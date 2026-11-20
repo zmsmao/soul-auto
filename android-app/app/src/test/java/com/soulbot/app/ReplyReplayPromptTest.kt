@@ -107,6 +107,24 @@ class ReplyReplayPromptTest {
         }
     }
 
+    @Test fun leakedAssistantDraftsAreRemovedFromHistoricalReplay() {
+        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。\n" +
+            "答：互联网行业，具体岗位可以模糊说。只回答，不盘问。"
+        val polluted = current.copy(
+            turns = listOf(
+                ReplayTurn("in", "做什么工作的"),
+                ReplayTurn("out", leaked),
+                ReplayTurn("in", "你平时做什么呀"),
+            ),
+        )
+
+        val prompt = ReplyReplayPrompt.build(polluted, SelfProfile(), emptyList(), personalized = false)
+
+        assertFalse(prompt.system.contains("用户问做什么工作的"))
+        assertFalse(prompt.messages.any { it.second.contains("用户问做什么工作的") })
+        assertEquals(listOf("做什么工作的", "你平时做什么呀"), prompt.messages.map { it.second })
+    }
+
     @Test fun historicalReplayNeverInjectsTodaysActualDateOrHour() {
         val historical = ModelClient.buildSystemPrompt(historicalReplay = true)
         val live = ModelClient.buildSystemPrompt(historicalReplay = false)
@@ -121,5 +139,32 @@ class ReplyReplayPromptTest {
             assertTrue(prompt.system.contains("历史聊天的回复回放"))
             assertFalse(prompt.system.contains("今天真实日期是"))
         }
+    }
+
+    @Test fun qingshengGuidanceIsSharedByLiveAndHistoricalPrompts() {
+        val live = ModelClient.buildSystemPrompt()
+        val historical = ModelClient.buildSystemPrompt(historicalReplay = true)
+        for (prompt in listOf(live, historical)) {
+            assertTrue(prompt.contains("【Soul 聊天策略"))
+            assertTrue(prompt.contains("七阶段关系判断"))
+            assertTrue(prompt.contains("千人千面的动态适配"))
+            assertTrue(prompt.contains("适度冷读"))
+            assertTrue(prompt.contains("话题引领"))
+            assertTrue(prompt.contains("温和调情"))
+            assertTrue(prompt.contains("匹配对方当前的表达能量"))
+            assertTrue(prompt.contains("阶段是描述当前关系状态的地图"))
+            assertTrue(prompt.contains("对方表达热情、主动、有趣、直接或主动释放暧昧信号时"))
+            assertFalse(prompt.contains("慢热"))
+            assertFalse(prompt.contains("节奏可以比即时通讯慢一些"))
+            assertTrue(prompt.contains("简短实战参考"))
+            assertTrue(prompt.contains("邀约三步"))
+            assertTrue(prompt.contains("话题阶梯"))
+            assertTrue(prompt.contains("假性时间限制"))
+            assertTrue(prompt.contains("Neg／轻度否定式调侃"))
+            assertTrue(prompt.contains("嫉妒／竞争感"))
+            assertTrue(prompt.contains("冷热节奏／Push-Pull"))
+        }
+        assertTrue(live.contains("今天真实日期是"))
+        assertFalse(historical.contains("今天真实日期是"))
     }
 }

@@ -102,8 +102,11 @@ class DeviceDiagnosticsActivity : BaseSettingsActivity() {
         } ?: "暂无 Soul 页面记录。点击下方按钮打开 Soul，停留在需要检测的页面数秒后再返回查看。检测过程只读取控件，不会点击或发送消息。"
 
         val capabilityLines = SoulUiCapability.entries.joinToString("\n") { capability ->
-            val stateText = if (capability in state.observedCapabilities) "已检测" else "待检测"
-            "$stateText  ${capability.label}"
+            val current = capability in state.latest?.capabilities.orEmpty()
+            val observed = capability in state.observedCapabilities
+            val currentText = if (current) "当前页可读" else "当前页未读取到"
+            val observedText = if (observed) "历史曾观察到" else "历史未观察到"
+            "$currentText · $observedText  ${capability.label}"
         }
         val fallbackState = if (DeviceCompatibilityStore.hasLearnedVoiceMenuOffset(this)) {
             "已学习  本机语音菜单兜底位置"
@@ -144,7 +147,15 @@ class DeviceDiagnosticsActivity : BaseSettingsActivity() {
                 appendLine("有效区域：${formatRegion(latest.effectiveBounds)}")
                 appendLine("可见节点：${latest.visibleNodeCount}")
             }
-            append("已检测能力：")
+            appendLine("当前页面能力：")
+            appendLine(
+                latest?.capabilities
+                    ?.sortedBy(SoulUiCapability::ordinal)
+                    ?.joinToString("、") { it.label }
+                    .orEmpty()
+                    .ifBlank { "暂无当前页面记录" },
+            )
+            append("历史曾观察到：")
             append(
                 state.observedCapabilities
                     .sortedBy(SoulUiCapability::ordinal)

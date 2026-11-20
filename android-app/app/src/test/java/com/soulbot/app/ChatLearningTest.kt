@@ -34,6 +34,27 @@ class ChatLearningTest {
     }
 
     @Test
+    fun manualStyleSamplesRetainTheirConversationScene() {
+        val thread = listOf("in" to "你平时做什么", "out" to "互联网研发")
+
+        val qiyu = ManualStyleLearner.extract(thread, ReplyScene.QIYU) { false }
+        val chat = ManualStyleLearner.extract(thread) { false }
+
+        assertEquals(ReplyScene.QIYU, qiyu.single().scene)
+        assertEquals(ReplyScene.CHAT, chat.single().scene)
+    }
+
+    @Test
+    fun manualStyleSamplesKeepSceneInTheirIdentity() {
+        val thread = listOf("in" to "喜欢做饭吗", "out" to "还挺喜欢")
+        val chat = ManualStyleLearner.extract(thread) { false }
+        val match = ManualStyleLearner.extract(thread, ReplyScene.SOUL_MATCH) { false }
+
+        assertEquals(ReplyScene.CHAT, chat.single().scene)
+        assertEquals(ReplyScene.SOUL_MATCH, match.single().scene)
+    }
+
+    @Test
     fun ranksSimilarIncomingMessageFirst() {
         val samples = listOf(
             ChatStyleSample("你下班了吗", "刚下"),
@@ -230,6 +251,29 @@ class ChatLearningTest {
         assertEquals(null, ReplyNaturalness.rejectionReason(text, profile = profile))
         assertTrue(ReplyNaturalness.styleWarnings(text, profile = profile).isNotEmpty())
         assertTrue(ReplyNaturalness.styleWarnings("我25", requireEngagingHook = true).isEmpty())
+    }
+
+    @Test
+    fun rejectsLeakedInternalReplyPlanningButAllowsPlainAnswers() {
+        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。" +
+            "之前发过“直男确实省事，不用猜来猜去”了，不能重复。" +
+            "\n\n答：互联网行业，具体岗位可以模糊说。简短自然。回复要接住“做什么工作的”，只回答，不盘问。"
+
+        assertTrue(ReplyNaturalness.isInternalDraft(leaked))
+        assertEquals(
+            "疑似模型内部分析或回复指令泄漏",
+            ReplyNaturalness.rejectionReason(leaked),
+        )
+        assertFalse(ReplyNaturalness.isInternalDraft("互联网行业，主要做软件研发。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("互联网行业，主要做软件研发。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("我在互联网行业工作。"))
+    }
+
+    @Test
+    fun detectsExplicitAnalysisLabelsWithoutRejectingNormalUseOfTheWord() {
+        assertTrue(ReplyNaturalness.isInternalDraft("分析：先回答她的问题。建议回复：互联网行业。只回答，不盘问。"))
+        assertFalse(ReplyNaturalness.isInternalDraft("我简单分析了一下，还是觉得这家店不错。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("我简单分析了一下，还是觉得这家店不错。"))
     }
 
     @Test

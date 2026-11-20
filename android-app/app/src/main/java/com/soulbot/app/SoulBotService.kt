@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -1412,13 +1413,33 @@ class SoulBotService : AccessibilityService() {
         waitBeforeNext = ::sleep,
     )
 
+    private fun routeModelChatDetailed(
+        systemPrompt: String,
+        messages: List<Pair<String, String>>,
+        deadlineElapsedMs: Long,
+        preferDifferentFromEndpointId: String = "",
+    ): ModelRouteOutcome = ModelRouter.chatDetailed(
+        context = applicationContext,
+        systemPrompt = systemPrompt,
+        messages = messages,
+        deadlineElapsedMs = deadlineElapsedMs,
+        onProgress = { text, delayMs -> setNextStep(text, delayMs) },
+        waitBeforeNext = ::sleep,
+        preferDifferentFromEndpointId = preferDifferentFromEndpointId,
+    )
+
     private fun genReply(
         contactName: String,
         thread: List<Pair<String, String>>,
         focusIncoming: List<String> = emptyList(),
         rejectedReplies: List<String> = emptyList(),
-    ): String? {
-        val recent = thread.takeLast(CONTEXT_LEN)
+        correction: String = "",
+        analysisContext: String = "",
+        deadlineElapsedMs: Long,
+    ): ModelRouteOutcome {
+        val recent = thread.takeLast(CONTEXT_LEN).filterNot { (role, text) ->
+            role == "out" && ReplyNaturalness.isInternalDraft(text)
+        }
         val contextAnalysis = ConversationReplyContext.analyze(recent, focusIncoming)
         val msgs = mutableListOf<Pair<String, String>>()
         for ((role, text) in recent) {
@@ -1455,8 +1476,14 @@ class SoulBotService : AccessibilityService() {
                 "回应可以简短，不要求开启新话题、加引子或追加问题，也不要编造自身经历来附和。" +
                 "\n用于判断话题的最近对话：\n${contextAnalysis.supportingTranscript}"
         }
+        if (correction.isNotBlank()) {
+            systemPrompt += "\n上一个候选未通过本地检查，具体问题是：$correction。请针对问题改写，不要只换同义词。"
+        }
+        if (analysisContext.isNotBlank()) {
+            systemPrompt += "\n以下是结构化理解摘要，仅辅助理解；若与原始对话不一致，以原始对话为准：\n$analysisContext"
+        }
         systemPrompt += "\n" + ConversationReplyContext.responseGuidance(recent, latest)
-        return routeModelChat(systemPrompt, msgs)
+        return routeModelChatDetailed(systemPrompt, msgs, deadlineElapsedMs)
     }
 
     private fun genOpening(
@@ -1486,71 +1513,198 @@ class SoulBotService : AccessibilityService() {
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
     ): String? {
+        val startedAt = SystemClock.elapsedRealtime()
+        val deadline = startedAt + 90_000L
+        val recentThread = thread.takeLast(CONTEXT_LEN).filterNot { (role, text) ->
+            role == "out" && ReplyNaturalness.isInternalDraft(text)
+        }
+        val contextAnalysis = ConversationReplyContext.analyze(recentThread, focusIncoming)
+        val depth = ReplyPipelinePolicy.classify(
+            recentThread,
+            focusIncoming,
+            contextAnalysis.needsSupportingContext,
+        )
+        RuntimeLog.record(
+            applicationContext,
+            "reply pipeline selected; depth=$depth; incomingCount=${focusIncoming.size}",
+        )
+
+        var analysisContext = ""
+        if (depth == ReplyGenerationDepth.ANALYZE_AND_REVIEW) {
+            setNextStep("先识别对话意图和情绪", 15_000L)
+            val analysisDeadline = ReplyPipelinePolicy.stageDeadline(
+                SystemClock.elapsedRealtime(),
+                deadline,
+                ReplyPipelinePolicy.ANALYZER_BUDGET_MS,
+            )
+            val analysisOutcome = routeModelChatDetailed(
+                "你当前只执行后台结构化标注，不是聊天回复生成器。以下个人资料是已确认事实：\n" +
+                    Prefs.getSelfProfile(applicationContext).promptContext() +
+                    "\n" + ReplyPipelinePolicy.analysisInstructions(),
+                listOf("user" to ReplyPipelinePolicy.transcript(recentThread)),
+                analysisDeadline,
+            )
+            analysisContext = ReplyPipelinePolicy.parseAnalysis(analysisOutcome.content)
+                ?.toPromptContext()
+                .orEmpty()
+            RuntimeLog.record(
+                applicationContext,
+                "reply analysis completed; parsed=${analysisContext.isNotBlank()}; durationMs=${analysisOutcome.durationMs}",
+            )
+        }
+
         val rejected = mutableListOf<String>().apply {
             addAll(learningDb?.dislikedReplies(contactName, 6).orEmpty())
         }
-        var totalAttempts = 0
-        var modelFailures = 0
-        val profile = learningDb?.takeIf { Prefs.getStyleLearningEnabled(applicationContext) }?.styleProfile()
-        val recentReplies = thread.filter { it.first == "out" }.takeLast(6).map { it.second }
+        val profile = learningDb
+            ?.takeIf { Prefs.getStyleLearningEnabled(applicationContext) }
+            ?.styleProfile(ReplyScene.CHAT)
+        val recentReplies = recentThread.filter { it.first == "out" }.takeLast(6).map { it.second }
+        var correction = ""
+        var writerOutcome: ModelRouteOutcome? = null
+        var candidate: String? = null
 
-        while (running && isOnChat() && totalAttempts < 6 && modelFailures < 2) {
-            totalAttempts++
+        // At most one targeted repair; never repeat the same generation without feedback.
+        for (attempt in 1..2) {
+            if (!running || !isOnChat() || SystemClock.elapsedRealtime() >= deadline) break
             setNextStep(
-                "根据 $contactName 的最新消息生成回复（第 $totalAttempts 次）",
-                ModelRouter.MAX_GENERATION_WAIT_MS,
+                "根据 $contactName 的最新消息生成回复（第 $attempt 次）",
+                (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
             )
-            val rawCandidate = genReply(contactName, thread, focusIncoming, rejected)
+            writerOutcome = genReply(
+                contactName = contactName,
+                thread = thread,
+                focusIncoming = focusIncoming,
+                rejectedReplies = rejected,
+                correction = correction,
+                analysisContext = analysisContext,
+                deadlineElapsedMs = ReplyPipelinePolicy.stageDeadline(
+                    SystemClock.elapsedRealtime(),
+                    deadline,
+                    ReplyPipelinePolicy.WRITER_BUDGET_MS,
+                ),
+            )
             if (!running) throw StoppedException()
-            val candidate = rawCandidate?.let(ReplyNaturalness::sanitize)
-            if (candidate.isNullOrBlank()) {
-                modelFailures++
+            val current = writerOutcome.content?.let(ReplyNaturalness::sanitize)
+            if (current.isNullOrBlank()) {
                 RuntimeLog.record(
                     applicationContext,
-                    "reply generation empty; attempt=$totalAttempts; modelFailures=$modelFailures",
+                    "reply generation empty; attempt=$attempt; error=${writerOutcome.error.take(80)}",
                 )
-                if (modelFailures < 2) {
-                    val retryDelay = 3000L
-                    val reason = ModelRouter.lastError.ifBlank { "模型未返回文字" }.take(36)
-                    setNextStep("生成失败：$reason，换通道后再试一次", retryDelay)
-                    sleep(retryDelay)
+                if (attempt == 1 && writerOutcome.error.isNotBlank()) {
+                    correction = "上次模型未返回可用文本"
+                    continue
                 }
-                continue
+                break
             }
 
             val issue = ReplyNaturalness.rejectionReason(
-                candidate,
+                current,
                 profile = profile,
                 recentReplies = recentReplies + rejected,
             )
-            if (issue != null) {
-                rejected += candidate
-                learningDb?.recordQualityEvent(contactName, candidate, false, issue)
-                RuntimeLog.record(
-                    applicationContext,
-                    "reply quality rejected; attempt=$totalAttempts; reason=${issue.take(80)}; chars=${candidate.length}",
-                )
-                val switched = ModelRouter.markQualityRejected(applicationContext)
-                if (totalAttempts < 6) {
-                    val action = if (switched) "$issue，切换下一模型" else "$issue，重新生成"
-                    setNextStep(action, 1000)
-                    sleep(1000)
-                }
-                continue
+            if (issue == null) {
+                candidate = current
+                break
             }
-            ModelRouter.markAccepted(applicationContext)
-            learningDb?.recordQualityEvent(contactName, candidate, true, "accepted")
+
+            rejected += current
+            learningDb?.recordQualityEvent(contactName, current, false, issue)
             RuntimeLog.record(
                 applicationContext,
-                "reply generation accepted; attempts=$totalAttempts; chars=${candidate.length}; questionForced=false",
+                "reply quality rejected; attempt=$attempt; reason=${issue.take(80)}; chars=${current.length}",
             )
-            return candidate
+            val switched = ModelRouter.markQualityRejected(
+                applicationContext,
+                writerOutcome.endpointId,
+            )
+            if (attempt == 1) {
+                correction = issue
+                val guidance = if (switched) "$issue，切换下一模型后定向修订" else "$issue，定向修订一次"
+                setNextStep(guidance, 500L)
+            }
         }
+
+        val writer = writerOutcome ?: return null
+        var finalCandidate = candidate?.takeIf(String::isNotBlank) ?: run {
+            RuntimeLog.record(
+                applicationContext,
+                "reply generation exhausted; elapsedMs=${SystemClock.elapsedRealtime() - startedAt}; depth=$depth",
+            )
+            return null
+        }
+
+        if (depth != ReplyGenerationDepth.SINGLE && SystemClock.elapsedRealtime() < deadline) {
+            val transcript = ReplyPipelinePolicy.transcript(recentThread)
+            val reviewInput = buildString {
+                append("近期完整对话：\n")
+                append(transcript)
+                if (analysisContext.isNotBlank()) {
+                    append("\n结构化理解摘要（仅作辅助）：\n")
+                    append(analysisContext)
+                }
+                append("\n\n待审核候选：\n")
+                append(finalCandidate)
+            }
+            setNextStep("检查回复是否贴合上下文", (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            val reviewerDeadline = ReplyPipelinePolicy.stageDeadline(
+                SystemClock.elapsedRealtime(),
+                deadline,
+                ReplyPipelinePolicy.REVIEWER_BUDGET_MS,
+            )
+            val reviewOutcome = routeModelChatDetailed(
+                "你当前只执行后台回复质量审核与必要修订，不是直接和联系人聊天。\n" +
+                    Prefs.getSelfProfile(applicationContext).promptContext() +
+                    personalizationContext(
+                        contactName = contactName,
+                        latestMessage = focusIncoming.joinToString("\n"),
+                        scene = ReplyScene.CHAT,
+                        styleQuery = transcript,
+                    ) +
+                    "\n" + ReplyPipelinePolicy.reviewInstructions(),
+                listOf("user" to reviewInput),
+                reviewerDeadline,
+                preferDifferentFromEndpointId = writer.endpointId,
+            )
+            val review = ReplyPipelinePolicy.parseReview(reviewOutcome.content)
+            RuntimeLog.record(
+                applicationContext,
+                "reply review completed; parsed=${review != null}; durationMs=${reviewOutcome.durationMs}; reviewerEndpoint=${reviewOutcome.endpointId}",
+            )
+            when (review?.decision) {
+                ReplyReviewDecision.SKIP -> {
+                    RuntimeLog.record(applicationContext, "reply review skipped sending; reason=explicit_boundary")
+                    return null
+                }
+                ReplyReviewDecision.REWRITE -> {
+                    val revised = review.finalReply?.let(ReplyNaturalness::sanitize)
+                    val revisedIssue = revised?.let {
+                        ReplyNaturalness.rejectionReason(
+                            it,
+                            profile = profile,
+                            recentReplies = recentReplies + rejected + finalCandidate,
+                        )
+                    }
+                    if (!revised.isNullOrBlank() && revisedIssue == null) {
+                        finalCandidate = revised
+                    } else {
+                        RuntimeLog.record(
+                            applicationContext,
+                            "reply review rewrite rejected locally; reason=${revisedIssue ?: "empty"}; useWriterCandidate=true",
+                        )
+                    }
+                }
+                ReplyReviewDecision.PASS, null -> Unit
+            }
+        }
+
+        // Quality attribution stays on the writer's endpoint even after reviewer routing.
+        ModelRouter.markAccepted(applicationContext, writer.endpointId)
         RuntimeLog.record(
             applicationContext,
-            "reply generation exhausted; attempts=$totalAttempts; modelFailures=$modelFailures; qualityRejected=${rejected.size}",
+            "reply generation accepted; depth=$depth; elapsedMs=${SystemClock.elapsedRealtime() - startedAt}; chars=${finalCandidate.length}; endpointId=${writer.endpointId}",
         )
-        return null
+        return finalCandidate
     }
 
     private fun generateValidatedOpening(
@@ -1564,7 +1718,7 @@ class SoulBotService : AccessibilityService() {
         var qualityFailures = 0
         var correction = ""
         val recentPatterns = learningDb?.recentOpeningPatterns().orEmpty()
-        val profile = learningDb?.takeIf { Prefs.getStyleLearningEnabled(applicationContext) }?.styleProfile()
+        val profile = learningDb?.takeIf { Prefs.getStyleLearningEnabled(applicationContext) }?.styleProfile(context.scene)
         val learnedDisliked = learningDb?.dislikedReplies(contactName, 6).orEmpty()
         rejected += learnedDisliked
         // At most one style rewrite. Never spend five model calls trying to add a question.
@@ -1633,7 +1787,7 @@ class SoulBotService : AccessibilityService() {
         return buildString {
             val db = learningDb
             if (db != null && Prefs.getStyleLearningEnabled(applicationContext)) {
-                val profile = db.styleProfile()
+                val profile = db.styleProfile(scene)
                 val preferences = runCatching {
                     replyReplayDb?.relevantExamples(styleQuery, scene, 3, excludeContextKey)
                 }.onFailure { error ->
@@ -1674,7 +1828,9 @@ class SoulBotService : AccessibilityService() {
             if (includeMemory && Prefs.getContactMemoryEnabled(applicationContext) && contactName.isNotBlank()) {
                 val olderMessages = runCatching {
                     conversationMemoryDb?.relevantOlderMessages(contactName, latestMessage, 6)
-                }.getOrNull().orEmpty()
+                }.getOrNull().orEmpty().filterNot { message ->
+                    message.role == "out" && ReplyNaturalness.isInternalDraft(message.content)
+                }
                 if (olderMessages.isNotEmpty()) {
                     append("\n\n下面是与当前话题相关的更早聊天片段。只在确实相关时自然接上，")
                     append("不要复述整段，不要声称自己在读取数据库，也不要把推测当事实：")
@@ -1688,7 +1844,11 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun learnFromManualReplies(contactName: String, thread: List<Pair<String, String>>) {
+    private fun learnFromManualReplies(
+        contactName: String,
+        thread: List<Pair<String, String>>,
+        scene: ReplyScene = ReplyScene.CHAT,
+    ) {
         runCatching {
             conversationMemoryDb?.syncVisibleThread(contactName, thread)
         }.onFailure { error ->
@@ -1699,11 +1859,11 @@ class SoulBotService : AccessibilityService() {
             )
         }
         val db = learningDb ?: return
-        val manualSamples = ManualStyleLearner.extract(thread) { reply ->
+        val manualSamples = ManualStyleLearner.extract(thread, scene) { reply ->
             db.isAutomatedReply(contactName, reply)
         }
         if (Prefs.getStyleLearningEnabled(applicationContext)) {
-            manualSamples.forEach { db.recordManualSample(it.theirMessage, it.myMessage) }
+            manualSamples.forEach { db.recordManualSample(it.theirMessage, it.myMessage, it.scene) }
         }
         if (Prefs.getContactMemoryEnabled(applicationContext)) {
             manualSamples.forEach { db.recordContactMemory(contactName, it.theirMessage) }
@@ -1784,7 +1944,7 @@ class SoulBotService : AccessibilityService() {
             return false
         }
         val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(contactName) == true)
-        learnFromManualReplies(contactName, thread)
+        learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
         val newIncoming = seen.unseen(contactName, incomingTexts).takeLast(pendingIncoming.size)
@@ -1992,7 +2152,7 @@ class SoulBotService : AccessibilityService() {
             return deferQiyu(session, "stored_history_not_visible", "奇遇铃已有本地记录，但页面内容尚未读到")
         }
         val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(contactName) == true)
-        learnFromManualReplies(contactName, thread)
+        learnFromManualReplies(contactName, thread, ReplyScene.QIYU)
         val incoming = thread.filter { it.first == "in" }.map { it.second }
         val pending = qiyuSeen.unseen(contactName, incoming)
             .takeLast(OpeningConversationRoute.pendingIncoming(thread).size)

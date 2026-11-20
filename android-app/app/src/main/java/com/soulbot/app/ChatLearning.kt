@@ -117,6 +117,7 @@ object ChatSampleParser {
 object ManualStyleLearner {
     fun extract(
         thread: List<Pair<String, String>>,
+        scene: ReplyScene = ReplyScene.CHAT,
         isAutomatedReply: (String) -> Boolean,
     ): List<ChatStyleSample> {
         val result = mutableListOf<ChatStyleSample>()
@@ -129,7 +130,7 @@ object ManualStyleLearner {
                 if (incoming.size > 3) incoming.removeAt(0)
             } else if (role == "out") {
                 if (incoming.isNotEmpty() && !isAutomatedReply(text)) {
-                    result += ChatStyleSample(incoming.joinToString("\n"), text)
+                    result += ChatStyleSample(incoming.joinToString("\n"), text, scene = scene)
                 }
                 // Any outgoing message closes the current reply turn. Without
                 // this reset, the next sample would accidentally include the
@@ -138,7 +139,7 @@ object ManualStyleLearner {
             }
         }
         return result.distinctBy {
-            comparableText(it.theirMessage) + "\u0000" + comparableText(it.myMessage)
+            it.scene.name + "\u0000" + comparableText(it.theirMessage) + "\u0000" + comparableText(it.myMessage)
         }
     }
 }
@@ -228,6 +229,39 @@ object ReplyNaturalness {
     )
 
     private val allowedTrailingLatin = setOf("ok", "lol", "emo", "ktv", "soul", "citywalk")
+    private val internalMetaLead = Regex("""(?is)^\s*(?:用户|对方)(?:问|说|提到|发来|想知道)""")
+    private val internalMetaLabel = Regex(
+        """(?im)(?:^|[。！？\n])\s*(?:资料|上下文|已知信息|回复要求|输出要求)\s*[：:]""",
+    )
+    private val internalAnswerLabel = Regex(
+        """(?im)(?:^|[。！？\n])\s*(?:答|答复|建议回复|最终回复|回复内容)\s*[：:]""",
+    )
+    private val internalAnalysisLead = Regex(
+        """(?im)^\s*(?:分析|思考|判断|回复规划|生成思路)\s*[：:]""",
+    )
+    private val internalInstructionPhrases = listOf(
+        "直接回答", "只回答", "不盘问", "简短自然", "不要编造", "不编造具体",
+        "回复要接住", "之前发过", "不能重复", "不要追问", "不追加问题",
+        "具体岗位可以模糊说", "只回答，不盘问",
+    )
+
+    /**
+     * Detects high-confidence model planning text, not ordinary short or explanatory
+     * chat. Used before sending and when filtering historical conversation context.
+     */
+    fun isInternalDraft(text: String): Boolean {
+        val clean = text.trim()
+        if (clean.isEmpty()) return false
+        if (internalAnalysisLead.containsMatchIn(clean)) return true
+        if (Regex("""(?is)<(?:think|analysis|reasoning|thinking)\b""").containsMatchIn(clean)) return true
+        val hasMetaLead = internalMetaLead.containsMatchIn(clean)
+        val hasMetaLabel = internalMetaLabel.containsMatchIn(clean)
+        val hasAnswerLabel = internalAnswerLabel.containsMatchIn(clean)
+        val instructionCount = internalInstructionPhrases.count(clean::contains)
+        return (hasMetaLead && (hasMetaLabel || hasAnswerLabel || instructionCount >= 1)) ||
+            (hasMetaLabel && instructionCount >= 2) ||
+            (hasAnswerLabel && instructionCount >= 2)
+    }
 
     fun sanitize(raw: String): String = raw.trim()
         .removePrefix("回复：")
@@ -251,6 +285,7 @@ object ReplyNaturalness {
             ?.groupValues?.getOrNull(1)?.lowercase()
         return when {
             clean.isEmpty() -> "内容为空"
+            isInternalDraft(clean) -> "疑似模型内部分析或回复指令泄漏"
             artificialPhrases.any(clean::contains) -> "包含明显的 AI 套话"
             recentReplies.any { comparableText(it) == comparableText(clean) } -> "与最近回复重复"
             trailingLatin != null && trailingLatin !in allowedTrailingLatin ->
