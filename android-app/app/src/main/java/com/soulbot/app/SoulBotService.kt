@@ -1532,7 +1532,9 @@ class SoulBotService : AccessibilityService() {
         if (depth == ReplyGenerationDepth.ANALYZE_AND_REVIEW) {
             setNextStep("先识别对话意图和情绪", 15_000L)
             val analysisOutcome = routeModelChatDetailed(
-                baseSystemPrompt() + "\n" + ReplyPipelinePolicy.analysisInstructions(),
+                "你当前只执行后台结构化标注，不是聊天回复生成器。以下个人资料是已确认事实：\n" +
+                    Prefs.getSelfProfile(applicationContext).promptContext() +
+                    "\n" + ReplyPipelinePolicy.analysisInstructions(),
                 listOf("user" to ReplyPipelinePolicy.transcript(recentThread)),
                 deadline,
             )
@@ -1636,7 +1638,8 @@ class SoulBotService : AccessibilityService() {
             }
             setNextStep("检查回复是否贴合上下文", (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
             val reviewOutcome = routeModelChatDetailed(
-                baseSystemPrompt() +
+                "你当前只执行后台回复质量审核与必要修订，不是直接和联系人聊天。\n" +
+                    Prefs.getSelfProfile(applicationContext).promptContext() +
                     personalizationContext(
                         contactName = contactName,
                         latestMessage = focusIncoming.joinToString("\n"),
@@ -1661,7 +1664,11 @@ class SoulBotService : AccessibilityService() {
                 ReplyReviewDecision.REWRITE -> {
                     val revised = review.finalReply?.let(ReplyNaturalness::sanitize)
                     val revisedIssue = revised?.let {
-                        ReplyNaturalness.rejectionReason(it, profile = profile, recentReplies = recentReplies)
+                        ReplyNaturalness.rejectionReason(
+                            it,
+                            profile = profile,
+                            recentReplies = recentReplies + rejected + finalCandidate,
+                        )
                     }
                     if (!revised.isNullOrBlank() && revisedIssue == null) {
                         finalCandidate = revised
