@@ -36,4 +36,4 @@ jobs:
 
       - name: Run Android unit tests
         working-directory: android-app
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
