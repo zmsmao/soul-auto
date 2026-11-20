@@ -1,7 +1,5 @@
 package com.soulbot.app
 
-import org.json.JSONObject
-
 enum class ReplyGenerationDepth { SINGLE, REVIEW, ANALYZE_AND_REVIEW }
 enum class ReplyReviewDecision { PASS, REWRITE, SKIP }
 
@@ -97,24 +95,20 @@ object ReplyPipelinePolicy {
 
     fun parseAnalysis(raw: String?): ReplyIntentAnalysis? {
         val json = extractJson(raw) ?: return null
-        val intent = json.optString("intent", "").trim().take(80)
+        val intent = (json["intent"] as? String).orEmpty().trim().take(80)
         if (intent.isBlank()) return null
-        val facts = json.optJSONArray("facts_to_use")?.let { array ->
-            buildList {
-                for (i in 0 until minOf(array.length(), 5)) {
-                    val fact = array.optString(i).trim().take(160)
-                    if (fact.isNotBlank()) add(fact)
-                }
-            }
-        }.orEmpty()
-        val confidence = json.optDouble("signal_confidence", 0.0)
+        val facts = (json["facts_to_use"] as? List<*>)
+            .orEmpty()
+            .take(5)
+            .mapNotNull { (it as? String)?.trim()?.take(160)?.takeIf(String::isNotBlank) }
+        val confidence = (json["signal_confidence"] as? Number)?.toDouble() ?: 0.0
         return ReplyIntentAnalysis(
             intent = intent,
-            emotion = json.optString("emotion", "unknown").trim().take(40),
-            contextAnchor = json.optString("context_anchor", "").trim().take(160),
-            replyGoal = json.optString("reply_goal", "").trim().take(120),
-            replyAction = json.optString("reply_action", "").trim().take(40),
-            relationshipSignal = json.optString("relationship_signal", "none").trim().take(100),
+            emotion = (json["emotion"] as? String).orEmpty().ifBlank { "unknown" }.trim().take(40),
+            contextAnchor = (json["context_anchor"] as? String).orEmpty().trim().take(160),
+            replyGoal = (json["reply_goal"] as? String).orEmpty().trim().take(120),
+            replyAction = (json["reply_action"] as? String).orEmpty().trim().take(40),
+            relationshipSignal = (json["relationship_signal"] as? String).orEmpty().ifBlank { "none" }.trim().take(100),
             signalConfidence = if (confidence.isFinite()) confidence.coerceIn(0.0, 1.0) else 0.0,
             factsToUse = facts.distinct(),
         )
@@ -122,33 +116,181 @@ object ReplyPipelinePolicy {
 
     fun parseReview(raw: String?): ReplyReview? {
         val json = extractJson(raw) ?: return null
-        val decision = when (json.optString("decision", "").trim().lowercase()) {
+        val decision = when ((json["decision"] as? String).orEmpty().trim().lowercase()) {
             "pass" -> ReplyReviewDecision.PASS
             "rewrite" -> ReplyReviewDecision.REWRITE
             "skip" -> ReplyReviewDecision.SKIP
             else -> return null
         }
-        val issues = json.optJSONArray("issues")?.let { array ->
-            buildList {
-                for (i in 0 until minOf(array.length(), 8)) {
-                    val issue = array.optString(i).trim().take(60)
-                    if (issue.isNotBlank()) add(issue)
-                }
-            }
-        }.orEmpty()
-        val finalReply = json.optString("final_reply", "").trim()
-            .takeIf { it.isNotBlank() }
+        val issues = (json["issues"] as? List<*>)
+            .orEmpty()
+            .take(8)
+            .mapNotNull { (it as? String)?.trim()?.take(60)?.takeIf(String::isNotBlank) }
+        val finalReply = (json["final_reply"] as? String)?.trim()
+            ?.takeIf(String::isNotBlank)
             ?.take(1_000)
         if (decision == ReplyReviewDecision.REWRITE && finalReply.isNullOrBlank()) return null
         return ReplyReview(decision, issues, finalReply)
     }
 
-    private fun extractJson(raw: String?): JSONObject? {
-        val text = raw?.trim().orEmpty()
+    private fun extractJson(raw: String?): Map<String, Any?>? {
+        val text = raw?.trim()?.take(20_000).orEmpty()
         if (text.isBlank()) return null
         val start = text.indexOf('{')
         val end = text.lastIndexOf('}')
         if (start < 0 || end <= start) return null
-        return runCatching { JSONObject(text.substring(start, end + 1)) }.getOrNull()
+        return runCatching {
+            JsonObjectReader(text.substring(start, end + 1)).parseRoot()
+        }.getOrNull()
+    }
+
+    /**
+     * Small bounded JSON reader for the analyzer/reviewer contract.
+     * It avoids android.jar's mocked org.json methods in local JVM tests and
+     * rejects malformed or excessively nested model output.
+     */
+    private class JsonObjectReader(private val source: String) {
+        private var index = 0
+
+        fun parseRoot(): Map<String, Any?> {
+            skipWhitespace()
+            val result = parseObject(0)
+            skipWhitespace()
+            require(index == source.length) { "Trailing JSON data" }
+            return result
+        }
+
+        private fun parseObject(depth: Int): Map<String, Any?> {
+            require(depth <= 8) { "JSON nesting too deep" }
+            expect('{')
+            skipWhitespace()
+            val result = linkedMapOf<String, Any?>()
+            if (consume('}')) return result
+            while (true) {
+                skipWhitespace()
+                val key = parseString()
+                skipWhitespace()
+                expect(':')
+                skipWhitespace()
+                result[key] = parseValue(depth + 1)
+                skipWhitespace()
+                if (consume('}')) break
+                expect(',')
+            }
+            return result
+        }
+
+        private fun parseArray(depth: Int): List<Any?> {
+            require(depth <= 8) { "JSON nesting too deep" }
+            expect('[')
+            skipWhitespace()
+            val result = mutableListOf<Any?>()
+            if (consume(']')) return result
+            while (true) {
+                skipWhitespace()
+                result += parseValue(depth + 1)
+                skipWhitespace()
+                if (consume(']')) break
+                expect(',')
+            }
+            return result
+        }
+
+        private fun parseValue(depth: Int): Any? {
+            skipWhitespace()
+            require(index < source.length) { "Missing JSON value" }
+            return when (source[index]) {
+                '"' -> parseString()
+                '{' -> parseObject(depth)
+                '[' -> parseArray(depth)
+                't' -> { expectLiteral("true"); true }
+                'f' -> { expectLiteral("false"); false }
+                'n' -> { expectLiteral("null"); null }
+                '-', in '0'..'9' -> parseNumber()
+                else -> error("Invalid JSON value")
+            }
+        }
+
+        private fun parseString(): String {
+            expect('"')
+            val result = StringBuilder()
+            while (index < source.length) {
+                val current = source[index++]
+                when (current) {
+                    '"' -> return result.toString()
+                    '\\' -> {
+                        require(index < source.length) { "Incomplete JSON escape" }
+                        when (val escaped = source[index++]) {
+                            '"' -> result.append('"')
+                            '\\' -> result.append('\\')
+                            '/' -> result.append('/')
+                            'b' -> result.append('\b')
+                            'f' -> result.append('\u000C')
+                            'n' -> result.append('\n')
+                            'r' -> result.append('\r')
+                            't' -> result.append('\t')
+                            'u' -> {
+                                require(index + 4 <= source.length) { "Incomplete unicode escape" }
+                                val code = source.substring(index, index + 4).toInt(16)
+                                result.append(code.toChar())
+                                index += 4
+                            }
+                            else -> error("Invalid JSON escape: $escaped")
+                        }
+                    }
+                    else -> {
+                        require(current.code >= 0x20) { "Control character in JSON string" }
+                        result.append(current)
+                    }
+                }
+            }
+            error("Unterminated JSON string")
+        }
+
+        private fun parseNumber(): Number {
+            val start = index
+            consume('-')
+            if (!consume('0')) {
+                require(index < source.length && source[index] in '1'..'9') { "Invalid JSON number" }
+                while (index < source.length && source[index].isDigit()) index++
+            }
+            if (consume('.')) {
+                require(index < source.length && source[index].isDigit()) { "Invalid JSON fraction" }
+                while (index < source.length && source[index].isDigit()) index++
+            }
+            if (index < source.length && (source[index] == 'e' || source[index] == 'E')) {
+                index++
+                if (index < source.length && (source[index] == '+' || source[index] == '-')) index++
+                require(index < source.length && source[index].isDigit()) { "Invalid JSON exponent" }
+                while (index < source.length && source[index].isDigit()) index++
+            }
+            val token = source.substring(start, index)
+            return token.toLongOrNull() ?: token.toDoubleOrNull()?.takeIf(Double::isFinite)
+            ?: error("Invalid JSON number")
+        }
+
+        private fun expectLiteral(literal: String) {
+            require(source.regionMatches(index, literal, 0, literal.length)) { "Invalid JSON literal" }
+            index += literal.length
+        }
+
+        private fun expect(char: Char) {
+            require(index < source.length && source[index] == char) { "Expected $char" }
+            index++
+        }
+
+        private fun consume(char: Char): Boolean {
+            if (index < source.length && source[index] == char) {
+                index++
+                return true
+            }
+            return false
+        }
+
+        private fun skipWhitespace() {
+            while (index < source.length && source[index] in charArrayOf(' ', '\n', '\r', '\t')) {
+                index++
+            }
+        }
     }
 }
