@@ -5,6 +5,19 @@ import org.junit.Test
 
 class ConversationMemoryLogicTest {
     @Test
+    fun `memory scope requires matching thread and scene and excludes legacy rows`() {
+        val current = ConversationMemoryEntry("1", "小明", "in", "猫", 1, "chat", "thread-a", "CHAT")
+        val otherScene = current.copy(eventKey = "2", scene = "QIYU")
+        val otherThread = current.copy(eventKey = "3", threadId = "thread-b")
+        val legacy = current.copy(eventKey = "4", threadId = "LEGACY_UNKNOWN", scene = "LEGACY_UNKNOWN")
+
+        assertEquals(true, ConversationMemoryLogic.isInScope(current, "thread-a", ReplyScene.CHAT))
+        assertEquals(false, ConversationMemoryLogic.isInScope(otherScene, "thread-a", ReplyScene.CHAT))
+        assertEquals(false, ConversationMemoryLogic.isInScope(otherThread, "thread-a", ReplyScene.CHAT))
+        assertEquals(false, ConversationMemoryLogic.isInScope(legacy, "thread-a", ReplyScene.CHAT))
+    }
+
+    @Test
     fun `first visible thread stores every message`() {
         val visible = listOf(
             "in" to "你好",

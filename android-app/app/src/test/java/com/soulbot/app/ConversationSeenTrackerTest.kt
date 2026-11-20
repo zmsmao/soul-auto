@@ -7,6 +7,14 @@ import org.junit.Test
 class ConversationSeenTrackerTest {
 
     @Test
+    fun `same display name in different active thread scopes remains unseen`() {
+        val tracker = ConversationSeenTracker()
+        tracker.markSeen("session:one", listOf("你好"))
+
+        assertEquals(listOf("你好"), tracker.unseen("session:two", listOf("你好")))
+    }
+
+    @Test
     fun `same text in different conversations remains unseen`() {
         val tracker = ConversationSeenTracker()
         tracker.markSeen("小明", listOf("你好"))

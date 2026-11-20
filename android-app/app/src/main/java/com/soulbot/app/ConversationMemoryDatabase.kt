@@ -19,7 +19,7 @@ data class ConversationMemoryImportResult(
 )
 
 class ConversationMemoryDatabase(context: Context) :
-    SQLiteOpenHelper(context, "conversation_memory.db", null, 1) {
+    SQLiteOpenHelper(context, "conversation_memory.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -30,16 +30,33 @@ class ConversationMemoryDatabase(context: Context) :
                 "role TEXT NOT NULL, " +
                 "content TEXT NOT NULL, " +
                 "observed_at INTEGER NOT NULL, " +
-                "source TEXT NOT NULL)",
+                "source TEXT NOT NULL, " +
+                "thread_id TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN', " +
+                "scene TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN')
         )
         db.execSQL(
             "CREATE INDEX idx_conversation_contact_time " +
                 "ON conversation_messages(contact, observed_at, id)",
         )
+        db.execSQL(
+            "CREATE INDEX idx_conversation_thread_scene_time " +
+                "ON conversation_messages(thread_id, scene, observed_at, id)",
+        )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            // Nickname-only legacy rows must not be assigned a guessed identity or scene.
+            db.execSQL("ALTER TABLE conversation_messages ADD COLUMN thread_id TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN'")
+            db.execSQL("ALTER TABLE conversation_messages ADD COLUMN scene TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN'")
+            db.execSQL(
+                "CREATE INDEX idx_conversation_thread_scene_time " +
+                    "ON conversation_messages(thread_id, scene, observed_at, id)",
+            )
+        }
+    }
 
+    /** Nickname-only history lookup remains for legacy replay surfaces, not live retrieval. */
     fun hasHistory(contact: String): Boolean {
         val clean = cleanContact(contact) ?: return false
         readableDatabase.rawQuery(
@@ -48,17 +65,28 @@ class ConversationMemoryDatabase(context: Context) :
         ).use { return it.moveToFirst() }
     }
 
+    fun hasHistory(threadId: String, scene: ReplyScene): Boolean {
+        val scope = cleanThreadId(threadId) ?: return false
+        readableDatabase.rawQuery(
+            "SELECT 1 FROM conversation_messages WHERE thread_id=? AND scene=? LIMIT 1",
+            arrayOf(scope, scene.name),
+        ).use { return it.moveToFirst() }
+    }
+
     fun syncVisibleThread(
         contact: String,
         visibleThread: List<Pair<String, String>>,
+        threadId: String,
+        scene: ReplyScene,
         source: String = "chat",
     ): Int {
         val cleanContact = cleanContact(contact) ?: return 0
+        val scope = cleanThreadId(threadId) ?: return 0
         val cleanThread = visibleThread.mapNotNull { (role, content) ->
             cleanMessage(role, content)
         }
         if (cleanThread.isEmpty()) return 0
-        val existingTail = recentEntries(cleanContact, 120)
+        val existingTail = recentThreadEntries(scope, scene, 120)
             .map { it.role to it.content }
         val additions = ConversationMemoryLogic.messagesAfterOverlap(existingTail, cleanThread)
         if (additions.isEmpty()) return 0
@@ -76,6 +104,8 @@ class ConversationMemoryDatabase(context: Context) :
                         content = message.second,
                         observedAt = baseTime + index,
                         source = cleanSource(source),
+                        threadId = scope,
+                        scene = scene.name,
                     )
                 ) added++
             }
@@ -90,9 +120,12 @@ class ConversationMemoryDatabase(context: Context) :
         contact: String,
         role: String,
         content: String,
+        threadId: String,
+        scene: ReplyScene,
         source: String = "chat",
     ): Boolean {
         val cleanContact = cleanContact(contact) ?: return false
+        val scope = cleanThreadId(threadId) ?: return false
         val cleanMessage = cleanMessage(role, content) ?: return false
         return insert(
             db = writableDatabase,
@@ -102,6 +135,8 @@ class ConversationMemoryDatabase(context: Context) :
             content = cleanMessage.second,
             observedAt = System.currentTimeMillis(),
             source = cleanSource(source),
+            threadId = scope,
+            scene = scene.name,
         )
     }
 
@@ -148,18 +183,19 @@ class ConversationMemoryDatabase(context: Context) :
     }
 
     fun relevantOlderMessages(
-        contact: String,
+        threadId: String,
+        scene: ReplyScene,
         query: String,
         limit: Int = 6,
         recentWindow: Int = SoulBotService.CONTEXT_LEN,
     ): List<ConversationMemoryEntry> {
-        val cleanContact = cleanContact(contact) ?: return emptyList()
+        val scope = cleanThreadId(threadId) ?: return emptyList()
         val candidates = mutableListOf<ConversationMemoryEntry>()
         readableDatabase.rawQuery(
-            "SELECT event_key, contact, role, content, observed_at, source " +
-                "FROM conversation_messages WHERE contact=? " +
+            "SELECT event_key, contact, role, content, observed_at, source, thread_id, scene " +
+                "FROM conversation_messages WHERE thread_id=? AND scene=? " +
                 "ORDER BY observed_at DESC, id DESC LIMIT 500 OFFSET ?",
-            arrayOf(cleanContact, recentWindow.coerceAtLeast(0).toString()),
+            arrayOf(scope, scene.name, recentWindow.coerceAtLeast(0).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 val entry = ConversationMemoryEntry(
@@ -169,6 +205,8 @@ class ConversationMemoryDatabase(context: Context) :
                     content = cursor.getString(3),
                     observedAt = cursor.getLong(4),
                     source = cursor.getString(5),
+                    threadId = cursor.getString(6),
+                    scene = cursor.getString(7),
                 )
                 if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
                     candidates += entry
@@ -192,7 +230,7 @@ class ConversationMemoryDatabase(context: Context) :
     /** Oldest to newest; the picker must cut at the chosen incoming event before generation. */
     fun replayEntries(contact: String, limit: Int = 200): List<ConversationMemoryEntry> {
         val clean = cleanContact(contact) ?: return emptyList()
-        return recentEntries(clean, limit.coerceIn(1, 500))
+        return recentEntriesByContact(clean, limit.coerceIn(1, 500))
     }
 
     fun contactCount(): Int {
@@ -215,7 +253,7 @@ class ConversationMemoryDatabase(context: Context) :
             json.name("exportedAt").value(System.currentTimeMillis())
             json.name("messages").beginArray()
             readableDatabase.rawQuery(
-                "SELECT event_key, contact, role, content, observed_at, source " +
+                "SELECT event_key, contact, role, content, observed_at, source, thread_id, scene " +
                     "FROM conversation_messages ORDER BY observed_at, id",
                 null,
             ).use { cursor ->
@@ -230,6 +268,8 @@ class ConversationMemoryDatabase(context: Context) :
                     json.name("content").value(content)
                     json.name("observedAt").value(cursor.getLong(4))
                     json.name("source").value(cursor.getString(5))
+                    json.name("threadId").value(cursor.getString(6))
+                    json.name("scene").value(cursor.getString(7))
                     json.endObject()
                 }
             }
@@ -268,6 +308,8 @@ class ConversationMemoryDatabase(context: Context) :
                                         content = entry.content,
                                         observedAt = entry.observedAt,
                                         source = entry.source,
+                                        threadId = entry.threadId,
+                                        scene = entry.scene,
                                     )
                                     if (inserted) added++ else skipped++
                                 }
@@ -299,6 +341,8 @@ class ConversationMemoryDatabase(context: Context) :
         var content = ""
         var observedAt = 0L
         var source = "import"
+        var threadId = LEGACY_UNKNOWN
+        var scene = LEGACY_UNKNOWN
         json.beginObject()
         while (json.hasNext()) {
             when (json.nextName()) {
@@ -308,6 +352,8 @@ class ConversationMemoryDatabase(context: Context) :
                 "content" -> content = json.nextString()
                 "observedAt" -> observedAt = json.nextLong()
                 "source" -> source = json.nextString()
+                "threadId" -> threadId = json.nextString()
+                "scene" -> scene = json.nextString()
                 else -> json.skipValue()
             }
         }
@@ -318,6 +364,9 @@ class ConversationMemoryDatabase(context: Context) :
         val safeKey = eventKey.trim().take(160).ifEmpty {
             stableImportKey(cleanContact, cleanMessage.first, cleanMessage.second, safeTime, source)
         }
+        val validScene = ReplyScene.entries.firstOrNull { it.name == scene }
+        val validThreadId = threadId.trim().take(120).takeIf { it.isNotEmpty() && it != LEGACY_UNKNOWN }
+        val isScoped = validScene != null && validThreadId != null
         return ConversationMemoryEntry(
             eventKey = safeKey,
             contact = cleanContact,
@@ -325,13 +374,15 @@ class ConversationMemoryDatabase(context: Context) :
             content = cleanMessage.second,
             observedAt = safeTime,
             source = cleanSource(source),
+            threadId = if (isScoped) validThreadId!! else LEGACY_UNKNOWN,
+            scene = if (isScoped) validScene!!.name else LEGACY_UNKNOWN,
         )
     }
 
-    private fun recentEntries(contact: String, limit: Int): List<ConversationMemoryEntry> {
+    private fun recentEntriesByContact(contact: String, limit: Int): List<ConversationMemoryEntry> {
         val result = mutableListOf<ConversationMemoryEntry>()
         readableDatabase.rawQuery(
-            "SELECT event_key, contact, role, content, observed_at, source " +
+            "SELECT event_key, contact, role, content, observed_at, source, thread_id, scene " +
                 "FROM conversation_messages WHERE contact=? " +
                 "ORDER BY observed_at DESC, id DESC LIMIT ?",
             arrayOf(contact, limit.toString()),
@@ -340,6 +391,29 @@ class ConversationMemoryDatabase(context: Context) :
                 val entry = ConversationMemoryEntry(
                     cursor.getString(0), cursor.getString(1), cursor.getString(2),
                     cursor.getString(3), cursor.getLong(4), cursor.getString(5),
+                    cursor.getString(6), cursor.getString(7),
+                )
+                if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
+                    result += entry
+                }
+            }
+        }
+        return result.asReversed()
+    }
+
+    private fun recentThreadEntries(threadId: String, scene: ReplyScene, limit: Int): List<ConversationMemoryEntry> {
+        val result = mutableListOf<ConversationMemoryEntry>()
+        readableDatabase.rawQuery(
+            "SELECT event_key, contact, role, content, observed_at, source, thread_id, scene " +
+                "FROM conversation_messages WHERE thread_id=? AND scene=? " +
+                "ORDER BY observed_at DESC, id DESC LIMIT ?",
+            arrayOf(threadId, scene.name, limit.toString()),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val entry = ConversationMemoryEntry(
+                    cursor.getString(0), cursor.getString(1), cursor.getString(2),
+                    cursor.getString(3), cursor.getLong(4), cursor.getString(5),
+                    cursor.getString(6), cursor.getString(7),
                 )
                 if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
                     result += entry
@@ -357,6 +431,8 @@ class ConversationMemoryDatabase(context: Context) :
         content: String,
         observedAt: Long,
         source: String,
+        threadId: String = LEGACY_UNKNOWN,
+        scene: String = LEGACY_UNKNOWN,
     ): Boolean {
         val values = ContentValues().apply {
             put("event_key", eventKey)
@@ -365,6 +441,8 @@ class ConversationMemoryDatabase(context: Context) :
             put("content", content)
             put("observed_at", observedAt)
             put("source", source)
+            put("thread_id", threadId)
+            put("scene", scene)
         }
         return db.insertWithOnConflict(
             "conversation_messages",
@@ -382,6 +460,9 @@ class ConversationMemoryDatabase(context: Context) :
 
     private fun cleanContact(contact: String): String? =
         contact.trim().take(120).takeIf(String::isNotEmpty)
+
+    private fun cleanThreadId(threadId: String): String? =
+        threadId.trim().take(120).takeIf { it.isNotEmpty() && it != LEGACY_UNKNOWN }
 
     private fun cleanMessage(role: String, content: String): Pair<String, String>? {
         val cleanRole = role.trim().lowercase()
@@ -408,7 +489,8 @@ class ConversationMemoryDatabase(context: Context) :
     }
 
     companion object {
+        const val LEGACY_UNKNOWN = "LEGACY_UNKNOWN"
         private const val EXPORT_SCHEMA = "soulbot-conversation-memory"
-        private const val EXPORT_VERSION = 1
+        private const val EXPORT_VERSION = 2
     }
 }

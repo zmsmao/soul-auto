@@ -7,9 +7,15 @@ data class ConversationMemoryEntry(
     val content: String,
     val observedAt: Long,
     val source: String,
+    val threadId: String = "LEGACY_UNKNOWN",
+    val scene: String = "LEGACY_UNKNOWN",
 )
 
 object ConversationMemoryLogic {
+    fun isInScope(entry: ConversationMemoryEntry, threadId: String, scene: ReplyScene): Boolean =
+        threadId.isNotBlank() && threadId != "LEGACY_UNKNOWN" &&
+            entry.threadId == threadId && entry.scene == scene.name
+
     fun messagesAfterOverlap(
         existingTail: List<Pair<String, String>>,
         visibleThread: List<Pair<String, String>>,
