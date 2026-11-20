@@ -53,6 +53,7 @@ object ModelRouter {
         deadlineElapsedMs: Long? = null,
         onProgress: (String, Long) -> Unit = { _, _ -> },
         waitBeforeNext: (Long) -> Unit = { Thread.sleep(it) },
+        preferDifferentFromEndpointId: String = "",
     ): ModelRouteOutcome {
         val startedAt = SystemClock.elapsedRealtime()
         val deadline = minOf(
@@ -61,9 +62,14 @@ object ModelRouter {
         )
         val endpoints = ModelEndpointPrefs.getEndpoints(context)
         val health = ModelEndpointPrefs.getHealth(context)
-        val candidates = ModelFailoverPolicy.orderedCandidates(
+        val ordered = ModelFailoverPolicy.orderedCandidates(
             endpoints, health, System.currentTimeMillis(),
         )
+        val candidates = if (preferDifferentFromEndpointId.isBlank()) {
+            ordered
+        } else {
+            ordered.sortedBy { it.id == preferDifferentFromEndpointId }
+        }
         if (candidates.isEmpty()) {
             val enabled = endpoints.filter(ModelEndpointRules::isRunnable)
             val waitSeconds = ModelFailoverPolicy.secondsUntilNextCandidate(
