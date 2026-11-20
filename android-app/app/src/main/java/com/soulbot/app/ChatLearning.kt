@@ -228,25 +228,31 @@ object ReplyNaturalness {
     )
 
     private val allowedTrailingLatin = setOf("ok", "lol", "emo", "ktv", "soul", "citywalk")
-    private val internalMetaLead = Regex("""(?is)^\\s*(?:用户|对方)(?:问|说|提到|发来|想知道)""")
+    private val internalMetaLead = Regex("""(?is)^\s*(?:用户|对方)(?:问|说|提到|发来|想知道)""")
     private val internalMetaLabel = Regex(
-        """(?im)(?:^|[。！？\\n])\\s*(?:资料|上下文|已知信息|回复要求|输出要求)\\s*[：:]""",
+        """(?im)(?:^|[。！？\n])\s*(?:资料|上下文|已知信息|回复要求|输出要求)\s*[：:]""",
     )
     private val internalAnswerLabel = Regex(
-        """(?im)(?:^|[。！？\\n])\\s*(?:答|答复|建议回复|最终回复|回复内容)\\s*[：:]""",
+        """(?im)(?:^|[。！？\n])\s*(?:答|答复|建议回复|最终回复|回复内容)\s*[：:]""",
+    )
+    private val internalAnalysisLead = Regex(
+        """(?im)^\s*(?:分析|思考|判断|回复规划|生成思路)\s*[：:]""",
     )
     private val internalInstructionPhrases = listOf(
         "直接回答", "只回答", "不盘问", "简短自然", "不要编造", "不编造具体",
         "回复要接住", "之前发过", "不能重复", "不要追问", "不追加问题",
+        "具体岗位可以模糊说", "只回答，不盘问",
     )
 
     /**
      * Detects high-confidence model planning text, not ordinary short or explanatory
-     * chat. Used both as a send-time guard and to keep old leaked drafts out of context.
+     * chat. Used before sending and when filtering historical conversation context.
      */
     fun isInternalDraft(text: String): Boolean {
         val clean = text.trim()
         if (clean.isEmpty()) return false
+        if (internalAnalysisLead.containsMatchIn(clean)) return true
+        if (Regex("""(?is)<(?:think|analysis|reasoning|thinking)\b""").containsMatchIn(clean)) return true
         val hasMetaLead = internalMetaLead.containsMatchIn(clean)
         val hasMetaLabel = internalMetaLabel.containsMatchIn(clean)
         val hasAnswerLabel = internalAnswerLabel.containsMatchIn(clean)
