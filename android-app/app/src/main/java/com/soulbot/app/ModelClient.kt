@@ -196,7 +196,7 @@ object ModelClient {
         return if (detail.isBlank()) "HTTP $statusCode" else "HTTP $statusCode：$detail".take(180)
     }
 
-    private fun parseContent(json: JSONObject): String? {
+    internal fun parseContent(json: JSONObject): String? {
         val choices = json.optJSONArray("choices") ?: return null
         if (choices.length() == 0) return null
         val choice = choices.optJSONObject(0) ?: return null
@@ -205,8 +205,12 @@ object ModelClient {
         val blockContent = (contentValue as? JSONArray)?.let { blocks ->
             buildString {
                 for (index in 0 until blocks.length()) {
-                    val block = blocks.optJSONObject(index)
-                    val text = block?.optString("text").orEmpty()
+                    val block = blocks.optJSONObject(index) ?: continue
+                    val type = block.optString("type").lowercase()
+                    // Only user-visible text blocks may become a chat reply. Thinking,
+                    // reasoning and unknown block types are deliberately ignored.
+                    if (type.isNotBlank() && type !in setOf("text", "output_text")) continue
+                    val text = block.optString("text")
                     if (text.isNotBlank()) append(text)
                 }
             }.takeIf { it.isNotBlank() }
@@ -214,10 +218,16 @@ object ModelClient {
         val raw = (contentValue as? String)?.takeIf { it.isNotBlank() }
             ?: blockContent
             ?: choice.optString("text")?.takeIf { it.isNotBlank() }
-            ?: msg?.optString("reasoning_content")?.takeIf { it.isNotBlank() }
+            // Never fall back to message.reasoning_content: it is not user-facing output.
             ?: return null
         val cleaned = raw
-            .replace(Regex("""<think>.*?</think>""", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(
+                Regex(
+                    """<(think|analysis|reasoning|thinking)>.*?</\\1>""",
+                    setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
+                ),
+                "",
+            )
             .trim()
         return cleaned.ifBlank { null }
     }
