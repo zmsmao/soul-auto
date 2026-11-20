@@ -38,6 +38,16 @@ data class ReplyReview(
 
 /** Chooses a low-cost generation pipeline based on observable conversation signals. */
 object ReplyPipelinePolicy {
+    const val ANALYZER_BUDGET_MS = 15_000L
+    const val WRITER_BUDGET_MS = 35_000L
+    const val REVIEWER_BUDGET_MS = 25_000L
+
+    fun stageDeadline(
+        nowElapsedMs: Long,
+        overallDeadlineElapsedMs: Long,
+        stageBudgetMs: Long,
+    ): Long = minOf(overallDeadlineElapsedMs, nowElapsedMs + stageBudgetMs.coerceAtLeast(1L))
+
     private val deepAnalysisSignals = listOf(
         "不开心", "难过", "难受", "委屈", "生气", "失望", "不舒服", "焦虑", "压力大",
         "崩溃", "哭了", "道歉", "误会", "冷战", "拒绝", "不想继续", "别联系",

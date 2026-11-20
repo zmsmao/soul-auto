@@ -8,6 +8,14 @@ import org.junit.Test
 
 class ReplyPipelinePolicyTest {
     @Test
+    fun stageDeadlinesRespectOverallBudgetAndStageCaps() {
+        assertEquals(15_000L, ReplyPipelinePolicy.stageDeadline(0, 90_000, ReplyPipelinePolicy.ANALYZER_BUDGET_MS))
+        assertEquals(50_000L, ReplyPipelinePolicy.stageDeadline(15_000, 90_000, ReplyPipelinePolicy.WRITER_BUDGET_MS))
+        assertEquals(90_000L, ReplyPipelinePolicy.stageDeadline(80_000, 90_000, ReplyPipelinePolicy.REVIEWER_BUDGET_MS))
+        assertEquals(83_000L, ReplyPipelinePolicy.stageDeadline(80_000, 83_000, ReplyPipelinePolicy.REVIEWER_BUDGET_MS))
+    }
+
+    @Test
     fun simpleDirectQuestionUsesOneGenerationCall() {
         assertEquals(
             ReplyGenerationDepth.SINGLE,

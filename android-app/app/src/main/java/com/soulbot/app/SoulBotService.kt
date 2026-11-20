@@ -1531,12 +1531,17 @@ class SoulBotService : AccessibilityService() {
         var analysisContext = ""
         if (depth == ReplyGenerationDepth.ANALYZE_AND_REVIEW) {
             setNextStep("先识别对话意图和情绪", 15_000L)
+            val analysisDeadline = ReplyPipelinePolicy.stageDeadline(
+                SystemClock.elapsedRealtime(),
+                deadline,
+                ReplyPipelinePolicy.ANALYZER_BUDGET_MS,
+            )
             val analysisOutcome = routeModelChatDetailed(
                 "你当前只执行后台结构化标注，不是聊天回复生成器。以下个人资料是已确认事实：\n" +
                     Prefs.getSelfProfile(applicationContext).promptContext() +
                     "\n" + ReplyPipelinePolicy.analysisInstructions(),
                 listOf("user" to ReplyPipelinePolicy.transcript(recentThread)),
-                deadline,
+                analysisDeadline,
             )
             analysisContext = ReplyPipelinePolicy.parseAnalysis(analysisOutcome.content)
                 ?.toPromptContext()
@@ -1572,7 +1577,11 @@ class SoulBotService : AccessibilityService() {
                 rejectedReplies = rejected,
                 correction = correction,
                 analysisContext = analysisContext,
-                deadlineElapsedMs = deadline,
+                deadlineElapsedMs = ReplyPipelinePolicy.stageDeadline(
+                    SystemClock.elapsedRealtime(),
+                    deadline,
+                    ReplyPipelinePolicy.WRITER_BUDGET_MS,
+                ),
             )
             if (!running) throw StoppedException()
             val current = writerOutcome.content?.let(ReplyNaturalness::sanitize)
@@ -1637,6 +1646,11 @@ class SoulBotService : AccessibilityService() {
                 append(finalCandidate)
             }
             setNextStep("检查回复是否贴合上下文", (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            val reviewerDeadline = ReplyPipelinePolicy.stageDeadline(
+                SystemClock.elapsedRealtime(),
+                deadline,
+                ReplyPipelinePolicy.REVIEWER_BUDGET_MS,
+            )
             val reviewOutcome = routeModelChatDetailed(
                 "你当前只执行后台回复质量审核与必要修订，不是直接和联系人聊天。\n" +
                     Prefs.getSelfProfile(applicationContext).promptContext() +
@@ -1648,7 +1662,7 @@ class SoulBotService : AccessibilityService() {
                     ) +
                     "\n" + ReplyPipelinePolicy.reviewInstructions(),
                 listOf("user" to reviewInput),
-                deadline,
+                reviewerDeadline,
                 preferDifferentFromEndpointId = writer.endpointId,
             )
             val review = ReplyPipelinePolicy.parseReview(reviewOutcome.content)
