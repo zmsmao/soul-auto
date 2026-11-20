@@ -108,7 +108,7 @@ class ReplyReplayPromptTest {
     }
 
     @Test fun leakedAssistantDraftsAreRemovedFromHistoricalReplay() {
-        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。\\n" +
+        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。\n" +
             "答：互联网行业，具体岗位可以模糊说。只回答，不盘问。"
         val polluted = current.copy(
             turns = listOf(
