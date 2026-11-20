@@ -379,6 +379,7 @@ class ConversationMemoryDatabase(context: Context) :
         if (cleanRole != "in" && cleanRole != "out") return null
         val cleanContent = content.trim().take(2000)
         if (cleanContent.isEmpty()) return null
+        if (cleanRole == "out" && ReplyNaturalness.isInternalDraft(cleanContent)) return null
         return cleanRole to cleanContent
     }
 
