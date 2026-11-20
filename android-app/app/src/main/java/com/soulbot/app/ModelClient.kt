@@ -243,4 +243,5 @@ object ModelClient {
             "",
         ).trim()
         return cleaned.ifBlank { null }
-    }}
+    }
+}
