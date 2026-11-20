@@ -107,6 +107,24 @@ class ReplyReplayPromptTest {
         }
     }
 
+    @Test fun leakedAssistantDraftsAreRemovedFromHistoricalReplay() {
+        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。\\n" +
+            "答：互联网行业，具体岗位可以模糊说。只回答，不盘问。"
+        val polluted = current.copy(
+            turns = listOf(
+                ReplayTurn("in", "做什么工作的"),
+                ReplayTurn("out", leaked),
+                ReplayTurn("in", "你平时做什么呀"),
+            ),
+        )
+
+        val prompt = ReplyReplayPrompt.build(polluted, SelfProfile(), emptyList(), personalized = false)
+
+        assertFalse(prompt.system.contains("用户问做什么工作的"))
+        assertFalse(prompt.messages.any { it.second.contains("用户问做什么工作的") })
+        assertEquals(listOf("做什么工作的", "你平时做什么呀"), prompt.messages.map { it.second })
+    }
+
     @Test fun historicalReplayNeverInjectsTodaysActualDateOrHour() {
         val historical = ModelClient.buildSystemPrompt(historicalReplay = true)
         val live = ModelClient.buildSystemPrompt(historicalReplay = false)
