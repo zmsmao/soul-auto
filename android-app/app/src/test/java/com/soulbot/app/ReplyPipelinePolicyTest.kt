@@ -64,7 +64,7 @@ class ReplyPipelinePolicyTest {
     @Test
     fun parserHandlesEscapedCharactersAndNestedJsonValues() {
         val parsed = ReplyPipelinePolicy.parseAnalysis(
-            """{"intent":"问\\"工作\\"","emotion":"neutral","context_anchor":"A\\nB","reply_goal":"自然回答","reply_action":"answer","relationship_signal":"none","signal_confidence":0.7,"facts_to_use":["事实一","事实\\u4e8c"],"extra":{"unused":[1,true,null]}}""",
+            """{"intent":"问\"工作\"","emotion":"neutral","context_anchor":"A\nB","reply_goal":"自然回答","reply_action":"answer","relationship_signal":"none","signal_confidence":0.7,"facts_to_use":["事实一","事实\u4e8c"],"extra":{"unused":[1,true,null]}}""",
         )
         assertNotNull(parsed)
         assertEquals("问\"工作\"", parsed!!.intent)
