@@ -34,6 +34,27 @@ class ChatLearningTest {
     }
 
     @Test
+    fun manualStyleSamplesRetainTheirConversationScene() {
+        val thread = listOf("in" to "你平时做什么", "out" to "互联网研发")
+
+        val qiyu = ManualStyleLearner.extract(thread, ReplyScene.QIYU) { false }
+        val chat = ManualStyleLearner.extract(thread) { false }
+
+        assertEquals(ReplyScene.QIYU, qiyu.single().scene)
+        assertEquals(ReplyScene.CHAT, chat.single().scene)
+    }
+
+    @Test
+    fun manualStyleSamplesKeepSceneInTheirIdentity() {
+        val thread = listOf("in" to "喜欢做饭吗", "out" to "还挺喜欢")
+        val chat = ManualStyleLearner.extract(thread) { false }
+        val match = ManualStyleLearner.extract(thread, ReplyScene.SOUL_MATCH) { false }
+
+        assertEquals(ReplyScene.CHAT, chat.single().scene)
+        assertEquals(ReplyScene.SOUL_MATCH, match.single().scene)
+    }
+
+    @Test
     fun ranksSimilarIncomingMessageFirst() {
         val samples = listOf(
             ChatStyleSample("你下班了吗", "刚下"),

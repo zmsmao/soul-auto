@@ -96,8 +96,8 @@ class ChatLearningDatabase(context: Context) :
 
     fun styleSampleCount(): Int = scalarCount("style_samples")
 
-    fun styleProfile(): ChatStyleProfile {
-        val samples = allStyleSamples(200)
+    fun styleProfile(scene: ReplyScene = ReplyScene.CHAT): ChatStyleProfile {
+        val samples = allStyleSamples(200, scene)
         if (samples.isEmpty()) return ChatStyleProfile(0, 0, 0, 0, 0)
         fun percent(count: Int): Int = count * 100 / samples.size
         val outgoing = samples.map { it.myMessage }
@@ -115,7 +115,7 @@ class ChatLearningDatabase(context: Context) :
                 .filter { it > 0 }
         }
         return ChatStyleProfile(
-            sampleCount = styleSampleCount(),
+            sampleCount = samples.size,
             averageLength = outgoing.sumOf { it.length } / samples.size,
             emojiPercent = percent(samples.count { sample ->
                 sample.myMessage.codePoints().anyMatch { it > 0xFFFF }
@@ -352,7 +352,7 @@ class ChatLearningDatabase(context: Context) :
         var accepted = 0
         var rejected = 0
         readableDatabase.rawQuery(
-            "SELECT accepted, COUNT(*) FROM reply_quality_events GROUP BY accepted",
+            "SELECT accepted, COUNT(*) FROM reply_quality_events WHERE accepted=0 OR reason='sent' GROUP BY accepted",
             null,
         ).use { cursor ->
             while (cursor.moveToNext()) {

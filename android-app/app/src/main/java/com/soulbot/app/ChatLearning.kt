@@ -117,6 +117,7 @@ object ChatSampleParser {
 object ManualStyleLearner {
     fun extract(
         thread: List<Pair<String, String>>,
+        scene: ReplyScene = ReplyScene.CHAT,
         isAutomatedReply: (String) -> Boolean,
     ): List<ChatStyleSample> {
         val result = mutableListOf<ChatStyleSample>()
@@ -129,7 +130,7 @@ object ManualStyleLearner {
                 if (incoming.size > 3) incoming.removeAt(0)
             } else if (role == "out") {
                 if (incoming.isNotEmpty() && !isAutomatedReply(text)) {
-                    result += ChatStyleSample(incoming.joinToString("\n"), text)
+                    result += ChatStyleSample(incoming.joinToString("\n"), text, scene = scene)
                 }
                 // Any outgoing message closes the current reply turn. Without
                 // this reset, the next sample would accidentally include the
@@ -138,7 +139,7 @@ object ManualStyleLearner {
             }
         }
         return result.distinctBy {
-            comparableText(it.theirMessage) + "\u0000" + comparableText(it.myMessage)
+            it.scene.name + "\u0000" + comparableText(it.theirMessage) + "\u0000" + comparableText(it.myMessage)
         }
     }
 }

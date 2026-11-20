@@ -1,6 +1,16 @@
 package com.soulbot.app
 
 import android.content.Context
+import android.os.SystemClock
+
+data class ModelRouteOutcome(
+    val content: String?,
+    val endpointId: String = "",
+    val endpointLabel: String = "",
+    val model: String = "",
+    val durationMs: Long = 0,
+    val error: String = "",
+)
 
 object ModelRouter {
     const val MAX_GENERATION_WAIT_MS = 75_000L
@@ -15,20 +25,50 @@ object ModelRouter {
     @Volatile var lastUsedLabel: String = ""
         private set
 
+    /** Compatibility API for existing one-stage call sites. */
     fun chat(
         context: Context,
         systemPrompt: String,
         messages: List<Pair<String, String>>,
         onProgress: (String, Long) -> Unit = { _, _ -> },
         waitBeforeNext: (Long) -> Unit = { Thread.sleep(it) },
-    ): String? {
-        val startedAt = System.currentTimeMillis()
+        deadlineElapsedMs: Long? = null,
+    ): String? = chatDetailed(
+        context = context,
+        systemPrompt = systemPrompt,
+        messages = messages,
+        deadlineElapsedMs = deadlineElapsedMs,
+        onProgress = onProgress,
+        waitBeforeNext = waitBeforeNext,
+    ).content
+
+    /**
+     * Metadata belongs to this request. Multi-stage generation must not attribute
+     * a writer's rejected reply to the endpoint used by a later reviewer request.
+     */
+    fun chatDetailed(
+        context: Context,
+        systemPrompt: String,
+        messages: List<Pair<String, String>>,
+        deadlineElapsedMs: Long? = null,
+        onProgress: (String, Long) -> Unit = { _, _ -> },
+        waitBeforeNext: (Long) -> Unit = { Thread.sleep(it) },
+    ): ModelRouteOutcome {
+        val startedAt = SystemClock.elapsedRealtime()
+        val deadline = minOf(
+            startedAt + MAX_GENERATION_WAIT_MS,
+            deadlineElapsedMs ?: Long.MAX_VALUE,
+        )
         val endpoints = ModelEndpointPrefs.getEndpoints(context)
         val health = ModelEndpointPrefs.getHealth(context)
-        val candidates = ModelFailoverPolicy.orderedCandidates(endpoints, health, startedAt)
+        val candidates = ModelFailoverPolicy.orderedCandidates(
+            endpoints, health, System.currentTimeMillis(),
+        )
         if (candidates.isEmpty()) {
             val enabled = endpoints.filter(ModelEndpointRules::isRunnable)
-            val waitSeconds = ModelFailoverPolicy.secondsUntilNextCandidate(endpoints, health, startedAt)
+            val waitSeconds = ModelFailoverPolicy.secondsUntilNextCandidate(
+                endpoints, health, System.currentTimeMillis(),
+            )
             lastError = when {
                 enabled.isEmpty() -> "没有已启用且配置完整的模型"
                 waitSeconds != null -> "所有模型正在冷却，${waitSeconds} 秒后可用"
@@ -39,23 +79,26 @@ object ModelRouter {
                 "model route unavailable; configured=${endpoints.size}; runnable=${enabled.size}; cooldownSeconds=${waitSeconds ?: 0}",
             )
             onProgress(lastError, (waitSeconds ?: 0) * 1000)
-            return null
+            return ModelRouteOutcome(
+                content = null,
+                durationMs = SystemClock.elapsedRealtime() - startedAt,
+                error = lastError,
+            )
         }
 
         val inputChars = messages.sumOf { it.second.length }
         RuntimeLog.record(
             context,
-            "model route started; candidates=${candidates.size}; messages=${messages.size}; inputChars=$inputChars; budgetMs=$MAX_GENERATION_WAIT_MS",
+            "model route started; candidates=${candidates.size}; messages=${messages.size}; inputChars=$inputChars; budgetMs=${(deadline - startedAt).coerceAtLeast(0)}",
         )
-
         for ((candidateIndex, endpoint) in candidates.withIndex()) {
-            val elapsed = System.currentTimeMillis() - startedAt
-            val remaining = MAX_GENERATION_WAIT_MS - elapsed
+            val elapsed = SystemClock.elapsedRealtime()
+            val remaining = deadline - elapsed
             if (remaining < MIN_CALL_BUDGET_MS) {
-                lastError = "本轮模型调用已超过 75 秒"
+                lastError = "本轮模型调用已达到总时间预算"
                 RuntimeLog.record(
                     context,
-                    "model route budget exhausted; elapsedMs=$elapsed; remainingMs=$remaining",
+                    "model route budget exhausted; elapsedMs=${elapsed - startedAt}; remainingMs=$remaining",
                 )
                 break
             }
@@ -83,7 +126,13 @@ object ModelRouter {
                     context,
                     "model succeeded; priority=$priority; endpointId=${endpoint.id}; http=${result.httpStatus ?: 0}; durationMs=${result.durationMs}; responseBytes=${result.responseBytes}; outputChars=${result.content.length}",
                 )
-                return result.content
+                return ModelRouteOutcome(
+                    content = result.content,
+                    endpointId = endpoint.id,
+                    endpointLabel = endpoint.shortLabel(),
+                    model = endpoint.model,
+                    durationMs = SystemClock.elapsedRealtime() - startedAt,
+                )
             }
 
             ModelEndpointPrefs.recordFailure(context, endpoint.id, result)
@@ -93,7 +142,7 @@ object ModelRouter {
                 context,
                 "model failed; priority=$priority; endpointId=${endpoint.id}; type=${result.failureType}; http=${result.httpStatus ?: 0}; durationMs=${result.durationMs}; retryAfterMs=${result.retryAfterMs}; hasNext=$hasNext",
             )
-            if (hasNext) {
+            if (hasNext && deadline - SystemClock.elapsedRealtime() > SWITCH_DELAY_MS + MIN_CALL_BUDGET_MS) {
                 val next = candidates[candidateIndex + 1]
                 val nextPriority = endpoints.indexOfFirst { it.id == next.id } + 1
                 onProgress("P$priority 失败：${lastError.take(22)}，切换 P$nextPriority", SWITCH_DELAY_MS)
@@ -104,18 +153,25 @@ object ModelRouter {
                 waitBeforeNext(SWITCH_DELAY_MS)
             }
         }
-        return null
+        return ModelRouteOutcome(
+            content = null,
+            durationMs = SystemClock.elapsedRealtime() - startedAt,
+            error = lastError,
+        )
     }
 
-    fun markAccepted(context: Context) {
-        lastUsedEndpointId.takeIf(String::isNotBlank)?.let {
+    fun markAccepted(context: Context, endpointId: String = lastUsedEndpointId) {
+        endpointId.takeIf { it.isNotBlank() }?.let {
             ModelEndpointPrefs.recordSuccess(context, it, accepted = true)
             RuntimeLog.record(context, "model reply accepted; endpointId=$it")
         }
     }
 
-    fun markQualityRejected(context: Context): Boolean =
-        lastUsedEndpointId.takeIf(String::isNotBlank)
+    fun markQualityRejected(
+        context: Context,
+        endpointId: String = lastUsedEndpointId,
+    ): Boolean =
+        endpointId.takeIf { it.isNotBlank() }
             ?.let {
                 RuntimeLog.record(context, "model reply quality rejected; endpointId=$it")
                 ModelEndpointPrefs.recordQualityRejected(context, it)
