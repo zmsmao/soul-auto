@@ -122,4 +122,26 @@ class ReplyReplayPromptTest {
             assertFalse(prompt.system.contains("今天真实日期是"))
         }
     }
+
+    @Test fun qingshengGuidanceIsSharedByLiveAndHistoricalPrompts() {
+        val live = ModelClient.buildSystemPrompt()
+        val historical = ModelClient.buildSystemPrompt(historicalReplay = true)
+        for (prompt in listOf(live, historical)) {
+            assertTrue(prompt.contains("【Soul 聊天策略"))
+            assertTrue(prompt.contains("七阶段关系判断"))
+            assertTrue(prompt.contains("千人千面的动态适配"))
+            assertTrue(prompt.contains("适度冷读"))
+            assertTrue(prompt.contains("话题引领"))
+            assertTrue(prompt.contains("温和调情"))
+            assertTrue(prompt.contains("简短实战参考"))
+            assertTrue(prompt.contains("邀约三步"))
+            assertTrue(prompt.contains("话题阶梯"))
+            assertTrue(prompt.contains("假性时间限制"))
+            assertTrue(prompt.contains("Neg／轻度否定式调侃"))
+            assertTrue(prompt.contains("嫉妒／竞争感"))
+            assertTrue(prompt.contains("冷热节奏／Push-Pull"))
+        }
+        assertTrue(live.contains("今天真实日期是"))
+        assertFalse(historical.contains("今天真实日期是"))
+    }
 }
