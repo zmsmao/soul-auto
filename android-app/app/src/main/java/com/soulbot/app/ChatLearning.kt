@@ -228,6 +228,33 @@ object ReplyNaturalness {
     )
 
     private val allowedTrailingLatin = setOf("ok", "lol", "emo", "ktv", "soul", "citywalk")
+    private val internalMetaLead = Regex("""(?is)^\\s*(?:用户|对方)(?:问|说|提到|发来|想知道)""")
+    private val internalMetaLabel = Regex(
+        """(?im)(?:^|[。！？\\n])\\s*(?:资料|上下文|已知信息|回复要求|输出要求)\\s*[：:]""",
+    )
+    private val internalAnswerLabel = Regex(
+        """(?im)(?:^|[。！？\\n])\\s*(?:答|答复|建议回复|最终回复|回复内容)\\s*[：:]""",
+    )
+    private val internalInstructionPhrases = listOf(
+        "直接回答", "只回答", "不盘问", "简短自然", "不要编造", "不编造具体",
+        "回复要接住", "之前发过", "不能重复", "不要追问", "不追加问题",
+    )
+
+    /**
+     * Detects high-confidence model planning text, not ordinary short or explanatory
+     * chat. Used both as a send-time guard and to keep old leaked drafts out of context.
+     */
+    fun isInternalDraft(text: String): Boolean {
+        val clean = text.trim()
+        if (clean.isEmpty()) return false
+        val hasMetaLead = internalMetaLead.containsMatchIn(clean)
+        val hasMetaLabel = internalMetaLabel.containsMatchIn(clean)
+        val hasAnswerLabel = internalAnswerLabel.containsMatchIn(clean)
+        val instructionCount = internalInstructionPhrases.count(clean::contains)
+        return (hasMetaLead && (hasMetaLabel || hasAnswerLabel || instructionCount >= 1)) ||
+            (hasMetaLabel && instructionCount >= 2) ||
+            (hasAnswerLabel && instructionCount >= 2)
+    }
 
     fun sanitize(raw: String): String = raw.trim()
         .removePrefix("回复：")
@@ -251,6 +278,7 @@ object ReplyNaturalness {
             ?.groupValues?.getOrNull(1)?.lowercase()
         return when {
             clean.isEmpty() -> "内容为空"
+            isInternalDraft(clean) -> "疑似模型内部分析或回复指令泄漏"
             artificialPhrases.any(clean::contains) -> "包含明显的 AI 套话"
             recentReplies.any { comparableText(it) == comparableText(clean) } -> "与最近回复重复"
             trailingLatin != null && trailingLatin !in allowedTrailingLatin ->
