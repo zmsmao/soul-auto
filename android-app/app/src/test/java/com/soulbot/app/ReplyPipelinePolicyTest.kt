@@ -58,7 +58,7 @@ class ReplyPipelinePolicyTest {
         assertEquals("询问工作", result!!.intent)
         assertEquals(1.0, result.signalConfidence, 0.0)
         assertEquals(listOf("互联网行业", "软件研发"), result.factsToUse)
-        assertTrue(result.toPromptContext().contains("不超越原始对话证据"))
+        assertTrue(result.toPromptContext().contains("不能超越原始对话证据"))
     }
 
     @Test
