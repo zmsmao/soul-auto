@@ -162,7 +162,7 @@ class ConversationMemoryDatabase(context: Context) :
             arrayOf(cleanContact, recentWindow.coerceAtLeast(0).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                candidates += ConversationMemoryEntry(
+                val entry = ConversationMemoryEntry(
                     eventKey = cursor.getString(0),
                     contact = cursor.getString(1),
                     role = cursor.getString(2),
@@ -170,6 +170,9 @@ class ConversationMemoryDatabase(context: Context) :
                     observedAt = cursor.getLong(4),
                     source = cursor.getString(5),
                 )
+                if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
+                    candidates += entry
+                }
             }
         }
         return ConversationMemoryLogic.rankRelevant(query, candidates, limit.coerceIn(1, 12))
@@ -217,11 +220,14 @@ class ConversationMemoryDatabase(context: Context) :
                 null,
             ).use { cursor ->
                 while (cursor.moveToNext()) {
+                    val role = cursor.getString(2)
+                    val content = cursor.getString(3)
+                    if (role == "out" && ReplyNaturalness.isInternalDraft(content)) continue
                     json.beginObject()
                     json.name("eventKey").value(cursor.getString(0))
                     json.name("contact").value(cursor.getString(1))
-                    json.name("role").value(cursor.getString(2))
-                    json.name("content").value(cursor.getString(3))
+                    json.name("role").value(role)
+                    json.name("content").value(content)
                     json.name("observedAt").value(cursor.getLong(4))
                     json.name("source").value(cursor.getString(5))
                     json.endObject()
@@ -331,10 +337,13 @@ class ConversationMemoryDatabase(context: Context) :
             arrayOf(contact, limit.toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                result += ConversationMemoryEntry(
+                val entry = ConversationMemoryEntry(
                     cursor.getString(0), cursor.getString(1), cursor.getString(2),
                     cursor.getString(3), cursor.getLong(4), cursor.getString(5),
                 )
+                if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
+                    result += entry
+                }
             }
         }
         return result.asReversed()
