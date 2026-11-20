@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  group: android-ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -34,13 +34,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Android unit tests
+      - name: Run unit tests and build debug APK
         working-directory: android-app
-        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
-
-      - name: Build debug APK
-        working-directory: android-app
-        run: bash ./gradlew --no-daemon :app:assembleDebug
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
