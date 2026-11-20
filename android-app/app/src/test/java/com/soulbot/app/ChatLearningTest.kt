@@ -233,6 +233,29 @@ class ChatLearningTest {
     }
 
     @Test
+    fun rejectsLeakedInternalReplyPlanningButAllowsPlainAnswers() {
+        val leaked = "用户问做什么工作的。资料：互联网行业。直接回答，不编造具体岗位。" +
+            "之前发过“直男确实省事，不用猜来猜去”了，不能重复。" +
+            "\n\n答：互联网行业，具体岗位可以模糊说。简短自然。回复要接住“做什么工作的”，只回答，不盘问。"
+
+        assertTrue(ReplyNaturalness.isInternalDraft(leaked))
+        assertEquals(
+            "疑似模型内部分析或回复指令泄漏",
+            ReplyNaturalness.rejectionReason(leaked),
+        )
+        assertFalse(ReplyNaturalness.isInternalDraft("互联网行业，主要做软件研发。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("互联网行业，主要做软件研发。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("我在互联网行业工作。"))
+    }
+
+    @Test
+    fun detectsExplicitAnalysisLabelsWithoutRejectingNormalUseOfTheWord() {
+        assertTrue(ReplyNaturalness.isInternalDraft("分析：先回答她的问题。建议回复：互联网行业。只回答，不盘问。"))
+        assertFalse(ReplyNaturalness.isInternalDraft("我简单分析了一下，还是觉得这家店不错。"))
+        assertEquals(null, ReplyNaturalness.rejectionReason("我简单分析了一下，还是觉得这家店不错。"))
+    }
+
+    @Test
     fun rejectsLikelyModelGarbageAtTheEnd() {
         assertEquals(
             "结尾包含疑似模型残片",
