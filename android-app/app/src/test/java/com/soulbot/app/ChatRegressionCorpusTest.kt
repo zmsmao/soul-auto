@@ -66,9 +66,9 @@ class ChatRegressionCorpusTest {
                 "out" to "那我直接转正，被点名还挺有面子。",
                 "in" to "哈哈，当然啦。",
                 "out" to "我先坐稳这个位置，别说我是临时工。",
-                "in" to "怎么会说你是临时工呢？",
+                "in" to "哈哈，那你放心吧。",
             ),
-            listOf("怎么会说你是临时工呢？"),
+            listOf("哈哈，那你放心吧。"),
         )
         assertTrue(guidance.contains("同一个细节换词复述"))
         assertTrue(guidance.contains("一个玩笑接住一两次即可"))
