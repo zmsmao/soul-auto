@@ -1418,7 +1418,9 @@ class SoulBotService : AccessibilityService() {
         focusIncoming: List<String> = emptyList(),
         rejectedReplies: List<String> = emptyList(),
     ): String? {
-        val recent = thread.takeLast(CONTEXT_LEN)
+        val recent = thread.takeLast(CONTEXT_LEN).filterNot { (role, text) ->
+            role == "out" && ReplyNaturalness.isInternalDraft(text)
+        }
         val contextAnalysis = ConversationReplyContext.analyze(recent, focusIncoming)
         val msgs = mutableListOf<Pair<String, String>>()
         for ((role, text) in recent) {
@@ -1674,7 +1676,9 @@ class SoulBotService : AccessibilityService() {
             if (includeMemory && Prefs.getContactMemoryEnabled(applicationContext) && contactName.isNotBlank()) {
                 val olderMessages = runCatching {
                     conversationMemoryDb?.relevantOlderMessages(contactName, latestMessage, 6)
-                }.getOrNull().orEmpty()
+                }.getOrNull().orEmpty().filterNot { message ->
+                    message.role == "out" && ReplyNaturalness.isInternalDraft(message.content)
+                }
                 if (olderMessages.isNotEmpty()) {
                     append("\n\n下面是与当前话题相关的更早聊天片段。只在确实相关时自然接上，")
                     append("不要复述整段，不要声称自己在读取数据库，也不要把推测当事实：")
