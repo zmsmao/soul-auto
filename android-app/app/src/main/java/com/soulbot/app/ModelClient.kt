@@ -28,6 +28,8 @@ data class ModelCallResult(
     val durationMs: Long = 0,
 )
 
+internal data class ModelContentBlock(val type: String, val text: String)
+
 object ModelClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -200,35 +202,45 @@ object ModelClient {
         val choices = json.optJSONArray("choices") ?: return null
         if (choices.length() == 0) return null
         val choice = choices.optJSONObject(0) ?: return null
-        val msg = choice.optJSONObject("message")
-        val contentValue = msg?.opt("content")
-        val blockContent = (contentValue as? JSONArray)?.let { blocks ->
-            buildString {
-                for (index in 0 until blocks.length()) {
-                    val block = blocks.optJSONObject(index) ?: continue
-                    val type = block.optString("type").lowercase()
-                    // Only user-visible text blocks may become a chat reply. Thinking,
-                    // reasoning and unknown block types are deliberately ignored.
-                    if (type.isNotBlank() && type !in setOf("text", "output_text")) continue
-                    val text = block.optString("text")
-                    if (text.isNotBlank()) append(text)
+        val message = choice.optJSONObject("message")
+        val contentValue = message?.opt("content")
+        val blocks = (contentValue as? JSONArray)?.let { array ->
+            buildList {
+                for (index in 0 until array.length()) {
+                    val block = array.optJSONObject(index) ?: continue
+                    add(ModelContentBlock(block.optString("type"), block.optString("text")))
                 }
-            }.takeIf { it.isNotBlank() }
-        }
-        val raw = (contentValue as? String)?.takeIf { it.isNotBlank() }
-            ?: blockContent
-            ?: choice.optString("text")?.takeIf { it.isNotBlank() }
-            // Never fall back to message.reasoning_content: it is not user-facing output.
-            ?: return null
-        val cleaned = raw
-            .replace(
-                Regex(
-                    """<(think|analysis|reasoning|thinking)>.*?</\\1>""",
-                    setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
-                ),
-                "",
-            )
-            .trim()
-        return cleaned.ifBlank { null }
+            }
+        }.orEmpty()
+        return selectUserFacingContent(
+            contentText = contentValue as? String,
+            blocks = blocks,
+            legacyText = choice.optString("text").takeIf { it.isNotBlank() },
+        )
     }
-}
+
+    /** Selects only user-visible text; reasoning_content is intentionally never accepted. */
+    internal fun selectUserFacingContent(
+        contentText: String?,
+        blocks: List<ModelContentBlock>,
+        legacyText: String?,
+    ): String? {
+        val blockContent = blocks.asSequence()
+            .filter { it.type.isBlank() || it.type.lowercase() in setOf("text", "output_text") }
+            .map { it.text }
+            .filter { it.isNotBlank() }
+            .joinToString("")
+            .takeIf { it.isNotBlank() }
+        val raw = contentText?.takeIf { it.isNotBlank() }
+            ?: blockContent
+            ?: legacyText?.takeIf { it.isNotBlank() }
+            ?: return null
+        val cleaned = raw.replace(
+            Regex(
+                """<(think|analysis|reasoning|thinking)>.*?</\1>""",
+                setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
+            ),
+            "",
+        ).trim()
+        return cleaned.ifBlank { null }
+    }}
