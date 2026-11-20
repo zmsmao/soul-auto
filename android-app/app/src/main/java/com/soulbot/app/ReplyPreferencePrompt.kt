@@ -42,7 +42,10 @@ object ReplyReplayPrompt {
         examples: List<ReplyReplayCase>,
         personalized: Boolean,
     ): ReplayPrompt {
-        val thread = case.turns.map { it.role to it.text }
+        val cleanTurns = case.turns.filterNot { turn ->
+            turn.role == "out" && ReplyNaturalness.isInternalDraft(turn.text)
+        }
+        val thread = cleanTurns.map { it.role to it.text }
         var system = ModelClient.buildSystemPrompt(profile, historicalReplay = true)
         system += if (case.scene == ReplyScene.CHAT) {
             "\n只生成对选定截止消息的回复；聊天记录之后的消息不可假设。"
@@ -61,14 +64,14 @@ object ReplyReplayPrompt {
             if (analysis.supportingTranscript.isNotBlank()) {
                 system += "\n短答需要承接前文，先辨明它回答的是哪一句，不能仅因字少判定冷淡。"
             }
-            val key = ReplyReplayLogic.contextKey(case.turns, case.scene)
+            val key = ReplyReplayLogic.contextKey(cleanTurns, case.scene)
             system += ReplyPreferencePrompt.build(examples.filter {
                 ReplyReplayLogic.contextKey(it.turns, it.scene) != key &&
                     !ReplyReplayLogic.overlapsContext(case.turns, it.turns)
             })
         }
         // Never include this case's original reply, correction, votes, or later conversation.
-        return ReplayPrompt(system, case.turns.map { (role, text) ->
+        return ReplayPrompt(system, cleanTurns.map { (role, text) ->
             (if (role == "in") "user" else "assistant") to text
         })
     }
