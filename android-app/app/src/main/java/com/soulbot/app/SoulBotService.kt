@@ -1776,6 +1776,9 @@ class SoulBotService : AccessibilityService() {
         return null
     }
 
+    private fun memoryThreadId(contactName: String): String =
+        DiagnosticIdentity.contactId(applicationContext, contactName)
+
     private fun personalizationContext(
         contactName: String,
         latestMessage: String,
@@ -1827,7 +1830,7 @@ class SoulBotService : AccessibilityService() {
             }
             if (includeMemory && Prefs.getContactMemoryEnabled(applicationContext) && contactName.isNotBlank()) {
                 val olderMessages = runCatching {
-                    conversationMemoryDb?.relevantOlderMessages(contactName, latestMessage, 6)
+                    conversationMemoryDb?.relevantOlderMessages(memoryThreadId(contactName), scene, latestMessage, 6)
                 }.getOrNull().orEmpty().filterNot { message ->
                     message.role == "out" && ReplyNaturalness.isInternalDraft(message.content)
                 }
@@ -1850,7 +1853,7 @@ class SoulBotService : AccessibilityService() {
         scene: ReplyScene = ReplyScene.CHAT,
     ) {
         runCatching {
-            conversationMemoryDb?.syncVisibleThread(contactName, thread)
+            conversationMemoryDb?.syncVisibleThread(contactName, thread, memoryThreadId(contactName), scene)
         }.onFailure { error ->
             RuntimeLog.record(
                 applicationContext,
@@ -1875,9 +1878,10 @@ class SoulBotService : AccessibilityService() {
         incomingMessages: List<String>,
         reply: String,
         opening: OpeningContext? = null,
+        scene: ReplyScene = opening?.scene ?: ReplyScene.CHAT,
     ) {
         runCatching {
-            conversationMemoryDb?.recordMessage(contactName, "out", reply)
+            conversationMemoryDb?.recordMessage(contactName, "out", reply, memoryThreadId(contactName), scene)
         }.onFailure { error ->
             RuntimeLog.record(
                 applicationContext,
@@ -1943,7 +1947,7 @@ class SoulBotService : AccessibilityService() {
             gotoSoulPlanet()
             return false
         }
-        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(contactName) == true)
+        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.SOUL_MATCH) == true)
         learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
@@ -2022,7 +2026,7 @@ class SoulBotService : AccessibilityService() {
             } else {
                 "灵魂匹配资料：$openingBasis"
             }
-            recordAutomatedInteraction(contactName, contextMessages, finalReply, openingContext.takeUnless { replyingToMessage })
+            recordAutomatedInteraction(contactName, contextMessages, finalReply, openingContext.takeUnless { replyingToMessage }, scene = ReplyScene.SOUL_MATCH)
             historyDb?.record(contactName, historyContext, finalReply)
             setNextStep("灵魂匹配开场白已发送，返回星球页", 1200)
             sleep(1200)
@@ -2148,10 +2152,10 @@ class SoulBotService : AccessibilityService() {
         if (pendingIncomingVoiceBubbles().isNotEmpty()) {
             return deferQiyu(session, "voice_arrived", "奇遇铃收到新语音，等待转写")
         }
-        if (QiyuConversationPolicy.shouldWaitForHistory(thread, conversationMemoryDb?.hasHistory(contactName) == true)) {
+        if (QiyuConversationPolicy.shouldWaitForHistory(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.QIYU) == true)) {
             return deferQiyu(session, "stored_history_not_visible", "奇遇铃已有本地记录，但页面内容尚未读到")
         }
-        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(contactName) == true)
+        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.QIYU) == true)
         learnFromManualReplies(contactName, thread, ReplyScene.QIYU)
         val incoming = thread.filter { it.first == "in" }.map { it.second }
         val pending = qiyuSeen.unseen(contactName, incoming)
@@ -2257,7 +2261,7 @@ class SoulBotService : AccessibilityService() {
     private fun finishQiyuSend(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         pendingQiyu = null
         qiyuSeen.markSeen(session.contactName, prepared.thread.filter { it.first == "in" }.map { it.second })
-        recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening)
+        recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening, scene = ReplyScene.QIYU)
         historyDb?.record(session.contactName,
             prepared.opening?.let { "奇遇铃资料：${it.content}" } ?: prepared.pending.joinToString("\n"), prepared.text)
         RuntimeLog.record(applicationContext,
@@ -2868,7 +2872,7 @@ class SoulBotService : AccessibilityService() {
                     if (sent) {
                         seenDm += postKey
                         greetDb.recordGreet(name, text)
-                        recordAutomatedInteraction(name, listOf(text), reply, openingContext)
+                        recordAutomatedInteraction(name, listOf(text), reply, openingContext, scene = ReplyScene.SQUARE)
                         historyDb?.record(name, text, reply)
                     }
                     RuntimeLog.record(
