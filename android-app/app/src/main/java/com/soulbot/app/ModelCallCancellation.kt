@@ -17,7 +17,7 @@ class ModelCallCancellation {
 
     fun throwIfCancelled() {
         if (cancelled || Thread.currentThread().isInterrupted) {
-            throw CancellationException("回放已取消")
+            throw CancellationException("模型请求已取消")
         }
     }
 

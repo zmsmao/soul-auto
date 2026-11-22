@@ -124,6 +124,7 @@ class SoulBotService : AccessibilityService() {
         val pending: List<String>,
         val opening: OpeningContext?,
         val outgoingBefore: Int,
+        val eventAnchor: String,
         var attempts: Int = 0,
         var clickedSend: Boolean = false,
         var writtenText: String? = null,
@@ -2141,6 +2142,7 @@ class SoulBotService : AccessibilityService() {
         }
         val thread = readThread()
         if (!isExpectedConversation(contactName)) return false
+        val eventAnchor = currentIncomingMessageKeys(contactName).joinToString(",")
         val openingBasis = SoulMatchContent.openingBasis(contactName, gravityTags, zodiac)
         if (contactName.isBlank()) {
             setNextStep("未确认匹配联系人，本轮不发送")
@@ -2228,6 +2230,7 @@ class SoulBotService : AccessibilityService() {
             expectedContact = contactName,
             idempotencyKey = matchOpeningKey,
             sceneOverride = ReplyScene.SOUL_MATCH,
+            expectedEventAnchor = eventAnchor,
         )
         if (sent) {
             handledMatches += matchKey
@@ -2244,6 +2247,11 @@ class SoulBotService : AccessibilityService() {
             setNextStep("灵魂匹配开场白已发送，返回星球页", 1200)
             sleep(1200)
             gotoSoulPlanet()
+        } else if (isOnChat() && isExpectedConversation(contactName) &&
+            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+        ) {
+            RuntimeLog.record(applicationContext, "soul match reply regenerated; reason=incoming_changed_before_send")
+            return replyToCurrentConversation(contactName, seen)
         }
         return sent
     }
@@ -2391,6 +2399,7 @@ class SoulBotService : AccessibilityService() {
             session.reason,
         )
         val replying = route == OpeningConversationAction.REPLY
+        val eventAnchor = currentIncomingMessageKeys(contactName).joinToString(",")
         val finalReply = if (replying) {
             generateValidatedChatReply(contactName, thread, pending, ReplyScene.QIYU)
         } else generateValidatedOpening("优先生成奇遇铃开场", openingContext)
@@ -2407,8 +2416,10 @@ class SoulBotService : AccessibilityService() {
             return deferQiyu(session, "incoming_changed", "奇遇铃会话有变化，将按最新内容重新准备")
         }
         val sendText = splitReply(finalReply).single()
-        val prepared = QiyuPreparedReply(sendText, thread, pending, openingContext.takeUnless { replying },
-            outgoingOccurrenceCount(sendText))
+        val prepared = QiyuPreparedReply(
+            sendText, thread, pending, openingContext.takeUnless { replying },
+            outgoingOccurrenceCount(sendText), eventAnchor,
+        )
         session.prepared = prepared
         return sendPreparedQiyu(session, prepared)
     }
@@ -2466,6 +2477,7 @@ class SoulBotService : AccessibilityService() {
             onSendClick = { prepared.clickedSend = true },
             idempotencyKey = qiyuOpeningKey,
             sceneOverride = ReplyScene.QIYU,
+            expectedEventAnchor = prepared.eventAnchor,
         )
         if (sent) return finishQiyuSend(session, prepared)
         return deferQiyu(session, "send_failed", "奇遇铃消息未确认发出，将检查同一条草稿")
@@ -2849,13 +2861,22 @@ class SoulBotService : AccessibilityService() {
             handleQiyu()
             return false
         }
-        val sent = send(reply, expectedContact = name)
+        val sent = send(
+            reply,
+            expectedContact = name,
+            expectedEventAnchor = greetingEventKey,
+        )
         if (sent) {
             if (incomingTexts.isNotEmpty()) seen.markSeen("greeting:" + memoryThreadId(name), incomingTexts)
             greetDb.recordGreet(systemGreetingName, replyContext)
             recordAutomatedInteraction(name, new, reply)
             historyDb?.record(name, replyContext, reply)
             setNextStep("已确认给 $name 发出消息，返回招呼列表", 800)
+        } else if (isOnChat() && isExpectedConversation(name) &&
+            currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
+        ) {
+            RuntimeLog.record(applicationContext, "greeting reply regenerated; reason=incoming_changed_before_send")
+            return replyToCurrentConversation(name, seen)
         } else {
             setNextStep("给 $name 的消息未发出，本轮不再重复进入", 1500)
             sleep(1500)
@@ -3120,6 +3141,7 @@ class SoulBotService : AccessibilityService() {
                     RuntimeLog.record(applicationContext, "square private chat opened; contactId=$contactId")
                     val openingContext = OpeningContext(ReplyScene.SQUARE, name, text)
                     val initialIncoming = incomingSignature(readThread())
+                    val initialEventAnchor = currentIncomingMessageKeys(name).joinToString(",")
                     val reply = generateValidatedOpening(
                         "生成给 $name 的广场开场白",
                         openingContext,
@@ -3149,7 +3171,20 @@ class SoulBotService : AccessibilityService() {
                         expectedContact = name,
                         idempotencyKey = squareSendKey,
                         sceneOverride = ReplyScene.SQUARE,
+                        expectedEventAnchor = initialEventAnchor,
                     )
+                    if (!sent && reply != null && isOnChat() && isExpectedConversation(name) &&
+                        currentIncomingMessageKeys(name).joinToString(",") != initialEventAnchor
+                    ) {
+                        setNextStep("广场开场发送前收到新消息，改为回复最新内容")
+                        val replied = replyToCurrentConversation(name, ConversationSeenTracker())
+                        if (replied) {
+                            seenDm += postKey
+                            greetDb.recordGreet(name, text)
+                        }
+                        backToSquare()
+                        return replied
+                    }
                     if (sent) {
                         seenDm += postKey
                         greetDb.recordGreet(name, text)
