@@ -903,6 +903,9 @@ class SoulBotService : AccessibilityService() {
             .count { it == target }
     }
 
+    /** Total visible outgoing count reconciles an uncertain click even when the retry text differs. */
+    private fun outgoingMessageCount(): Int = readThread().count { it.first == "out" }
+
     private fun visibleMessageOccurrenceCount(text: String): Int {
         val target = normalizeReply(text)
         if (target.isEmpty()) return 0
@@ -955,7 +958,7 @@ class SoulBotService : AccessibilityService() {
                 scene = sendScene,
                 bodyHash = ConversationIdentity.digest(normalizeReply(text)),
                 eventAnchor = incomingEventKeys.joinToString(","),
-                outgoingBaseline = outgoingOccurrenceCount(text),
+                outgoingBaseline = outgoingMessageCount(),
             )
         }
         if (durableSendKey != null && reservation != null) {
@@ -966,7 +969,7 @@ class SoulBotService : AccessibilityService() {
                     return true
                 }
                 SendAttemptDisposition.UNCERTAIN -> {
-                    if (outgoingOccurrenceCount(text) > reservation.outgoingBaseline) {
+                    if (outgoingMessageCount() > reservation.outgoingBaseline) {
                         conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
                         return expectedEventIsCurrent()
                     }
