@@ -19,6 +19,16 @@ object ReplyRhythmPolicy {
             val answerFirst = if (incomingQuestion) "本轮若还有实际问题，先简短回答；" else ""
             return "${answerFirst}对方正在收尾，简短回应即可，不开启新话题或追加问题；不为留住对方强行续聊。"
         }
+        if (focus.any(::isStyleFeedback)) {
+            val directAiQuestion = focus.any(::asksDirectAiIdentity)
+            return buildString {
+                append("对方在反馈我的表达像 AI、太官方或太书面。先用一句简短的话承认刚才表达生硬，立刻回到对方原本的具体话题；")
+                append("不要解释模型、分析自己为什么像 AI、长篇自嘲，也不要只把原句替换成同义词。")
+                if (directAiQuestion) {
+                    append("对方直接询问是否 AI 时必须如实回答，不否认、不假扮真人；简短回答后再回到话题。")
+                }
+            }
+        }
         if (incomingQuestion) {
             return "先回答对方实际问的问题；只用本人已确认的信息，不知道的不要编造。" +
                 "回答完整即可，不附带对等盘问；有相关反应可以自然补一句，没有也不必加引子。"
@@ -40,7 +50,39 @@ object ReplyRhythmPolicy {
             append("按这轮情境选择回答、接梗、补充一个相关看法或简短回应，不需要每样都做。")
             append("可以接一个细节，确有必要时才问一个容易回答的问题；陈述句也可以自然接话，不必凑问号。")
             append("双方短答时不强行换题、追问或硬造热闹，允许自然停顿；不能为了找共同点编造自己的经历。")
+            append("连续几轮不要围绕同一个细节换词复述；一个玩笑接住一两次即可，不要反复延长同一个梗。")
+            append("已经回应过的细节没有新内容时，可以转向对方确实提过的另一个兴趣点，或自然停顿；不为续聊硬造话题。")
         }
+    }
+
+    private fun normalizeFeedbackText(text: String): String =
+        text.lowercase().replace(Regex("[\\s\\p{P}\\p{S}]+"), "")
+
+    /** Avoid treating ordinary mentions of an official event or a robot as tone feedback. */
+    private fun isStyleFeedback(text: String): Boolean {
+        val normalized = normalizeFeedbackText(text)
+        val explicitFeedback = listOf(
+            "ai味", "ai感", "像ai", "像机器人", "机器人味", "豆包味", "好豆包",
+            "太官方", "很官方", "有点官方", "官方腔",
+            "太书面", "很书面", "书面化", "太机械", "很机械", "机械感",
+            "太生硬", "很生硬",
+        )
+        if (explicitFeedback.any(normalized::contains)) return true
+
+        val refersToMyWording = listOf(
+            "你说话", "你回复", "你的回复", "你这个问题", "你这问题",
+            "这句话", "这句回复", "你的表达", "你这个表达",
+        ).any(normalized::contains)
+        val toneCriticism = listOf("官方", "书面", "机械", "生硬", "ai生成", "豆包", "机器人")
+            .any(normalized::contains)
+        return refersToMyWording && toneCriticism
+    }
+
+    private fun asksDirectAiIdentity(text: String): Boolean {
+        val normalized = normalizeFeedbackText(text)
+        return listOf("你是ai吗", "你是不是ai", "你是机器人吗", "你是不是机器人")
+            .any(normalized::contains) ||
+            (normalized.contains("你") && normalized.contains("ai生成") && normalized.endsWith("吗"))
     }
 
     private fun containsCorrection(text: String): Boolean {
