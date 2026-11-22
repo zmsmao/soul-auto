@@ -918,13 +918,14 @@ class SoulBotService : AccessibilityService() {
         onInputWritten: (String) -> Unit = {},
         onSendClick: () -> Unit = {},
         idempotencyKey: String? = null,
+        sceneOverride: ReplyScene? = null,
     ): Boolean {
         if (!isOnChat()) {
             RuntimeLog.record(applicationContext, "message send rejected; reason=not_on_chat")
             return false
         }
         val pieces = splitReply(text)
-        val sendScene = when {
+        val sendScene = sceneOverride ?: when {
             pendingQiyu != null -> ReplyScene.QIYU
             currentScreen() == Screen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
             else -> ReplyScene.CHAT
@@ -2193,7 +2194,20 @@ class SoulBotService : AccessibilityService() {
             }
             return false
         }
-        val sent = send(finalReply, expectedContact = contactName)
+        val matchOpeningKey = if (replyingToMessage) null else {
+            ConversationIdentity.sendKey(
+                memoryThreadId(contactName),
+                ReplyScene.SOUL_MATCH.name,
+                listOf(ConversationIdentity.digest(matchKey)),
+                finalReply,
+            )
+        }
+        val sent = send(
+            finalReply,
+            expectedContact = contactName,
+            idempotencyKey = matchOpeningKey,
+            sceneOverride = ReplyScene.SOUL_MATCH,
+        )
         if (sent) {
             handledMatches += matchKey
             greetDb.recordGreet(persistentName, openingBasis)
@@ -2413,8 +2427,25 @@ class SoulBotService : AccessibilityService() {
         }
         prepared.attempts++
         setNextStep("立即发送奇遇铃私聊回复")
-        val sent = send(prepared.text, contactName, QiyuConversationPolicy.LOAD_TIMEOUT_MS,
-            onInputWritten = { prepared.writtenText = it }, onSendClick = { prepared.clickedSend = true })
+        val qiyuOpeningKey = prepared.opening?.let {
+            ConversationIdentity.sendKey(
+                memoryThreadId(contactName),
+                ReplyScene.QIYU.name,
+                listOf(ConversationIdentity.digest(
+                    session.signature + "\u0000" + session.reason + "\u0000" + it.content,
+                )),
+                prepared.text,
+            )
+        }
+        val sent = send(
+            prepared.text,
+            contactName,
+            QiyuConversationPolicy.LOAD_TIMEOUT_MS,
+            onInputWritten = { prepared.writtenText = it },
+            onSendClick = { prepared.clickedSend = true },
+            idempotencyKey = qiyuOpeningKey,
+            sceneOverride = ReplyScene.QIYU,
+        )
         if (sent) return finishQiyuSend(session, prepared)
         return deferQiyu(session, "send_failed", "奇遇铃消息未确认发出，将检查同一条草稿")
     }
@@ -3073,7 +3104,20 @@ class SoulBotService : AccessibilityService() {
                         backToSquare()
                         return replied
                     }
-                    val sent = reply != null && canSend && send(reply, expectedContact = name)
+                    val squareSendKey = reply?.let {
+                        ConversationIdentity.sendKey(
+                            memoryThreadId(name),
+                            ReplyScene.SQUARE.name,
+                            listOf(ConversationIdentity.digest(postKey)),
+                            it,
+                        )
+                    }
+                    val sent = reply != null && canSend && send(
+                        reply,
+                        expectedContact = name,
+                        idempotencyKey = squareSendKey,
+                        sceneOverride = ReplyScene.SQUARE,
+                    )
                     if (sent) {
                         seenDm += postKey
                         greetDb.recordGreet(name, text)
