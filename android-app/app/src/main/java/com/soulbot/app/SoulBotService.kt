@@ -960,14 +960,16 @@ class SoulBotService : AccessibilityService() {
         if (durableSendKey != null && reservation != null) {
             when (reservation.disposition) {
                 SendAttemptDisposition.ALREADY_CONFIRMED -> {
+                    if (!expectedEventIsCurrent()) return false
                     RuntimeLog.record(applicationContext, "message send suppressed; reason=already_confirmed")
                     return true
                 }
                 SendAttemptDisposition.UNCERTAIN -> {
                     if (outgoingOccurrenceCount(text) > reservation.outgoingBaseline) {
                         conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
-                        return true
+                        return expectedEventIsCurrent()
                     }
+                    if (!expectedEventIsCurrent()) return false
                     conversationMemoryDb?.markSendAttemptUncertain(durableSendKey)
                     RuntimeLog.record(applicationContext, "message send suppressed; reason=previous_click_unconfirmed")
                     return false
