@@ -1576,7 +1576,7 @@ class SoulBotService : AccessibilityService() {
                 "${if (role == "in") "对方" else "我"}：$text"
             },
             excludeContextKey = ReplyReplayLogic.contextKey(
-                recent.map { ReplayTurn(it.first, it.second) }, ReplyScene.CHAT,
+                recent.map { ReplayTurn(it.first, it.second) }, scene,
             ),
         )
         if (avoid.isNotEmpty()) {
@@ -1724,7 +1724,7 @@ class SoulBotService : AccessibilityService() {
         }
         val profile = learningDb
             ?.takeIf { Prefs.getStyleLearningEnabled(applicationContext) }
-            ?.styleProfile(ReplyScene.CHAT)
+            ?.styleProfile(scene)
         val recentReplies = recentThread.filter { it.first == "out" }.takeLast(6).map { it.second }
         var correction = ""
         var writerOutcome: ModelRouteOutcome? = null

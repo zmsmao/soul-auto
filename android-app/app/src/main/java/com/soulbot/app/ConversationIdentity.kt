@@ -9,13 +9,11 @@ internal object SoulAccessibilityIdentity {
     private val userKeys = setOf("uid", "userid", "soulid", "souluserid", "accountid", "imuserid", "targetuserid")
     private val messageKeys = setOf("msgid", "messageid", "chatmessageid", "immessageid", "messagekey")
 
-    fun userId(node: AccessibilityNodeInfo?): String? =
-        explicitIdentifier(node, userKeys, setOf("userid", "soulid", "accountid", "uid"))
+    fun userId(node: AccessibilityNodeInfo?): String? = explicitIdentifier(node, userKeys)
 
-    fun messageId(node: AccessibilityNodeInfo?): String? =
-        explicitIdentifier(node, messageKeys, setOf("messageid", "msgid", "chatmessageid"))
+    fun messageId(node: AccessibilityNodeInfo?): String? = explicitIdentifier(node, messageKeys)
 
-    private fun explicitIdentifier(root: AccessibilityNodeInfo?, acceptedKeys: Set<String>, resourceHints: Set<String>): String? {
+    private fun explicitIdentifier(root: AccessibilityNodeInfo?, acceptedKeys: Set<String>): String? {
         if (root == null) return null
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.add(root)
@@ -23,15 +21,8 @@ internal object SoulAccessibilityIdentity {
         while (stack.isNotEmpty() && visited < 160) {
             val node = stack.removeLast()
             visited++
-            val resource = runCatching { node.viewIdResourceName.orEmpty() }.getOrDefault("")
-                .substringAfterLast('/').lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
             val extras = runCatching { node.extras }.getOrNull()
             if (extras != null) explicitValue(extras, acceptedKeys)?.let { return it }
-            if (resourceHints.any(resource::contains)) {
-                val value = runCatching { node.text?.toString() ?: node.contentDescription?.toString() }
-                    .getOrNull()?.let(::cleanIdentifier)
-                if (value != null) return value
-            }
             val description = runCatching { node.contentDescription?.toString().orEmpty() }.getOrDefault("")
             labelledIdentifier(description, acceptedKeys)?.let { return it }
             val childCount = runCatching { node.childCount }.getOrDefault(0)
