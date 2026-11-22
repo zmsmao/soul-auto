@@ -2015,7 +2015,7 @@ class SoulBotService : AccessibilityService() {
             }
             return false
         }
-        val sent = send(finalReply)
+        val sent = send(finalReply, expectedContact = contactName)
         if (sent) {
             handledMatches += matchKey
             greetDb.recordGreet(persistentName, openingBasis)
@@ -2452,7 +2452,7 @@ class SoulBotService : AccessibilityService() {
                 return false
             }
 
-            val sent = send(reply)
+            val sent = send(reply, expectedContact = name)
             if (sent) {
                 RuntimeLog.record(applicationContext, "conversation reply confirmed; unseenMessages=${new.size}")
                 seen.markSeen(name, incomingTexts)
@@ -2581,7 +2581,7 @@ class SoulBotService : AccessibilityService() {
             handleQiyu()
             return false
         }
-        val sent = send(reply)
+        val sent = send(reply, expectedContact = name)
         if (sent) {
             if (incomingTexts.isNotEmpty()) seen.markSeen("招呼:$name", incomingTexts)
             greetDb.recordGreet(systemGreetingName, replyContext)
@@ -2868,7 +2868,7 @@ class SoulBotService : AccessibilityService() {
                         backToSquare()
                         return replied
                     }
-                    val sent = reply != null && canSend && send(reply)
+                    val sent = reply != null && canSend && send(reply, expectedContact = name)
                     if (sent) {
                         seenDm += postKey
                         greetDb.recordGreet(name, text)
