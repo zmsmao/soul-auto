@@ -2270,7 +2270,8 @@ class SoulBotService : AccessibilityService() {
             return false
         }
         if (!isExpectedConversation(contactName) || pendingIncomingVoiceBubbles().isNotEmpty() ||
-            incomingSignature(readThread()) != incomingSignature(thread)
+            incomingSignature(readThread()) != incomingSignature(thread) ||
+            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
         ) {
             setNextStep("收到更新消息，重新按最新内容准备回复", MESSAGE_SETTLE_MS)
             if (isOnChat() && isExpectedConversation(contactName)) {
@@ -2465,14 +2466,17 @@ class SoulBotService : AccessibilityService() {
             generateValidatedChatReply(contactName, thread, pending, ReplyScene.QIYU)
         } else generateValidatedOpening("优先生成奇遇铃开场", openingContext)
         if (finalReply == null) {
-            if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != thread) {
+            if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != thread ||
+                currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+            ) {
                 return deferQiyu(session, "incoming_changed_during_generation", "奇遇铃收到新消息，旧生成已取消，稍后按最新上下文重新准备")
             }
             return deferQiyu(session, "generation_failed", "奇遇铃回复生成失败，未发送")
         }
         if (!running || !isOnChat() || !hasConfirmedConversationName(contactName) ||
             pendingIncomingVoiceBubbles().isNotEmpty() ||
-            readThread() != thread
+            readThread() != thread ||
+            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
         ) {
             return deferQiyu(session, "incoming_changed", "奇遇铃会话有变化，将按最新内容重新准备")
         }
@@ -2498,7 +2502,9 @@ class SoulBotService : AccessibilityService() {
             prepared.attempts,
         )
         if (recovery == QiyuSendRecovery.CONFIRMED) return finishQiyuSend(session, prepared)
-        if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != prepared.thread) {
+        if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != prepared.thread ||
+            currentIncomingMessageKeys(contactName).joinToString(",") != prepared.eventAnchor
+        ) {
             val refresh = QiyuConversationPolicy.draftRefresh(inputText, prepared.writtenText, prepared.clickedSend)
             val cleared = refresh == QiyuDraftRefresh.CLEAR_OWNED_UNSENT && clearOwnedQiyuDraft(session, prepared)
             if (!QiyuConversationPolicy.mayDiscardDraft(refresh, cleared)) {
@@ -3208,7 +3214,9 @@ class SoulBotService : AccessibilityService() {
                         openingContext,
                     )
                     val canSend = running && isOnChat() && isExpectedConversation(name) &&
-                        pendingIncomingVoiceBubbles().isEmpty() && incomingSignature(readThread()) == initialIncoming
+                        pendingIncomingVoiceBubbles().isEmpty() &&
+                        incomingSignature(readThread()) == initialIncoming &&
+                        currentIncomingMessageKeys(name).joinToString(",") == initialEventAnchor
                     if (!canSend && running && isOnChat() && isExpectedConversation(name)) {
                         setNextStep("对方已发来消息，取消广场开场并直接回复")
                         val replied = replyToCurrentConversation(name, ConversationSeenTracker())
