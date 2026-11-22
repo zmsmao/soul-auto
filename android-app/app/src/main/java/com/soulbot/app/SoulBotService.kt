@@ -2188,7 +2188,9 @@ class SoulBotService : AccessibilityService() {
             )
         }
         if (finalReply == null) {
-            if (currentConversationHasChanged(contactName, thread)) {
+            if (currentConversationHasChanged(contactName, thread) ||
+                currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+            ) {
                 return replyToCurrentConversation(contactName, seen)
             }
             RuntimeLog.record(applicationContext, "soul-match reply generation exhausted")
