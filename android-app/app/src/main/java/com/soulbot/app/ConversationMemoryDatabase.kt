@@ -32,7 +32,7 @@ class ConversationMemoryDatabase(context: Context) :
                 "observed_at INTEGER NOT NULL, " +
                 "source TEXT NOT NULL, " +
                 "thread_id TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN', " +
-                "scene TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN')
+                "scene TEXT NOT NULL DEFAULT 'LEGACY_UNKNOWN')",
         )
         db.execSQL(
             "CREATE INDEX idx_conversation_contact_time " +
