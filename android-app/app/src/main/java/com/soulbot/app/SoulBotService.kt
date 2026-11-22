@@ -125,6 +125,7 @@ class SoulBotService : AccessibilityService() {
         val opening: OpeningContext?,
         val outgoingBefore: Int,
         val eventAnchor: String,
+        val pendingEventKeys: List<String>,
         var attempts: Int = 0,
         var clickedSend: Boolean = false,
         var writtenText: String? = null,
@@ -1388,6 +1389,26 @@ class SoulBotService : AccessibilityService() {
         return keys.takeLast(8)
     }
 
+    private fun unseenIncomingEvents(
+        contactName: String,
+        thread: List<Pair<String, String>>,
+        tracker: ConversationSeenTracker,
+        pendingCount: Int,
+    ): List<ConversationIncomingEvent> {
+        if (pendingCount <= 0) return emptyList()
+        val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
+        val eventKeys = currentIncomingMessageKeys(contactName)
+        val alignedCount = minOf(incomingTexts.size, eventKeys.size)
+        if (alignedCount == 0) return emptyList()
+        val events = incomingTexts.takeLast(alignedCount)
+            .zip(eventKeys.takeLast(alignedCount))
+            .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
+            .takeLast(pendingCount)
+        val threadId = memoryThreadId(contactName)
+        val confirmedKeys = conversationMemoryDb?.confirmedMessageKeys(threadId).orEmpty()
+        return tracker.unseenEvents(threadId, events, confirmedKeys)
+    }
+
     private fun currentNativeSoulUserId(): String? {
         if (!isOnChat()) return null
         var node = findVisibleById(ID_PROFILE_NAME)
@@ -2212,9 +2233,9 @@ class SoulBotService : AccessibilityService() {
         }
         val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.SOUL_MATCH) == true)
         learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
-        val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
-        val newIncoming = seen.unseen(memoryThreadId(contactName), incomingTexts).takeLast(pendingIncoming.size)
+        val newIncomingEvents = unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
+        val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
         if (route == OpeningConversationAction.SKIP ||
             (route == OpeningConversationAction.REPLY && !replyingToMessage)
@@ -2299,7 +2320,7 @@ class SoulBotService : AccessibilityService() {
         if (sent) {
             handledMatches += matchKey
             greetDb.recordGreet(persistentName, openingBasis)
-            if (replyingToMessage) seen.markSeen(memoryThreadId(contactName), incomingTexts)
+            if (replyingToMessage) seen.markSeenEvents(memoryThreadId(contactName), newIncomingEvents)
             val contextMessages = if (replyingToMessage) newIncoming else listOf(openingBasis)
             val historyContext = if (replyingToMessage) {
                 newIncoming.last()
@@ -2442,9 +2463,9 @@ class SoulBotService : AccessibilityService() {
         }
         val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.QIYU) == true)
         learnFromManualReplies(contactName, thread, ReplyScene.QIYU)
-        val incoming = thread.filter { it.first == "in" }.map { it.second }
-        val pending = qiyuSeen.unseen(memoryThreadId(contactName), incoming)
-            .takeLast(OpeningConversationRoute.pendingIncoming(thread).size)
+        val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
+        val pendingEvents = unseenIncomingEvents(contactName, thread, qiyuSeen, pendingCount)
+        val pending = pendingEvents.map { it.text }
         if (route == OpeningConversationAction.SKIP ||
             (route == OpeningConversationAction.REPLY && pending.isEmpty())
         ) {
@@ -2485,7 +2506,7 @@ class SoulBotService : AccessibilityService() {
         val sendText = splitReply(finalReply).single()
         val prepared = QiyuPreparedReply(
             sendText, thread, pending, openingContext.takeUnless { replying },
-            outgoingOccurrenceCount(sendText), eventAnchor,
+            outgoingOccurrenceCount(sendText), eventAnchor, pendingEvents.map { it.key },
         )
         session.prepared = prepared
         return sendPreparedQiyu(session, prepared)
@@ -2574,7 +2595,7 @@ class SoulBotService : AccessibilityService() {
 
     private fun finishQiyuSend(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         pendingQiyu = null
-        qiyuSeen.markSeen(memoryThreadId(session.contactName), prepared.thread.filter { it.first == "in" }.map { it.second })
+        qiyuSeen.markSeen(memoryThreadId(session.contactName), prepared.pendingEventKeys)
         recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening, scene = ReplyScene.QIYU)
         historyDb?.record(session.contactName,
             prepared.opening?.let { "奇遇铃资料：${it.content}" } ?: prepared.pending.joinToString("\n"), prepared.text)
@@ -2717,24 +2738,15 @@ class SoulBotService : AccessibilityService() {
                 gotoChatList()
                 return false
             }
-            val incomingTexts = incoming.map { it.second }
-            val new = seen.unseen(memoryThreadId(name), incomingTexts)
-                .takeLast(OpeningConversationRoute.pendingIncoming(thread).size)
+            val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
+            val newEvents = unseenIncomingEvents(name, thread, seen, pendingCount)
+            val new = newEvents.map { it.text }
             if (new.isEmpty()) {
                 RuntimeLog.record(applicationContext, "conversation reply skipped; reason=no_unseen_message")
                 gotoChatList()
                 return false
             }
             val eventAnchor = currentIncomingMessageKeys(name).joinToString(",")
-            if (conversationMemoryDb?.hasConfirmedSendForEvent(
-                    memoryThreadId(name), ReplyScene.CHAT, eventAnchor,
-                ) == true
-            ) {
-                seen.markSeen(memoryThreadId(name), incomingTexts)
-                RuntimeLog.record(applicationContext, "conversation reply skipped; reason=durable_event_already_sent")
-                gotoChatList()
-                return false
-            }
 
             val reply = generateValidatedChatReply(name, thread, new)
             if (reply.isNullOrBlank()) {
@@ -2791,7 +2803,7 @@ class SoulBotService : AccessibilityService() {
             )
             if (sent) {
                 RuntimeLog.record(applicationContext, "conversation reply confirmed; unseenMessages=${new.size}")
-                seen.markSeen(memoryThreadId(name), incomingTexts)
+                seen.markSeenEvents(memoryThreadId(name), newEvents)
                 recordAutomatedInteraction(name, new, reply)
                 historyDb?.record(name, incoming.last().second, reply)
                 gotoChatList()
@@ -2900,8 +2912,9 @@ class SoulBotService : AccessibilityService() {
             else { pressBack(); sleep(1200) }
             return false
         }
-        val incomingTexts = incoming.map { it.second }
-        val new = seen.unseen("greeting:" + memoryThreadId(name), incomingTexts)
+        val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
+        val newEvents = unseenIncomingEvents(name, thread, seen, pendingCount)
+        val new = newEvents.map { it.text }
         if (incoming.isNotEmpty() && new.isEmpty()) {
             if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(1200) }
@@ -2936,7 +2949,7 @@ class SoulBotService : AccessibilityService() {
             expectedEventAnchor = greetingEventKey,
         )
         if (sent) {
-            if (incomingTexts.isNotEmpty()) seen.markSeen("greeting:" + memoryThreadId(name), incomingTexts)
+            seen.markSeenEvents(memoryThreadId(name), newEvents)
             greetDb.recordGreet(systemGreetingName, replyContext)
             recordAutomatedInteraction(name, new, reply)
             historyDb?.record(name, replyContext, reply)

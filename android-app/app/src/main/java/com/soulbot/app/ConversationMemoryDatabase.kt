@@ -266,6 +266,21 @@ class ConversationMemoryDatabase(context: Context) :
         return result
     }
 
+    /** Event-level ledger view: handles partial overlap when later messages arrive after restart. */
+    fun confirmedMessageKeys(threadId: String): Set<String> {
+        val scope = cleanThreadId(threadId) ?: return emptySet()
+        val result = linkedSetOf<String>()
+        readableDatabase.rawQuery(
+            "SELECT event_anchor FROM send_attempts WHERE thread_id=? AND state='CONFIRMED' AND event_anchor<>''",
+            arrayOf(scope),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                cursor.getString(0).split(',').filter(String::isNotBlank).forEach(result::add)
+            }
+        }
+        return result
+    }
+
     fun hasConfirmedSendForEvent(threadId: String, scene: ReplyScene, eventAnchor: String): Boolean {
         if (eventAnchor.isBlank()) return false
         readableDatabase.rawQuery(

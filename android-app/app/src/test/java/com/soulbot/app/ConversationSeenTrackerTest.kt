@@ -40,6 +40,40 @@ class ConversationSeenTrackerTest {
     }
 
     @Test
+    fun `durable confirmation filters earlier events after tracker restart`() {
+        val restarted = ConversationSeenTracker()
+        val events = listOf(
+            ConversationIncomingEvent("m1", "你好"),
+            ConversationIncomingEvent("m2", "在吗"),
+        )
+
+        assertEquals(
+            listOf(events.last()),
+            restarted.unseenEvents("thread", events, setOf("m1")),
+        )
+    }
+
+    @Test
+    fun `distinct event keys preserve repeated identical message text`() {
+        val tracker = ConversationSeenTracker()
+        val events = listOf(
+            ConversationIncomingEvent("m1", "嗯"),
+            ConversationIncomingEvent("m2", "嗯"),
+        )
+
+        assertEquals(events, tracker.unseenEvents("thread", events, emptySet()))
+        tracker.markSeenEvents("thread", listOf(events.first()))
+        assertEquals(listOf(events.last()), tracker.unseenEvents("thread", events, emptySet()))
+    }
+
+    @Test
+    fun `scene independent durable keys work across tracker scopes`() {
+        val tracker = ConversationSeenTracker()
+        val events = listOf(ConversationIncomingEvent("m1", "你好"))
+        assertTrue(tracker.unseenEvents("thread", events, setOf("m1")).isEmpty())
+    }
+
+    @Test
     fun `scrolled visible window keeps suffix overlap`() {
         val tracker = ConversationSeenTracker()
         tracker.markSeen("小明", listOf("第一条", "第二条"))
