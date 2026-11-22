@@ -1535,13 +1535,15 @@ class SoulBotService : AccessibilityService() {
     private fun routeModelChat(
         systemPrompt: String,
         messages: List<Pair<String, String>>,
-    ): String? = ModelRouter.chat(
+        cancellation: ModelCallCancellation? = activeGenerationCancellation,
+    ): String? = ModelRouter.chatDetailed(
         context = applicationContext,
         systemPrompt = systemPrompt,
         messages = messages,
         onProgress = { text, delayMs -> setNextStep(text, delayMs) },
         waitBeforeNext = ::sleep,
-    )
+        cancellation = cancellation,
+    ).content
 
     private fun routeModelChatDetailed(
         systemPrompt: String,
@@ -1659,14 +1661,16 @@ class SoulBotService : AccessibilityService() {
         val watcher = Thread({
             try {
                 while (running && !cancellation.isCancelled() && !Thread.currentThread().isInterrupted) {
-                    if (!isOnChat() || !isExpectedConversation(contactName)) {
-                        RuntimeLog.record(applicationContext, "reply generation cancelled; reason=conversation_changed")
-                        cancellation.cancel()
-                        break
-                    }
+                    val expectedConversation = isOnChat() && isExpectedConversation(contactName)
                     val latestEventKeys = currentIncomingMessageKeys(contactName).joinToString(",")
-                    if (latestEventKeys != baselineEventKeys || pendingIncomingVoiceBubbles().isNotEmpty()) {
-                        RuntimeLog.record(applicationContext, "reply generation cancelled; reason=new_incoming_message")
+                    if (ConversationGenerationPolicy.shouldCancel(
+                            baselineEventKeys,
+                            latestEventKeys,
+                            pendingIncomingVoiceBubbles().isNotEmpty(),
+                            expectedConversation,
+                        )
+                    ) {
+                        RuntimeLog.record(applicationContext, "reply generation cancelled; reason=context_changed")
                         cancellation.cancel()
                         break
                     }
@@ -1888,6 +1892,8 @@ class SoulBotService : AccessibilityService() {
             }
         }
 
+        // Do not accept an output if a new message arrived while the reviewer was finishing.
+        cancellation.throwIfCancelled()
         // Quality attribution stays on the writer's endpoint even after reviewer routing.
         ModelRouter.markAccepted(applicationContext, writer.endpointId)
         RuntimeLog.record(
@@ -1901,6 +1907,56 @@ class SoulBotService : AccessibilityService() {
         action: String,
         context: OpeningContext,
     ): String? {
+        activeGenerationCancellation?.cancel()
+        val cancellation = ModelCallCancellation()
+        activeGenerationCancellation = cancellation
+        val contactName = context.contactName
+        val baselineEventKeys = currentIncomingMessageKeys(contactName).joinToString(",")
+        val watcher = Thread({
+            try {
+                while (running && !cancellation.isCancelled() && !Thread.currentThread().isInterrupted) {
+                    val expectedConversation = isOnChat() && isExpectedConversation(contactName)
+                    val latestEventKeys = currentIncomingMessageKeys(contactName).joinToString(",")
+                    if (ConversationGenerationPolicy.shouldCancel(
+                            baselineEventKeys,
+                            latestEventKeys,
+                            pendingIncomingVoiceBubbles().isNotEmpty(),
+                            expectedConversation,
+                        )
+                    ) {
+                        RuntimeLog.record(applicationContext, "opening generation cancelled; reason=context_changed")
+                        cancellation.cancel()
+                        break
+                    }
+                    Thread.sleep(400)
+                }
+            } catch (_: InterruptedException) {
+                // Normal completion; stop the watcher without interrupting the worker.
+            } catch (error: Throwable) {
+                RuntimeLog.record(applicationContext, "opening generation watcher failed; canceling stale request", error)
+                cancellation.cancel()
+            }
+        }, "SoulBot-Opening-Watcher").apply {
+            isDaemon = true
+            start()
+        }
+        return try {
+            generateValidatedOpeningInternal(action, context, cancellation)
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            if (!cancellation.isCancelled()) throw cancelled
+            null
+        } finally {
+            watcher.interrupt()
+            if (activeGenerationCancellation === cancellation) activeGenerationCancellation = null
+            cancellation.cancel()
+        }
+    }
+
+    private fun generateValidatedOpeningInternal(
+        action: String,
+        context: OpeningContext,
+        cancellation: ModelCallCancellation,
+    ): String? {
         val contactName = context.contactName
         val rejected = mutableListOf<String>()
         var totalAttempts = 0
@@ -1913,9 +1969,11 @@ class SoulBotService : AccessibilityService() {
         rejected += learnedDisliked
         // At most one style rewrite. Never spend five model calls trying to add a question.
         while (running && isOnChat() && totalAttempts < 3 && modelFailures < 2 && qualityFailures < 2) {
+            cancellation.throwIfCancelled()
             totalAttempts++
             setNextStep("$action（第 $totalAttempts 次）", ModelRouter.MAX_GENERATION_WAIT_MS)
             val candidate = genOpening(context, recentPatterns, rejected, correction)?.let(ReplyNaturalness::sanitize)
+            cancellation.throwIfCancelled()
             if (!running) throw StoppedException()
             if (candidate.isNullOrBlank()) {
                 modelFailures++
@@ -1951,6 +2009,7 @@ class SoulBotService : AccessibilityService() {
                 }
                 continue
             }
+            cancellation.throwIfCancelled()
             ModelRouter.markAccepted(applicationContext)
             learningDb?.recordQualityEvent(contactName, candidate, true, "accepted")
             RuntimeLog.record(
