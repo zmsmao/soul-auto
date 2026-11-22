@@ -919,6 +919,7 @@ class SoulBotService : AccessibilityService() {
         onSendClick: () -> Unit = {},
         idempotencyKey: String? = null,
         sceneOverride: ReplyScene? = null,
+        expectedEventAnchor: String? = null,
     ): Boolean {
         if (!isOnChat()) {
             RuntimeLog.record(applicationContext, "message send rejected; reason=not_on_chat")
@@ -932,9 +933,19 @@ class SoulBotService : AccessibilityService() {
         }
         val sendThreadId = expectedContact?.let(::memoryThreadId).orEmpty()
         val incomingEventKeys = expectedContact?.let(::currentIncomingMessageKeys).orEmpty()
-        val durableSendKey = (idempotencyKey ?: expectedContact?.let {
-            ConversationIdentity.sendKey(sendThreadId, sendScene.name, incomingEventKeys, text)
-        })?.takeIf { conversationMemoryDb != null }
+        val incomingEventAnchor = incomingEventKeys.joinToString(",")
+        if (expectedEventAnchor != null && incomingEventAnchor != expectedEventAnchor) {
+            RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_input")
+            return false
+        }
+        val generatedSendKey = expectedContact?.let {
+            ConversationIdentity.replySendKey(sendThreadId, sendScene.name, incomingEventKeys, text)
+        }
+        val durableSendKey = (idempotencyKey ?: generatedSendKey)?.takeIf { conversationMemoryDb != null }
+        fun expectedEventIsCurrent(): Boolean {
+            if (expectedContact == null || expectedEventAnchor == null) return true
+            return currentIncomingMessageKeys(expectedContact).joinToString(",") == expectedEventAnchor
+        }
         val reservation = durableSendKey?.let { key ->
             conversationMemoryDb?.reserveSendAttempt(
                 sendKey = key,
@@ -1005,6 +1016,10 @@ class SoulBotService : AccessibilityService() {
                 inputReady = true
             }
             if (!inputReady) return false
+            if (!expectedEventIsCurrent()) {
+                RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_after_input")
+                return false
+            }
 
             sleep(500)
             val beforeOutgoingCount = outgoingOccurrenceCount(piece)
@@ -1028,6 +1043,10 @@ class SoulBotService : AccessibilityService() {
                     else "上次点击未生效，再发送一次",
                 )
                 val currentButton = findVisibleById(ID_SEND_BUTTON) ?: break
+                if (!expectedEventIsCurrent()) {
+                    RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_click")
+                    return false
+                }
                 if (durableSendKey != null) conversationMemoryDb?.markSendAttemptClicked(durableSendKey)
                 val clickAccepted = tapNode(if (sendAttempt == 0) sendButton else currentButton)
                 if (!clickAccepted) {
@@ -1947,8 +1966,10 @@ class SoulBotService : AccessibilityService() {
     }
 
     private fun memoryThreadId(contactName: String): String =
-        currentNativeSoulUserId()?.let { "soul-user:" + it }
-            ?: DiagnosticIdentity.contactId(applicationContext, contactName)
+        ConversationIdentity.threadId(
+            currentNativeSoulUserId(),
+            DiagnosticIdentity.contactId(applicationContext, contactName),
+        )
 
     private fun personalizationContext(
         contactName: String,
@@ -2682,7 +2703,11 @@ class SoulBotService : AccessibilityService() {
                 return false
             }
 
-            val sent = send(reply, expectedContact = name)
+            val sent = send(
+                reply,
+                expectedContact = name,
+                expectedEventAnchor = eventAnchor,
+            )
             if (sent) {
                 RuntimeLog.record(applicationContext, "conversation reply confirmed; unseenMessages=${new.size}")
                 seen.markSeen(memoryThreadId(name), incomingTexts)
@@ -2691,6 +2716,13 @@ class SoulBotService : AccessibilityService() {
                 gotoChatList()
                 return true
             } else if (running && isOnChat()) {
+                if (pendingIncomingVoiceBubbles().isNotEmpty() ||
+                    currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                ) {
+                    RuntimeLog.record(applicationContext, "conversation reply regenerated; reason=incoming_changed_before_send")
+                    setNextStep("发送前收到新消息，使用最新上下文重新准备回复", MESSAGE_SETTLE_MS)
+                    continue@replyCycle
+                }
                 RuntimeLog.record(applicationContext, "conversation reply send failed; chatStillVisible=true")
                 setNextStep("回复未完成，保留当前会话")
             }

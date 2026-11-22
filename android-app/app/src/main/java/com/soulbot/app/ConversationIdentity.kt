@@ -66,6 +66,19 @@ internal object SoulAccessibilityIdentity {
 }
 
 internal object ConversationIdentity {
+    fun threadId(nativeUserId: String?, fallbackThreadId: String): String {
+        val native = nativeUserId?.trim().orEmpty()
+        return if (native.isNotEmpty()) "soul-user:" + digest(native) else fallbackThreadId
+    }
+
+    fun replySendKey(
+        threadId: String,
+        scene: String,
+        messageKeys: List<String>,
+        body: String,
+    ): String? = messageKeys.takeIf { it.isNotEmpty() }
+        ?.let { sendKey(threadId, scene, it, body) }
+
     fun messageKey(
         threadId: String,
         nativeMessageId: String?,

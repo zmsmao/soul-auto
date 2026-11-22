@@ -2,6 +2,8 @@ package com.soulbot.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationIdentityTest {
@@ -25,5 +27,18 @@ class ConversationIdentityTest {
         val next = ConversationIdentity.sendKey("soul-user:1", "CHAT", listOf("message-b"), "回复")
         assertEquals(first, retry)
         assertNotEquals(first, next)
+    }
+
+    @Test fun replySendKeyIsNotCreatedWithoutAStableOrFallbackEventKey() {
+        assertNull(ConversationIdentity.replySendKey("thread", "CHAT", emptyList(), "嗯"))
+    }
+
+    @Test fun nativeUserIdIsHashedBeforeBecomingAConversationScope() {
+        val rawId = "soul-user-private-918273"
+        val first = ConversationIdentity.threadId(rawId, "fallback")
+        val second = ConversationIdentity.threadId(rawId, "other-fallback")
+        assertEquals(first, second)
+        assertTrue(first.startsWith("soul-user:"))
+        org.junit.Assert.assertFalse(first.contains(rawId))
     }
 }

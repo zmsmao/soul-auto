@@ -389,7 +389,16 @@ class ConversationMemoryDatabase(context: Context) :
     }
 
     fun clearAll() {
-        writableDatabase.delete("conversation_messages", null, null)
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.delete("conversation_messages", null, null)
+            writableDatabase.delete("conversation_state", null, null)
+            // Keep the compact send-attempt ledger: clearing chat memory must not make
+            // a previously clicked message eligible for an accidental duplicate send.
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
     }
 
     fun writeExport(writer: Writer) {
