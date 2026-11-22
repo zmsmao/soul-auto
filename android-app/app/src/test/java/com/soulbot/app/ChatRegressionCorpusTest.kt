@@ -98,7 +98,8 @@ class ChatRegressionCorpusTest {
         assertTrue(prompt.contains("[分享动态]"))
         assertTrue(prompt.contains("不等同于个人签名"))
         assertTrue(prompt.contains("来源不清"))
-        assertTrue(prompt.contains("慢热、慢熟、社恐"))
+        assertTrue(prompt.contains("未经确认的性格标签"))
+        assertFalse(prompt.contains("慢热"))
         assertTrue(prompt.contains("本人已明确提供"))
     }
 }
