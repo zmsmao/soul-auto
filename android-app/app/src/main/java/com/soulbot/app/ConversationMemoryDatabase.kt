@@ -19,7 +19,7 @@ data class ConversationMemoryImportResult(
 )
 
 class ConversationMemoryDatabase(context: Context) :
-    SQLiteOpenHelper(context, "conversation_memory.db", null, 2) {
+    SQLiteOpenHelper(context, "conversation_memory.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -42,6 +42,7 @@ class ConversationMemoryDatabase(context: Context) :
             "CREATE INDEX idx_conversation_thread_scene_time " +
                 "ON conversation_messages(thread_id, scene, observed_at, id)",
         )
+        createReliabilityTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -54,6 +55,25 @@ class ConversationMemoryDatabase(context: Context) :
                     "ON conversation_messages(thread_id, scene, observed_at, id)",
             )
         }
+        if (oldVersion < 3) createReliabilityTables(db)
+    }
+
+    private fun createReliabilityTables(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS conversation_state (" +
+                "thread_id TEXT NOT NULL, scene TEXT NOT NULL, current_topic TEXT NOT NULL DEFAULT '', " +
+                "topic_turn_count INTEGER NOT NULL DEFAULT 0, last_question TEXT NOT NULL DEFAULT '', " +
+                "last_banter TEXT NOT NULL DEFAULT '', low_information_count INTEGER NOT NULL DEFAULT 0, " +
+                "last_progress_at INTEGER NOT NULL DEFAULT 0, last_incoming_fingerprint TEXT NOT NULL DEFAULT '', " +
+                "updated_at INTEGER NOT NULL, PRIMARY KEY(thread_id, scene))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS send_attempts (" +
+                "send_key TEXT PRIMARY KEY, thread_id TEXT NOT NULL, scene TEXT NOT NULL, " +
+                "body_hash TEXT NOT NULL, event_anchor TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, " +
+                "outgoing_baseline INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_send_attempt_state_time ON send_attempts(state, updated_at)")
     }
 
     /** Nickname-only history lookup remains for legacy replay surfaces, not live retrieval. */
@@ -138,6 +158,134 @@ class ConversationMemoryDatabase(context: Context) :
             threadId = scope,
             scene = scene.name,
         )
+    }
+
+
+    fun loadConversationState(threadId: String, scene: ReplyScene): ConversationState? {
+        val scope = cleanThreadId(threadId) ?: return null
+        readableDatabase.rawQuery(
+            "SELECT current_topic, topic_turn_count, last_question, last_banter, low_information_count, " +
+                "last_progress_at, last_incoming_fingerprint, updated_at " +
+                "FROM conversation_state WHERE thread_id=? AND scene=? LIMIT 1",
+            arrayOf(scope, scene.name),
+        ).use { cursor ->
+            if (!cursor.moveToFirst()) return null
+            return ConversationState(
+                threadId = scope, scene = scene.name, currentTopic = cursor.getString(0),
+                topicTurnCount = cursor.getInt(1), lastQuestion = cursor.getString(2),
+                lastBanter = cursor.getString(3), lowInformationCount = cursor.getInt(4),
+                lastProgressAt = cursor.getLong(5), lastIncomingFingerprint = cursor.getString(6),
+                updatedAt = cursor.getLong(7),
+            )
+        }
+    }
+
+    fun updateConversationState(
+        threadId: String,
+        scene: ReplyScene,
+        thread: List<Pair<String, String>>,
+    ): ConversationState? {
+        val scope = cleanThreadId(threadId) ?: return null
+        val state = ConversationStatePolicy.evolve(scope, scene, thread, loadConversationState(scope, scene))
+        val values = ContentValues().apply {
+            put("thread_id", state.threadId)
+            put("scene", state.scene)
+            put("current_topic", state.currentTopic)
+            put("topic_turn_count", state.topicTurnCount)
+            put("last_question", state.lastQuestion)
+            put("last_banter", state.lastBanter)
+            put("low_information_count", state.lowInformationCount)
+            put("last_progress_at", state.lastProgressAt)
+            put("last_incoming_fingerprint", state.lastIncomingFingerprint)
+            put("updated_at", state.updatedAt)
+        }
+        writableDatabase.insertWithOnConflict("conversation_state", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        return state
+    }
+
+    internal fun reserveSendAttempt(
+        sendKey: String,
+        threadId: String,
+        scene: ReplyScene,
+        bodyHash: String,
+        eventAnchor: String,
+        outgoingBaseline: Int,
+    ): SendAttemptReservation {
+        val db = writableDatabase
+        var result = SendAttemptReservation(SendAttemptDisposition.READY, outgoingBaseline)
+        db.beginTransaction()
+        try {
+            var existingState: String? = null
+            var storedBodyHash = ""
+            var storedBaseline = outgoingBaseline
+            db.rawQuery(
+                "SELECT state, body_hash, outgoing_baseline FROM send_attempts WHERE send_key=? LIMIT 1",
+                arrayOf(sendKey),
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    existingState = cursor.getString(0)
+                    storedBodyHash = cursor.getString(1)
+                    storedBaseline = cursor.getInt(2)
+                }
+            }
+            if (existingState == null) {
+                val values = ContentValues().apply {
+                    put("send_key", sendKey)
+                    put("thread_id", threadId)
+                    put("scene", scene.name)
+                    put("body_hash", bodyHash)
+                    put("event_anchor", eventAnchor)
+                    put("state", "PREPARED")
+                    put("outgoing_baseline", outgoingBaseline)
+                    put("updated_at", System.currentTimeMillis())
+                }
+                db.insertWithOnConflict("send_attempts", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+                result = SendAttemptReservation(SendAttemptDisposition.READY, outgoingBaseline)
+            } else if (existingState == "PREPARED") {
+                if (storedBodyHash != bodyHash) {
+                    val values = ContentValues().apply {
+                        put("body_hash", bodyHash)
+                        put("updated_at", System.currentTimeMillis())
+                    }
+                    db.update("send_attempts", values, "send_key=?", arrayOf(sendKey))
+                }
+                result = SendAttemptReservation(SendAttemptDisposition.READY, storedBaseline)
+            } else {
+                val disposition = if (storedBodyHash != bodyHash) SendAttemptDisposition.UNCERTAIN
+                    else SendAttemptPolicy.disposition(existingState, storedBaseline, storedBaseline)
+                result = SendAttemptReservation(disposition, storedBaseline)
+            }
+            db.delete(
+                "send_attempts", "state='CONFIRMED' AND updated_at < ?",
+                arrayOf((System.currentTimeMillis() - 90L * 24L * 60L * 60L * 1000L).toString()),
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return result
+    }
+
+    fun hasConfirmedSendForEvent(threadId: String, scene: ReplyScene, eventAnchor: String): Boolean {
+        if (eventAnchor.isBlank()) return false
+        readableDatabase.rawQuery(
+            "SELECT 1 FROM send_attempts WHERE thread_id=? AND scene=? AND event_anchor=? AND state='CONFIRMED' LIMIT 1",
+            arrayOf(threadId, scene.name, eventAnchor),
+        ).use { return it.moveToFirst() }
+    }
+
+    fun markSendAttemptClicked(sendKey: String) = updateSendAttemptState(sendKey, "CLICKED")
+    fun markSendAttemptPrepared(sendKey: String) = updateSendAttemptState(sendKey, "PREPARED")
+    fun markSendAttemptUncertain(sendKey: String) = updateSendAttemptState(sendKey, "UNCERTAIN")
+    fun markSendAttemptConfirmed(sendKey: String) = updateSendAttemptState(sendKey, "CONFIRMED")
+
+    private fun updateSendAttemptState(sendKey: String, state: String) {
+        if (state !in setOf("PREPARED", "CLICKED", "UNCERTAIN", "CONFIRMED")) return
+        val values = ContentValues().apply {
+            put("state", state)
+            put("updated_at", System.currentTimeMillis())
+        }
+        writableDatabase.update("send_attempts", values, "send_key=?", arrayOf(sendKey))
     }
 
     fun seedLegacyHistory(items: List<HistoryItem>): Int {

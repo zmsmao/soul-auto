@@ -54,7 +54,9 @@ object ModelRouter {
         onProgress: (String, Long) -> Unit = { _, _ -> },
         waitBeforeNext: (Long) -> Unit = { Thread.sleep(it) },
         preferDifferentFromEndpointId: String = "",
+        cancellation: ModelCallCancellation? = null,
     ): ModelRouteOutcome {
+        cancellation?.throwIfCancelled()
         val startedAt = SystemClock.elapsedRealtime()
         val deadline = minOf(
             startedAt + MAX_GENERATION_WAIT_MS,
@@ -98,6 +100,7 @@ object ModelRouter {
             "model route started; candidates=${candidates.size}; messages=${messages.size}; inputChars=$inputChars; budgetMs=${(deadline - startedAt).coerceAtLeast(0)}",
         )
         for ((candidateIndex, endpoint) in candidates.withIndex()) {
+            cancellation?.throwIfCancelled()
             val elapsed = SystemClock.elapsedRealtime()
             val remaining = deadline - elapsed
             if (remaining < MIN_CALL_BUDGET_MS) {
@@ -122,7 +125,9 @@ object ModelRouter {
                 systemPrompt = systemPrompt,
                 messages = messages,
                 timeoutMs = timeout,
+                cancellation = cancellation,
             )
+            cancellation?.throwIfCancelled()
             if (result.content != null) {
                 ModelEndpointPrefs.recordSuccess(context, endpoint.id)
                 lastError = ""
@@ -156,7 +161,9 @@ object ModelRouter {
                     context,
                     "model failover scheduled; fromPriority=$priority; toPriority=$nextPriority; delayMs=$SWITCH_DELAY_MS",
                 )
+                cancellation?.throwIfCancelled()
                 waitBeforeNext(SWITCH_DELAY_MS)
+                cancellation?.throwIfCancelled()
             }
         }
         return ModelRouteOutcome(
