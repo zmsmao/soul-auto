@@ -21,22 +21,22 @@ internal interface SoulConversationListHost {
 /** Reads visible inbox rows and previews; unread ranking remains in policy. */
 internal class SoulConversationListScanner(private val host: SoulConversationListHost) {
     fun snapshot(): String =
-        host.findByIds(SoulBotService.ID_CONV_NAME)
+        host.findByIds(SoulAccessibilityIds.ID_CONV_NAME)
             .map { node -> host.rect(node).top to host.textOf(node) }
             .sortedBy { it.first }
             .joinToString("|") { (top, name) -> "$top:$name" }
 
     fun scanUnread(): List<UnreadConversationCandidate> {
         if (!host.isOnList()) return emptyList()
-        val items = host.findByIds(SoulBotService.ID_CONV_ITEM)
+        val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM)
             .filter(host::isVisibleOnScreen)
             .sortedBy { host.rect(it).top }
-        val names = host.findByIds(SoulBotService.ID_CONV_NAME).filter(host::isVisibleOnScreen)
-        val times = host.findByIds(SoulBotService.ID_CONV_TIME).filter(host::isVisibleOnScreen)
+        val names = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME).filter(host::isVisibleOnScreen)
+        val times = host.findByIds(SoulAccessibilityIds.ID_CONV_TIME).filter(host::isVisibleOnScreen)
         // Soul keeps recycled/hidden unread badges in the accessibility tree. Using
         // them made an already-read row reopen forever and wait for content that
         // could never be "unread" again.
-        val badges = host.findByIds(SoulBotService.ID_UNREAD_BADGE).filter(host::isVisibleOnScreen)
+        val badges = host.findByIds(SoulAccessibilityIds.ID_UNREAD_BADGE).filter(host::isVisibleOnScreen)
         val result = mutableListOf<UnreadConversationCandidate>()
         for ((displayOrder, item) in items.withIndex()) {
             val ib = host.rect(item)
@@ -105,8 +105,8 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
 
     fun findConversation(name: String): AccessibilityNodeInfo? {
         if (!host.isOnList()) return null
-        val items = host.findByIds(SoulBotService.ID_CONV_ITEM).filter(host::isVisibleOnScreen)
-        val names = host.findByIds(SoulBotService.ID_CONV_NAME).filter(host::isVisibleOnScreen)
+        val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM).filter(host::isVisibleOnScreen)
+        val names = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME).filter(host::isVisibleOnScreen)
         for (item in items) {
             val ib = host.rect(item)
             for (n in names) {

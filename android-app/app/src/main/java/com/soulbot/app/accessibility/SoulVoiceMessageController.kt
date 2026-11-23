@@ -45,7 +45,7 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
         // transcript as a sibling below the item, so fall back to geometric
         // ownership among all currently visible voice bubbles.
         item?.let { messageItem ->
-            host.descendantsById(messageItem, SoulBotService.ID_AUDIO_CONTENT)
+            host.descendantsById(messageItem, SoulAccessibilityIds.ID_AUDIO_CONTENT)
                 .asSequence()
                 .filter(host::isVisibleOnScreen)
                 .map(host::textOf)
@@ -54,10 +54,10 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
         }
 
         val voiceBounds = host.rect(bubble)
-        val voices = host.findByIds(SoulBotService.ID_VOICE_BUBBLE)
+        val voices = host.findByIds(SoulAccessibilityIds.ID_VOICE_BUBBLE)
             .filter(host::isVisibleOnScreen)
             .map { host.rect(it).toUiRegion() }
-        val transcripts = host.findByIds(SoulBotService.ID_AUDIO_CONTENT)
+        val transcripts = host.findByIds(SoulAccessibilityIds.ID_AUDIO_CONTENT)
             .filter(host::isVisibleOnScreen)
             .map { TranscriptCandidate(host.textOf(it), host.rect(it).toUiRegion()) }
         return VoiceTranscriptPolicy.transcriptFor(
@@ -70,18 +70,18 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
     }
 
     fun voiceTranscriptFrom(item: AccessibilityNodeInfo): String {
-        val bubble = host.descendantsById(item, SoulBotService.ID_VOICE_BUBBLE).firstOrNull()
-            ?: host.findByIds(SoulBotService.ID_VOICE_BUBBLE).firstOrNull { host.contains(host.rect(item), host.rect(it)) }
+        val bubble = host.descendantsById(item, SoulAccessibilityIds.ID_VOICE_BUBBLE).firstOrNull()
+            ?: host.findByIds(SoulAccessibilityIds.ID_VOICE_BUBBLE).firstOrNull { host.contains(host.rect(item), host.rect(it)) }
             ?: return ""
         return transcriptForVoice(bubble, item)
     }
 
     fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> {
         if (!host.isOnChat()) return emptyList()
-        val items = host.findByIds(SoulBotService.ID_CHAT_ITEM)
-        val avatars = host.findByIds(SoulBotService.ID_CHAT_AVATAR)
-        val messageDots = host.findByIds(SoulBotService.ID_MESSAGE_READ)
-        return host.findByIds(SoulBotService.ID_VOICE_BUBBLE).filter { bubble ->
+        val items = host.findByIds(SoulAccessibilityIds.ID_CHAT_ITEM)
+        val avatars = host.findByIds(SoulAccessibilityIds.ID_CHAT_AVATAR)
+        val messageDots = host.findByIds(SoulAccessibilityIds.ID_MESSAGE_READ)
+        return host.findByIds(SoulAccessibilityIds.ID_VOICE_BUBBLE).filter { bubble ->
             val bubbleBounds = host.rect(bubble)
             val item = items.firstOrNull { host.contains(host.rect(it), bubbleBounds) }
             val hasUnreadDot = item != null && messageDots.any { dot ->
@@ -171,7 +171,7 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
             var lastTranscript = ""
             var stableSince = System.currentTimeMillis()
             while (host.isRunning && host.isOnChat() && System.currentTimeMillis() - startedAt < 30_000L) {
-                val currentBubble = host.findByIds(SoulBotService.ID_VOICE_BUBBLE)
+                val currentBubble = host.findByIds(SoulAccessibilityIds.ID_VOICE_BUBBLE)
                     .filter(host::isVisibleOnScreen)
                     .minByOrNull { candidate ->
                         val bounds = host.rect(candidate)
@@ -187,12 +187,12 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
                 val stableFor = System.currentTimeMillis() - stableSince
                 val elapsed = System.currentTimeMillis() - startedAt
                 if (lastTranscript.isNotBlank() &&
-                    elapsed >= SoulBotService.VOICE_TRANSCRIPT_START_GRACE_MS &&
-                    stableFor >= SoulBotService.VOICE_TRANSCRIPT_STABLE_MS
+                    elapsed >= VOICE_TRANSCRIPT_START_GRACE_MS &&
+                    stableFor >= VOICE_TRANSCRIPT_STABLE_MS
                 ) {
                     break
                 }
-                val remaining = (SoulBotService.VOICE_TRANSCRIPT_STABLE_MS - stableFor).coerceAtLeast(500L)
+                val remaining = (VOICE_TRANSCRIPT_STABLE_MS - stableFor).coerceAtLeast(500L)
                 host.setNextStep("等待语音转文字完成", remaining)
                 host.sleep(500)
             }
@@ -215,5 +215,10 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
             RuntimeLog.record(host.context, "voice transcription batch ended; complete=$complete")
         }
         return complete
+    }
+
+    companion object {
+        const val VOICE_TRANSCRIPT_STABLE_MS = 2000L
+        const val VOICE_TRANSCRIPT_START_GRACE_MS = 1500L
     }
 }

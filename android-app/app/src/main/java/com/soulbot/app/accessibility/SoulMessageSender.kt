@@ -118,14 +118,14 @@ internal class SoulMessageSender(private val host: SoulMessageSenderHost) {
                     return false
                 }
                 host.setNextStep("输入第 ${i + 1} 段回复")
-                val input = host.findById(SoulBotService.ID_INPUT_BOX)
+                val input = host.findById(SoulAccessibilityIds.ID_INPUT_BOX)
                 if (input == null) {
                     RuntimeLog.record(
                         host.context,
                         "message input missing; attemptId=$attemptId; part=${i + 1}",
                     )
-                    host.setNextStep("等待输入框后重试", SoulBotService.SQUARE_RETRY_DELAY_MS)
-                    host.sleep(SoulBotService.SQUARE_RETRY_DELAY_MS)
+                    host.setNextStep("等待输入框后重试", SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
+                    host.sleep(SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
                     continue
                 }
                 host.tapNode(input)
@@ -136,8 +136,8 @@ internal class SoulMessageSender(private val host: SoulMessageSenderHost) {
                         host.context,
                         "message input injection failed; attemptId=$attemptId; part=${i + 1}",
                     )
-                    host.setNextStep("输入失败，重新输入第 ${i + 1} 段", SoulBotService.SQUARE_RETRY_DELAY_MS)
-                    host.sleep(SoulBotService.SQUARE_RETRY_DELAY_MS)
+                    host.setNextStep("输入失败，重新输入第 ${i + 1} 段", SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
+                    host.sleep(SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
                     continue
                 }
                 onInputWritten(piece)
@@ -152,7 +152,7 @@ internal class SoulMessageSender(private val host: SoulMessageSenderHost) {
             host.sleep(500)
             val beforeOutgoingCount = host.outgoingOccurrenceCount(piece)
             val beforeVisibleCount = host.visibleMessageOccurrenceCount(piece)
-            val sendButton = host.findVisibleById(SoulBotService.ID_SEND_BUTTON) ?: run {
+            val sendButton = host.findVisibleById(SoulAccessibilityIds.ID_SEND_BUTTON) ?: run {
                 RuntimeLog.record(
                     host.context,
                     "message send button missing; attemptId=$attemptId; part=${i + 1}",
@@ -170,7 +170,7 @@ internal class SoulMessageSender(private val host: SoulMessageSenderHost) {
                     if (sendAttempt == 0) "发送第 ${i + 1} 段回复"
                     else "上次点击未生效，再发送一次",
                 )
-                val currentButton = host.findVisibleById(SoulBotService.ID_SEND_BUTTON) ?: break
+                val currentButton = host.findVisibleById(SoulAccessibilityIds.ID_SEND_BUTTON) ?: break
                 if (!expectedEventIsCurrent()) {
                     RuntimeLog.record(host.context, "message send rejected; reason=stale_event_before_click")
                     return false
@@ -204,7 +204,7 @@ internal class SoulMessageSender(private val host: SoulMessageSenderHost) {
                 }
                 // Only click again when the original text is still in the input box.
                 // If it has disappeared, the result is ambiguous and another click could duplicate it.
-                if (host.normalizeReply(host.textOf(host.findVisibleById(SoulBotService.ID_INPUT_BOX))) != host.normalizeReply(piece)) break
+                if (host.normalizeReply(host.textOf(host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX))) != host.normalizeReply(piece)) break
             }
             if (!sent) {
                 if (durableSendKey != null && durableClickPerformed) {

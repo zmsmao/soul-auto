@@ -82,7 +82,7 @@ internal class SoulNavigationController(
         // Verify that the list is really at the beginning. Keep scrolling backward
         // until the visible conversations stop changing, rather than assuming a
         // fixed number of gestures is enough.
-        repeat(SoulBotService.MAX_SCROLLS_TO_TOP) {
+        repeat(MAX_SCROLLS_TO_TOP) {
             if (!isOnList()) return
             val before = conversationListSnapshot()
             val list = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
@@ -187,4 +187,8 @@ internal class SoulNavigationController(
     }
 
     // ===== 延时 =====
+
+    companion object {
+        const val MAX_SCROLLS_TO_TOP = 20
+    }
 }

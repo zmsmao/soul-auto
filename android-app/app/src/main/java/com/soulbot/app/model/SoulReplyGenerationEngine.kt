@@ -78,7 +78,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
         scene: ReplyScene,
         cancellation: ModelCallCancellation?,
     ): ModelRouteOutcome {
-        val recent = thread.takeLast(SoulBotService.CONTEXT_LEN).filterNot { (role, text) ->
+        val recent = thread.takeLast(ReplyGenerationConfig.CONTEXT_LEN).filterNot { (role, text) ->
             role == "out" && ReplyNaturalness.isInternalDraft(text)
         }
         val contextAnalysis = ConversationReplyContext.analyze(recent, focusIncoming)
@@ -210,7 +210,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
         cancellation.throwIfCancelled()
         val startedAt = SystemClock.elapsedRealtime()
         val deadline = startedAt + 90_000L
-        val recentThread = thread.takeLast(SoulBotService.CONTEXT_LEN).filterNot { (role, text) ->
+        val recentThread = thread.takeLast(ReplyGenerationConfig.CONTEXT_LEN).filterNot { (role, text) ->
             role == "out" && ReplyNaturalness.isInternalDraft(text)
         }
         val contextAnalysis = ConversationReplyContext.analyze(recentThread, focusIncoming)

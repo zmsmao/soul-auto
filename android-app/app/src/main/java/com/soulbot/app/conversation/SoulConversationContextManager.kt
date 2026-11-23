@@ -50,8 +50,8 @@ internal class SoulConversationContextManager(private val host: SoulConversation
 
     fun currentNativeSoulUserId(): String? {
         if (!host.isOnChat()) return null
-        var node = host.findVisibleById(SoulBotService.ID_PROFILE_NAME)
-            ?: host.findByIds(SoulBotService.ID_GENERIC_TITLE).filter(host::isVisibleOnScreen)
+        var node = host.findVisibleById(SoulAccessibilityIds.ID_PROFILE_NAME)
+            ?: host.findByIds(SoulAccessibilityIds.ID_GENERIC_TITLE).filter(host::isVisibleOnScreen)
                 .firstOrNull { host.rect(it).bottom <= host.activeWindowRegion().top + host.screenHeight() / 5 }
         repeat(3) {
             if (node != null) {
