@@ -273,52 +273,47 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 8. 返回主界面启动悬浮按钮，在 Soul 前台点击悬浮窗中的“启动”。
 9. 通过悬浮窗观察当前动作和倒计时；需要接管手机时先点击“停止”。
 
-## 项目结构
+## 项目结构与代码分层
+
+Android 源码位于 app/src/main/java/com/soulbot/app/。当前按职责拆分为以下 Kotlin 子包：
 
 ```text
-android-app/
-├── build.gradle / settings.gradle / gradle.properties
-├── gradlew / gradlew.bat
-└── app/
-    ├── build.gradle
-    └── src/
-        ├── main/
-        │   ├── AndroidManifest.xml
-        │   ├── java/com/soulbot/app/
-        │   │   ├── MainActivity.kt                 # 首页状态仪表盘
-        │   │   ├── BaseSettingsActivity.kt         # 设置页通用标题栏
-        │   │   ├── TaskSettingsActivity.kt         # 任务模式与时间设置
-        │   │   ├── ModelSettingsActivity.kt        # 多模型列表、排序与测试
-        │   │   ├── ModelEndpointEditActivity.kt    # 模型端点编辑
-        │   │   ├── ProfileSettingsActivity.kt      # 我的资料
-        │   │   ├── ReplyLearningActivity.kt        # 回复学习与记忆开关
-        │   │   ├── ChatSamplesActivity.kt          # 学习样本统计与清理
-        │   │   ├── DataBackupActivity.kt           # 记忆统计、导入与导出
-        │   │   ├── DeviceDiagnosticsActivity.kt    # 新设备适配状态与只读诊断
-        │   │   ├── RuntimeLogActivity.kt           # 运行日志查看、导出与清空
-        │   │   ├── HistoryActivity.kt              # 本地互动历史
-        │   │   ├── SoulBotService.kt               # 无障碍状态机与自动化主循环
-        │   │   ├── FloatingButtonService.kt        # 悬浮控制器与前台服务
-        │   │   ├── ModelClient.kt / ModelRouter.kt # 模型调用、容错与路由
-        │   │   ├── ModelEndpoint.kt                # 端点配置、健康状态与迁移
-        │   │   ├── ConversationReplyContext.kt     # 多段上下文与提问节奏
-        │   │   ├── ConversationMemoryDatabase.kt   # 完整聊天记忆
-        │   │   ├── ChatLearning.kt                 # 风格样本提取与匹配
-        │   │   ├── ChatLearningDatabase.kt         # 学习数据与自动回复标记
-        │   │   ├── VoiceTranscriptPolicy.kt        # 未读语音和转写归属策略
-        │   │   ├── AdaptiveUi.kt                    # 有效窗口、容器手势和归一化兜底
-        │   │   ├── DeviceCompatibility.kt          # 分设备诊断记录与语音菜单学习
-        │   │   ├── RuntimeLog.kt                    # 结构化滚动日志、读取和导出
-        │   │   ├── DiagnosticLogSanitizer.kt        # 日志凭据脱敏
-        │   │   ├── SquareBrowsePolicy.kt           # 广场目标选择与翻页策略
-        │   │   ├── GreetDatabase.kt                # 广场打招呼去重
-        │   │   ├── HistoryDatabase.kt              # 旧版互动记录
-        │   │   └── Settings.kt / SelfProfile.kt    # 设置和个人资料模型
-        │   ├── res/                                # 布局、颜色、文案、主题
-        │   └── xml/accessibility_service_config.xml
-        └── test/java/com/soulbot/app/               # 核心策略单元测试
+com.soulbot.app/
+├── app/             # Application、Activity、设置界面、无障碍 Service 组合入口
+├── automation/      # 自动化主循环、任务协调器及 Host 接口
+├── accessibility/   # 无障碍节点操作、页面识别、消息读取/发送、导航
+├── workflow/
+│   ├── privatechat/ # 普通私聊与回复流程
+│   ├── greeting/    # 新招呼处理
+│   ├── match/       # 灵魂匹配与星球闲置流程
+│   ├── qiyu/        # 奇遇铃流程
+│   └── square/      # 广场浏览与主动私聊流程
+├── conversation/    # 会话状态、身份、上下文、记忆逻辑
+├── model/           # 模型客户端、端点配置、路由与回复生成引擎
+├── policy/          # 回复生成、开场、节奏、语音及场景策略
+├── data/             # 本地数据库与设置持久化
+└── diagnostics/     # 运行日志、设备兼容性、诊断与回放
 ```
 
+### 模块边界
+
+- app 是 Android 生命周期与界面入口，也是各模块的组合根；SoulBotService 保留平台生命周期和模块装配职责，不应重新承载所有场景细节。
+- automation 负责调度与任务优先级，通过 Host 调用具体页面/场景能力。
+- accessibility 封装 Android 无障碍节点操作及 Soul 页面识别，不负责决定聊天策略。
+- workflow 按业务场景组织操作流程；每个场景通过自己的 Host 接口访问 Android 页面能力和共享服务。
+- conversation、model、policy、data、diagnostics 分别承载会话领域逻辑、模型调用、策略规则、持久化和诊断能力。
+- workflow 与底层能力之间通过 Host/接口衔接，避免场景流程直接耦合无障碍服务的全部实现。
+
+### 维护约定
+
+- 新增场景代码放入对应 workflow 子包，不再平铺到根包。
+- 页面识别、节点点击/滑动、消息读取/发送和导航能力放入 accessibility。
+- 不要为了目录整理改变策略判断、提示词、人设、任务优先级、去重条件或数据库读写语义。
+- 调整数据库结构或迁移时必须单独审查兼容性；普通架构迁移不应顺手改 schema 或历史数据。
+- 新增跨模块能力优先通过明确的 Host/接口暴露，避免 Service 继续膨胀为所有模块的直接依赖。
+
+测试源码位于 app/src/test/java/com/soulbot/app/，资源文件位于 app/src/main/res/，无障碍服务配置位于 app/src/main/res/xml/。
+ 
 ## 已知限制与排查
 
 1. **Soul 改版可能导致识别失效**：自动化依赖 `cn.soulapp.android:id/...` 控件 id、文本特征和节点位置；Soul 更新布局后可能需要同步调整。
