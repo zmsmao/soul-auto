@@ -1,6 +1,6 @@
 package com.soulbot.app.workflow
 
-import com.soulbot.app.comparableText
+import com.soulbot.app.conversation.comparableText
 
 /** Pure parsing helpers for the title texts exposed by Soul's match chat header. */
 object SoulMatchContent {
