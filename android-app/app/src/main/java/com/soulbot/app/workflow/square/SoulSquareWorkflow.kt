@@ -1,4 +1,7 @@
 package com.soulbot.app.workflow.square
+
+import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.logging.DiagnosticIdentity
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
