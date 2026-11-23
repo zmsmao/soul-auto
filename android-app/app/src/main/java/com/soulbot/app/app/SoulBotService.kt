@@ -200,6 +200,29 @@ class SoulBotService : AccessibilityService() {
         })
     }
 
+    private val conversationContextManager: SoulConversationContextManager by lazy(LazyThreadSafetyMode.NONE) {
+        SoulConversationContextManager(object : SoulConversationContextHost {
+            override val context: android.content.Context get() = applicationContext
+            override val learningDatabase: ChatLearningDatabase? get() = learningDb
+            override val memoryDatabase: ConversationMemoryDatabase? get() = conversationMemoryDb
+            override val replyReplayDatabase: ReplyReplayDatabase? get() = replyReplayDb
+            override fun currentIncomingMessageKeys(contactName: String): List<String> =
+                this@SoulBotService.currentIncomingMessageKeys(contactName)
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun isExpectedConversation(contactName: String): Boolean =
+                this@SoulBotService.isExpectedConversation(contactName)
+            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
+            override fun findVisibleById(id: String): AccessibilityNodeInfo? =
+                this@SoulBotService.findVisibleById(id)
+            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
+            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
+                this@SoulBotService.isVisibleOnScreen(node)
+            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
+            override fun activeWindowRegion(): UiRegion = this@SoulBotService.activeWindowRegion()
+            override fun screenHeight(): Int = this@SoulBotService.screenHeight()
+        })
+    }
+
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -975,34 +998,10 @@ class SoulBotService : AccessibilityService() {
         thread: List<Pair<String, String>>,
         tracker: ConversationSeenTracker,
         pendingCount: Int,
-    ): List<ConversationIncomingEvent> {
-        if (pendingCount <= 0) return emptyList()
-        val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
-        val eventKeys = currentIncomingMessageKeys(contactName)
-        val alignedCount = minOf(incomingTexts.size, eventKeys.size)
-        if (alignedCount == 0) return emptyList()
-        val events = incomingTexts.takeLast(alignedCount)
-            .zip(eventKeys.takeLast(alignedCount))
-            .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
-            .takeLast(pendingCount)
-        val threadId = memoryThreadId(contactName)
-        val confirmedKeys = conversationMemoryDb?.confirmedMessageKeys(threadId).orEmpty()
-        return tracker.unseenEvents(threadId, events, confirmedKeys)
-    }
+    ): List<ConversationIncomingEvent> =
+        conversationContextManager.unseenIncomingEvents(contactName, thread, tracker, pendingCount)
 
-    private fun currentNativeSoulUserId(): String? {
-        if (!isOnChat()) return null
-        var node = findVisibleById(ID_PROFILE_NAME)
-            ?: findByIds(ID_GENERIC_TITLE).filter(::isVisibleOnScreen)
-                .firstOrNull { rect(it).bottom <= activeWindowRegion().top + screenHeight() / 5 }
-        repeat(3) {
-            if (node != null) {
-                SoulAccessibilityIdentity.userId(node)?.let { return it }
-                node = runCatching { node?.parent }.getOrNull()
-            }
-        }
-        return null
-    }
+    private fun currentNativeSoulUserId(): String? = conversationContextManager.currentNativeSoulUserId()
 
     private fun nonTextMessageFrom(item: AccessibilityNodeInfo): String = messageReader.nonTextMessageFrom(item)
 
@@ -1070,10 +1069,7 @@ class SoulBotService : AccessibilityService() {
     ): String? = replyGenerationEngine.generateValidatedOpening(action, context)
 
     private fun memoryThreadId(contactName: String): String =
-        ConversationIdentity.threadId(
-            currentNativeSoulUserId(),
-            DiagnosticIdentity.contactId(applicationContext, contactName),
-        )
+        conversationContextManager.memoryThreadId(contactName)
 
     private fun personalizationContext(
         contactName: String,
@@ -1082,94 +1078,15 @@ class SoulBotService : AccessibilityService() {
         includeMemory: Boolean = true,
         styleQuery: String = latestMessage,
         excludeContextKey: String = "",
-    ): String {
-        return buildString {
-            val db = learningDb
-            if (db != null && Prefs.getStyleLearningEnabled(applicationContext)) {
-                val profile = db.styleProfile(scene)
-                val preferences = runCatching {
-                    replyReplayDb?.relevantExamples(styleQuery, scene, 3, excludeContextKey)
-                }.onFailure { error ->
-                    RuntimeLog.record(applicationContext, "reply preference lookup failed", error)
-                }.getOrNull().orEmpty()
-                // Prefer reviewed multi-turn corrections. Legacy pairs remain a fallback.
-                val examples = if (preferences.isEmpty()) db.relevantStyleSamples(styleQuery, 3, scene) else emptyList()
-                val dislikedHints = db.dislikedStyleHints(scene)
-                if (dislikedHints.isNotEmpty()) {
-                    append("\n用户对这个场景明确不喜欢的表达类型：").append(dislikedHints.joinToString("、"))
-                    append("。这些是表达偏好，不是对方的个人信息。")
-                }
-                if (profile.sampleCount > 0) {
-                    append("\n\n这是用户本人聊天风格档案，只模仿表达习惯，不要声称自己是某个角色，也不要照抄事实或整句。\n")
-                    append(profile.promptLine())
-                    // Frequent words and endings may be names or topic fragments, not style rules.
-                    append("不要刻意重复口头词、收尾或固定句式；这些统计不是字数或提问配额。")
-                }
-                if (examples.isNotEmpty()) {
-                    append("\n下面是用户本人过去的人工回复样本。只参考长度、措辞和节奏，不要照抄其中的人名、事实或句子。\n")
-                    for (sample in examples) {
-                        append("\n对方：").append(sample.theirMessage)
-                        append("\n我：").append(sample.myMessage)
-                    }
-                }
-                append(ReplyPreferencePrompt.build(preferences))
-            }
-            if (includeMemory && db != null &&
-                Prefs.getContactMemoryEnabled(applicationContext) &&
-                contactName.isNotBlank()
-            ) {
-                val memories = db.contactMemories(contactName, 5)
-                if (memories.isNotEmpty()) {
-                    append("\n\n对方过去提到过这些内容，相关时再自然参考，不相关就忽略，也不要说自己在读取记忆：")
-                    memories.forEach { append("\n- ").append(it) }
-                }
-            }
-            if (includeMemory && Prefs.getContactMemoryEnabled(applicationContext) && contactName.isNotBlank()) {
-                val olderMessages = runCatching {
-                    conversationMemoryDb?.relevantOlderMessages(memoryThreadId(contactName), scene, latestMessage, 6)
-                }.getOrNull().orEmpty().filterNot { message ->
-                    message.role == "out" && ReplyNaturalness.isInternalDraft(message.content)
-                }
-                if (olderMessages.isNotEmpty()) {
-                    append("\n\n下面是与当前话题相关的更早聊天片段。只在确实相关时自然接上，")
-                    append("不要复述整段，不要声称自己在读取数据库，也不要把推测当事实：")
-                    olderMessages.forEach { message ->
-                        append("\n")
-                        append(if (message.role == "in") "对方曾说：" else "我曾说：")
-                        append(message.content)
-                    }
-                }
-            }
-        }
-    }
+    ): String = conversationContextManager.personalizationContext(
+        contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
+    )
 
     private fun learnFromManualReplies(
         contactName: String,
         thread: List<Pair<String, String>>,
         scene: ReplyScene = ReplyScene.CHAT,
-    ) {
-        runCatching {
-            val threadId = memoryThreadId(contactName)
-            conversationMemoryDb?.syncVisibleThread(contactName, thread, threadId, scene)
-            conversationMemoryDb?.updateConversationState(threadId, scene, thread)
-        }.onFailure { error ->
-            RuntimeLog.record(
-                applicationContext,
-                "conversation memory sync failed; contactId=${DiagnosticIdentity.contactId(applicationContext, contactName)}",
-                error,
-            )
-        }
-        val db = learningDb ?: return
-        val manualSamples = ManualStyleLearner.extract(thread, scene) { reply ->
-            db.isAutomatedReply(contactName, reply)
-        }
-        if (Prefs.getStyleLearningEnabled(applicationContext)) {
-            manualSamples.forEach { db.recordManualSample(it.theirMessage, it.myMessage, it.scene) }
-        }
-        if (Prefs.getContactMemoryEnabled(applicationContext)) {
-            manualSamples.forEach { db.recordContactMemory(contactName, it.theirMessage) }
-        }
-    }
+    ) = conversationContextManager.learnFromManualReplies(contactName, thread, scene)
 
     private fun recordAutomatedInteraction(
         contactName: String,
@@ -1177,39 +1094,9 @@ class SoulBotService : AccessibilityService() {
         reply: String,
         opening: OpeningContext? = null,
         scene: ReplyScene = opening?.scene ?: ReplyScene.CHAT,
-    ) {
-        runCatching {
-            val threadId = memoryThreadId(contactName)
-            conversationMemoryDb?.recordMessage(contactName, "out", reply, threadId, scene)
-            if (isOnChat() && isExpectedConversation(contactName)) {
-                val visibleThread = readThread()
-                conversationMemoryDb?.syncVisibleThread(contactName, visibleThread, threadId, scene)
-                conversationMemoryDb?.updateConversationState(threadId, scene, visibleThread)
-            }
-        }.onFailure { error ->
-            RuntimeLog.record(
-                applicationContext,
-                "conversation memory write failed; contactId=${DiagnosticIdentity.contactId(applicationContext, contactName)}",
-                error,
-            )
-        }
-        val db = learningDb ?: return
-        if (opening != null) {
-            runCatching {
-                db.recordSentOpening(opening.scene, OpeningReplyPolicy.fingerprint(reply, opening))
-            }.onFailure { error ->
-                RuntimeLog.record(applicationContext, "sent opening pattern write failed", error)
-            }
-        }
-        // Always mark automated text, even when learning is disabled, so it can
-        // never be mistaken for a human-written sample after learning is enabled.
-        db.recordAutomatedReply(contactName, reply)
-        db.recordQualityEvent(contactName, reply, true, "sent")
-        // A system match reason/profile is not an incoming chat message.
-        if (opening == null && Prefs.getContactMemoryEnabled(applicationContext)) {
-            incomingMessages.takeLast(3).forEach { db.recordContactMemory(contactName, it) }
-        }
-    }
+    ) = conversationContextManager.recordAutomatedInteraction(
+        contactName, incomingMessages, reply, opening, scene,
+    )
 
     private fun hasPendingQiyu(): Boolean = qiyuWorkflow.hasPending()
 
