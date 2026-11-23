@@ -30,6 +30,14 @@ object Prefs {
     private const val KEY_SELF_ZODIAC = "self_zodiac"
     private const val KEY_SELF_OCCUPATION = "self_occupation"
     private const val KEY_SELF_DETAILS = "self_details"
+    private const val KEY_SELF_HEIGHT = "self_height"
+    private const val KEY_SELF_GENDER_VISIBILITY = "self_gender_visibility"
+    private const val KEY_SELF_AGE_VISIBILITY = "self_age_visibility"
+    private const val KEY_SELF_REGION_VISIBILITY = "self_region_visibility"
+    private const val KEY_SELF_ZODIAC_VISIBILITY = "self_zodiac_visibility"
+    private const val KEY_SELF_OCCUPATION_VISIBILITY = "self_occupation_visibility"
+    private const val KEY_SELF_DETAILS_VISIBILITY = "self_details_visibility"
+    private const val KEY_SELF_HEIGHT_VISIBILITY = "self_height_visibility"
 
     fun getSelectedModel(ctx: Context): String =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -119,11 +127,20 @@ object Prefs {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return SelfProfile(
             gender = prefs.getString(KEY_SELF_GENDER, "男") ?: "男",
-            age = prefs.getString(KEY_SELF_AGE, "25") ?: "25",
+            // Do not assume an age for new installs; existing saved values remain unchanged.
+            age = prefs.getString(KEY_SELF_AGE, "") ?: "",
             region = prefs.getString(KEY_SELF_REGION, "") ?: "",
             zodiac = prefs.getString(KEY_SELF_ZODIAC, "") ?: "",
             occupation = prefs.getString(KEY_SELF_OCCUPATION, "") ?: "",
             details = prefs.getString(KEY_SELF_DETAILS, "") ?: "",
+            height = prefs.getString(KEY_SELF_HEIGHT, "") ?: "",
+            genderVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_GENDER_VISIBILITY, null)),
+            ageVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_AGE_VISIBILITY, null)),
+            regionVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_REGION_VISIBILITY, null)),
+            zodiacVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_ZODIAC_VISIBILITY, null)),
+            occupationVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_OCCUPATION_VISIBILITY, null)),
+            detailsVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_DETAILS_VISIBILITY, null)),
+            heightVisibility = ProfileVisibility.fromStored(prefs.getString(KEY_SELF_HEIGHT_VISIBILITY, null)),
         )
     }
 
@@ -135,6 +152,14 @@ object Prefs {
             .putString(KEY_SELF_ZODIAC, profile.zodiac.trim())
             .putString(KEY_SELF_OCCUPATION, profile.occupation.trim())
             .putString(KEY_SELF_DETAILS, profile.details.trim())
+            .putString(KEY_SELF_HEIGHT, profile.height.trim())
+            .putString(KEY_SELF_GENDER_VISIBILITY, profile.genderVisibility.name)
+            .putString(KEY_SELF_AGE_VISIBILITY, profile.ageVisibility.name)
+            .putString(KEY_SELF_REGION_VISIBILITY, profile.regionVisibility.name)
+            .putString(KEY_SELF_ZODIAC_VISIBILITY, profile.zodiacVisibility.name)
+            .putString(KEY_SELF_OCCUPATION_VISIBILITY, profile.occupationVisibility.name)
+            .putString(KEY_SELF_DETAILS_VISIBILITY, profile.detailsVisibility.name)
+            .putString(KEY_SELF_HEIGHT_VISIBILITY, profile.heightVisibility.name)
             .apply()
     }
 
