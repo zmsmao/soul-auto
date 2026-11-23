@@ -3,7 +3,6 @@ package com.soulbot.app.automation
 import com.soulbot.app.accessibility.SoulAccessibilityIds
 import com.soulbot.app.accessibility.SoulAccessibilityTiming
 import com.soulbot.app.accessibility.SoulScreen
-import com.soulbot.app.app.SoulBotService
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
