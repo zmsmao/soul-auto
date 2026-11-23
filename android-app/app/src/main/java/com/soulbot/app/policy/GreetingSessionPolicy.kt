@@ -1,5 +1,7 @@
 package com.soulbot.app.policy
 
+import com.soulbot.app.conversation.comparableText
+
 /** Rules for consuming Soul's "new greeting" list without reopening stale rows forever. */
 internal object GreetingSessionPolicy {
     const val EMPTY_LIST_RECHECK_MS = 120_000L

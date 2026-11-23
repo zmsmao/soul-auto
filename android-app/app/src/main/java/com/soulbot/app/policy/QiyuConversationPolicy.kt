@@ -1,5 +1,7 @@
 package com.soulbot.app.policy
 
+import com.soulbot.app.conversation.comparableText
+
 enum class QiyuSendRecovery { CONFIRMED, RETRY_UNSENT, WAIT_CONFIRMATION }
 enum class QiyuDraftRefresh { DISCARD_EMPTY, CLEAR_OWNED_UNSENT, KEEP_OTHER_INPUT, WAIT_CONFIRMATION }
 

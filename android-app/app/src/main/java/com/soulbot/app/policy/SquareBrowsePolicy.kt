@@ -1,5 +1,7 @@
 package com.soulbot.app.policy
 
+import com.soulbot.app.conversation.comparableText
+
 object SquareBrowsePolicy {
     const val MAX_TRANSIENT_ATTEMPTS = 2
 
