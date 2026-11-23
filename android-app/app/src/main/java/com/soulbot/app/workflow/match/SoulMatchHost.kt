@@ -1,21 +1,15 @@
 package com.soulbot.app.workflow.match
 
-import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.policy.OpeningContext
 import com.soulbot.app.policy.ReplyScene
-import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android capabilities and shared chat services used by Soul Match workflows. */
-internal interface SoulMatchHost {
-    val context: Context
-    val isRunning: Boolean
-    fun currentScreen(): SoulScreen
+internal interface SoulMatchHost : SoulWorkflowHost {
     fun soulMatchProfileTexts(): List<String>
-    fun setNextStep(action: String, delayMs: Long = 0L)
-    fun sleep(ms: Long)
     fun waitUnlessQiyu(delayMs: Long): Boolean
     fun convertIncomingVoiceMessages(): Boolean
     fun readThread(): List<Pair<String, String>>

@@ -1,24 +1,18 @@
 package com.soulbot.app.workflow.greeting
 
-import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
-import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android and conversation capabilities used by the greeting workflow. */
-internal interface SoulGreetingHost {
-    val context: Context
-    val isRunning: Boolean
-    fun currentScreen(): SoulScreen
+internal interface SoulGreetingHost : SoulWorkflowHost {
     fun findVisibleById(id: String): AccessibilityNodeInfo?
     fun findById(id: String): AccessibilityNodeInfo?
     fun findByIds(id: String): List<AccessibilityNodeInfo>
     fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean
     fun textOf(node: AccessibilityNodeInfo?): String
-    fun setNextStep(action: String, delayMs: Long = 0L)
     fun tapNode(node: AccessibilityNodeInfo): Boolean
-    fun sleep(ms: Long)
     fun isOnChat(): Boolean
     fun isExpectedConversation(name: String): Boolean
     fun pressBack()

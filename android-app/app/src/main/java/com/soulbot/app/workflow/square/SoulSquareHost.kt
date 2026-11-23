@@ -1,21 +1,15 @@
 package com.soulbot.app.workflow.square
 
-import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.policy.OpeningContext
 import com.soulbot.app.policy.ReplyScene
-import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android page-agent operations required by Square browsing and its follow-up chat. */
-internal interface SoulSquareHost {
-    val context: Context
-    val isRunning: Boolean
+internal interface SoulSquareHost : SoulWorkflowHost {
     fun setStatusText(text: String)
-    fun setNextStep(action: String, delayMs: Long = 0L)
-    fun sleep(ms: Long)
-    fun currentScreen(): SoulScreen
     fun hasUnreadRedDot(): Boolean
     fun isOnSquare(): Boolean
     fun selectedSquareChannel(): String

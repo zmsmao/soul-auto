@@ -1,21 +1,16 @@
 package com.soulbot.app.workflow.qiyu
 
-import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.policy.OpeningContext
 import com.soulbot.app.policy.ReplyScene
-import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android page-agent operations required by the Qiyu conversation workflow. */
-internal interface SoulQiyuHost {
-    val context: Context
-    val isRunning: Boolean
-    fun currentScreen(): SoulScreen
+internal interface SoulQiyuHost : SoulWorkflowHost {
     fun findVisibleById(id: String): AccessibilityNodeInfo?
     fun textOf(node: AccessibilityNodeInfo?): String
-    fun sleep(ms: Long)
     fun tapNode(node: AccessibilityNodeInfo): Boolean
     fun isSoulForeground(): Boolean
     fun isOnChat(): Boolean
@@ -23,7 +18,6 @@ internal interface SoulQiyuHost {
     fun displayedConversationName(): String
     fun skipNoSend()
     fun skipGift()
-    fun setNextStep(action: String, delayMs: Long = 0L)
     fun convertIncomingVoiceMessages(): Boolean
     fun readThread(): List<Pair<String, String>>
     fun hasConversationHistory(contactName: String, scene: ReplyScene): Boolean

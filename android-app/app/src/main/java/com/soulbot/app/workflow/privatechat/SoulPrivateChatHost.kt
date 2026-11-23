@@ -1,22 +1,16 @@
 package com.soulbot.app.workflow.privatechat
 
-import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
-import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 
 
 /** Android and shared-chat capabilities required by the ordinary private-chat workflow. */
-internal interface SoulPrivateChatHost {
-    val context: Context
-    val isRunning: Boolean
-    fun currentScreen(): SoulScreen
+internal interface SoulPrivateChatHost : SoulWorkflowHost {
     fun isOnList(): Boolean
     fun isOnChat(): Boolean
     fun findConversation(name: String): AccessibilityNodeInfo?
-    fun setNextStep(action: String, delayMs: Long = 0L)
-    fun sleep(ms: Long)
     fun tapNode(node: AccessibilityNodeInfo): Boolean
     fun gotoChatList(): Boolean
     fun isExpectedConversation(name: String): Boolean
