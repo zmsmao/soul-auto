@@ -2,8 +2,6 @@ package com.soulbot.app.accessibility
 
 import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.*
-import com.soulbot.app.app.SoulBotService
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.ConversationMemoryDatabase
 import com.soulbot.app.diagnostics.RuntimeLog
