@@ -16,7 +16,7 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.random.Random
-import com.soulbot.app.workflow.match.SoulMatchContent
+import com.soulbot.app.workflow.SoulMatchContent
 import com.soulbot.app.workflow.square.SoulSquareTiming
 import com.soulbot.app.workflow.greeting.SoulGreetingHost
 import com.soulbot.app.workflow.greeting.SoulGreetingWorkflow

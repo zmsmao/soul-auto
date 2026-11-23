@@ -1,4 +1,6 @@
 package com.soulbot.app.workflow.qiyu
+
+import com.soulbot.app.workflow.SoulMatchContent
 import com.soulbot.app.*
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.app.*
