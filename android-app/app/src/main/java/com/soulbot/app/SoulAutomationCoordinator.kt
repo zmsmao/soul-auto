@@ -18,17 +18,7 @@ internal class SoulAutomationCoordinator(
         val seen = ConversationSeenTracker()
         val seenDm = mutableSetOf<String>()
         val attemptedDmProfiles = mutableSetOf<String>()
-        val greetDb = GreetDatabase(context)
-        historyDb = HistoryDatabase(context)
-        conversationMemoryDb = ConversationMemoryDatabase(context).also { memory ->
-            memory.seedLegacyHistory(historyDb?.getAll().orEmpty())
-        }
-        learningDb = ChatLearningDatabase(context).also { db ->
-            // Existing interaction history contains only replies sent by the bot.
-            // Seed it once so older bot messages are not learned as human style.
-            db.seedAutomatedReplies(historyDb?.getAll().orEmpty())
-        }
-        replyReplayDb = ReplyReplayDatabase(context)
+
 
         var lastDm = 0L
         var lastScreenName = ""
@@ -73,8 +63,8 @@ internal class SoulAutomationCoordinator(
                 }
                 if (!host.isOnSquare()) host.gotoSquare()
                 RuntimeLog.record(context, "square round ended; sent=false; cooldown=false")
-                host.setNextStep("继续寻找可私聊用户", SQUARE_RETRY_DELAY_MS)
-                host.sleep(SQUARE_RETRY_DELAY_MS)
+                host.setNextStep("继续寻找可私聊用户", SoulBotService.SQUARE_RETRY_DELAY_MS)
+                host.sleep(SoulBotService.SQUARE_RETRY_DELAY_MS)
             }
         }
 
@@ -87,7 +77,7 @@ internal class SoulAutomationCoordinator(
                     stuckCount = 0
                     RuntimeLog.record(
                         context,
-                        "screen=${screen.name} pager=${host.findVisibleById(ID_SQUARE_PAGER) != null} avatar=${host.findVisibleById(ID_SQUARE_AVATAR) != null} name=${host.findVisibleById(ID_CONV_NAME) != null} input=${host.findVisibleById(ID_INPUT_BOX) != null}"
+                        "screen=${screen.name} pager=${host.findVisibleById(SoulBotService.ID_SQUARE_PAGER) != null} avatar=${host.findVisibleById(SoulBotService.ID_SQUARE_AVATAR) != null} name=${host.findVisibleById(SoulBotService.ID_CONV_NAME) != null} input=${host.findVisibleById(SoulBotService.ID_INPUT_BOX) != null}"
                     )
                 }
                 if (stuckCount > 8 && !host.hasPendingQiyu()) {

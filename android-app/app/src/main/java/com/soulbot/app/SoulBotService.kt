@@ -2999,6 +2999,17 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
             "worker initialized; mode=${automationMode.name}; enabledModels=${enabledModels.size}; primary=${enabledModels.first().displayName}",
         )
 
+        val greetDb = GreetDatabase(applicationContext)
+        historyDb = HistoryDatabase(applicationContext)
+        conversationMemoryDb = ConversationMemoryDatabase(applicationContext).also { memory ->
+            memory.seedLegacyHistory(historyDb?.getAll().orEmpty())
+        }
+        learningDb = ChatLearningDatabase(applicationContext).also { db ->
+            // Existing interaction history contains only replies sent by the bot.
+            // Seed it once so older bot messages are not learned as human style.
+            db.seedAutomatedReplies(historyDb?.getAll().orEmpty())
+        }
+        replyReplayDb = ReplyReplayDatabase(applicationContext)
         val squareInterval = Prefs.getSquareInterval(applicationContext).toLong()
         SoulAutomationCoordinator(
             context = applicationContext,
