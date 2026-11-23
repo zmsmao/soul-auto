@@ -882,34 +882,7 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun runLoopInternal() {
-        val ctx = applicationContext
-        val automationMode = Prefs.getAutomationMode(ctx)
-        val configuredModels = ModelEndpointPrefs.getEndpoints(ctx)
-        val enabledModels = configuredModels.filter(ModelEndpointRules::isRunnable)
-        if (configuredModels.none { it.enabled && it.apiKey.isNotBlank() }) {
-            statusText = "未配置 API Key"
-            statusDeadline = 0
-            Prefs.setTaskShouldRun(ctx, false)
-            Prefs.setLastStopReason(ctx, statusText)
-            RuntimeLog.record(applicationContext, "worker preflight failed; reason=no_api_key")
-            return
-        }
-        if (enabledModels.isEmpty()) {
-            statusText = "模型配置不完整"
-            statusDeadline = 0
-            Prefs.setTaskShouldRun(ctx, false)
-            Prefs.setLastStopReason(ctx, statusText)
-            RuntimeLog.record(applicationContext, "worker preflight failed; reason=no_runnable_model")
-            return
-        }
-        setNextStep("${automationMode.displayName}：检查当前页面")
-        RuntimeLog.record(
-            applicationContext,
-            "worker initialized; mode=${automationMode.name}; enabledModels=${enabledModels.size}; primary=${enabledModels.first().displayName}",
-        )
-
-        val greetDb = GreetDatabase(applicationContext)
+    private fun initializeSessionDatabases() {
         historyDb = HistoryDatabase(applicationContext)
         conversationMemoryDb = ConversationMemoryDatabase(applicationContext).also { memory ->
             memory.seedLegacyHistory(historyDb?.getAll().orEmpty())
@@ -920,13 +893,18 @@ class SoulBotService : AccessibilityService() {
             db.seedAutomatedReplies(historyDb?.getAll().orEmpty())
         }
         replyReplayDb = ReplyReplayDatabase(applicationContext)
-        val squareInterval = Prefs.getSquareInterval(applicationContext).toLong()
-        SoulAutomationCoordinator(
+    }
+
+    private fun runLoopInternal() {
+        SoulAutomationWorker(
             context = applicationContext,
-            automationMode = automationMode,
-            squareIntervalSeconds = squareInterval,
-            greetDb = greetDb,
-            host = automationHost,
+            automationHost = automationHost,
+            updateStatus = { text, deadline ->
+                statusText = text
+                statusDeadline = deadline
+            },
+            setNextStep = ::setNextStep,
+            initializeSessionDatabases = ::initializeSessionDatabases,
         ).run()
     }
 }
