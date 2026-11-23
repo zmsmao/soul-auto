@@ -74,7 +74,7 @@ object ReplyReplayPrompt {
         if (personalized) {
             val pending = thread.takeLastWhile { it.first == "in" }.map { it.second }
             val analysis = ConversationReplyContext.analyze(thread, pending)
-            system += "\n" + ConversationReplyContext.responseGuidance(thread, analysis.focusIncoming)
+            system += "\n" + ReplyRhythmPolicy.guidance(thread, analysis.focusIncoming)
             if (analysis.supportingTranscript.isNotBlank()) {
                 system += "\n短答需要承接前文，先辨明它回答的是哪一句，不能仅因字少判定冷淡。"
             }

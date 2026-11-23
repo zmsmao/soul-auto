@@ -2,8 +2,8 @@ package com.soulbot.app.workflow.square
 
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationSeenTracker
-import com.soulbot.app.policy.OpeningContext
-import com.soulbot.app.policy.ReplyScene
+import com.soulbot.app.conversation.OpeningContext
+import com.soulbot.app.conversation.ReplyScene
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 

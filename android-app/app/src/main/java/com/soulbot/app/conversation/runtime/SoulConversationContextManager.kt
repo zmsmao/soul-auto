@@ -1,4 +1,4 @@
-package com.soulbot.app.conversation
+package com.soulbot.app.conversation.runtime
 
 import android.content.Context
 import android.graphics.Rect
@@ -6,7 +6,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
-import com.soulbot.app.policy.*
+import com.soulbot.app.conversation.*
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -14,6 +14,7 @@ internal interface SoulConversationContextHost {
     val memoryDatabase: ConversationMemoryDatabase?
     val replyReplayDatabase: ReplyReplayDatabase?
     fun currentIncomingMessageKeys(contactName: String): List<String>
+    fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint
     fun isOnChat(): Boolean
     fun isExpectedConversation(contactName: String): Boolean
     fun readThread(): List<Pair<String, String>>
@@ -187,7 +188,7 @@ internal class SoulConversationContextManager(private val host: SoulConversation
         val db = host.learningDatabase ?: return
         if (opening != null) {
             runCatching {
-                db.recordSentOpening(opening.scene, OpeningReplyPolicy.fingerprint(reply, opening))
+                db.recordSentOpening(opening.scene, host.openingFingerprint(reply, opening))
             }.onFailure { error ->
                 RuntimeLog.record(host.context, "sent opening pattern write failed", error)
             }

@@ -1,5 +1,4 @@
 package com.soulbot.app.conversation
-import com.soulbot.app.policy.ReplyScene
 
 data class ConversationMemoryEntry(
     val eventKey: String,

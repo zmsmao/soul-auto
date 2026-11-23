@@ -14,19 +14,6 @@ import com.soulbot.app.workflow.privatechat.*
 import com.soulbot.app.workflow.qiyu.*
 import com.soulbot.app.workflow.square.*
 
-enum class ReplyScene { CHAT, SOUL_MATCH, QIYU, SQUARE }
-
-data class OpeningContext(
-    val scene: ReplyScene,
-    val contactName: String = "",
-    val content: String = "",
-    val zodiac: String = "",
-    val matchReason: String = "",
-)
-
-/** Only an anonymized form of our own sent opening is retained across contacts. */
-data class OpeningFingerprint(val normalized: String, val tactic: String)
-
 /** Local safeguards, not a collection of sentences to copy into conversations. */
 object OpeningReplyPolicy {
     private val punctuation = Regex("""[\s\p{P}\p{S}]+""")

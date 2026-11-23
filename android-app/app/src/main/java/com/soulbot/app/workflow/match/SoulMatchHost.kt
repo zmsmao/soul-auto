@@ -3,8 +3,8 @@ package com.soulbot.app.workflow.match
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
-import com.soulbot.app.policy.OpeningContext
-import com.soulbot.app.policy.ReplyScene
+import com.soulbot.app.conversation.OpeningContext
+import com.soulbot.app.conversation.ReplyScene
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android capabilities and shared chat services used by Soul Match workflows. */

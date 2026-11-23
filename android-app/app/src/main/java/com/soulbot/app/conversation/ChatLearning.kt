@@ -1,6 +1,5 @@
 package com.soulbot.app.conversation
 
-import com.soulbot.app.policy.ReplyScene
 import kotlin.math.abs
 
 data class ChatStyleSample(
