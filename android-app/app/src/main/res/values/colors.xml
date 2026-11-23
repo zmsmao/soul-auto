@@ -1,13 +1,26 @@
 <resources>
-    <color name="purple_500">#6D28D9</color>
-    <color name="purple_700">#4C1D95</color>
-    <color name="brand_primary">#6D28D9</color>
-    <color name="brand_primary_dark">#4C1D95</color>
+    <color name="purple_500">#6D63D2</color>
+    <color name="purple_700">#4B409F</color>
+    <color name="brand_primary">#6257C8</color>
+    <color name="brand_primary_dark">#4B409F</color>
     <color name="brand_on_primary">#FFFFFF</color>
-    <color name="brand_primary_container">#EDE9FE</color>
-    <color name="brand_on_primary_container">#2E1065</color>
-    <color name="state_success">#16864B</color>
-    <color name="state_warning">#B45309</color>
+    <color name="brand_primary_container">#EAE7FF</color>
+    <color name="brand_on_primary_container">#211A5B</color>
+    <color name="brand_secondary">#5D607E</color>
+    <color name="brand_secondary_container">#E6E5F3</color>
+    <color name="brand_tertiary">#8B4D75</color>
+    <color name="brand_tertiary_container">#F7DDEC</color>
+    <color name="surface_page">#F7F7FB</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="surface_subtle">#F0EFF6</color>
+    <color name="surface_border">#E5E3ED</color>
+    <color name="text_primary">#1D1B27</color>
+    <color name="text_secondary">#656275</color>
+    <color name="nav_selected">#5145B5</color>
+    <color name="nav_unselected">#777487</color>
+    <color name="state_success">#16845B</color>
+    <color name="state_warning">#A86618</color>
+    <color name="state_danger">#B54755</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 </resources>

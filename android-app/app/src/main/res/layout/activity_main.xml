@@ -25,24 +25,30 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingStart="18dp"
-            android:paddingTop="10dp"
-            android:paddingEnd="18dp"
-            android:paddingBottom="24dp">
+            android:paddingStart="20dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="28dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="运行控制台"
-                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                android:textStyle="bold" />
+                android:textAppearance="@style/TextAppearance.SoulBot.PageTitle" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:text="查看自动化状态、权限和当前配置"
+                android:textAppearance="@style/TextAppearance.SoulBot.Supporting" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="20dp"
                 app:cardBackgroundColor="?attr/colorPrimaryContainer"
-                app:cardCornerRadius="20dp"
+                app:cardCornerRadius="26dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="0dp">
 
@@ -50,7 +56,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="18dp">
+                    android:padding="22dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -65,16 +71,23 @@
                             android:background="@drawable/bg_status_dot" />
 
                         <TextView
-                            android:id="@+id/tvRuntimeTitle"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:layout_weight="1"
-                            android:text="等待服务连接"
-                            android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
-                            android:textColor="?attr/colorOnPrimaryContainer"
-                            android:textStyle="bold" />
+                            android:layout_marginStart="9dp"
+                            android:text="当前运行状态"
+                            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                            android:textColor="?attr/colorOnPrimaryContainer" />
                     </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvRuntimeTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="15dp"
+                        android:text="等待服务连接"
+                        android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+                        android:textColor="?attr/colorOnPrimaryContainer"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvRuntimeDetail"
@@ -91,22 +104,38 @@
                         style="@style/Widget.SoulBot.PrimaryButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:text="打开悬浮控制" />
+                        android:layout_marginTop="20dp"
+                        android:text="打开悬浮控制"
+                        android:textColor="?attr/colorOnPrimary" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:text="运行权限"
-                android:textAppearance="@style/TextAppearance.SoulBot.Section" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="25dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="运行权限"
+                    android:textAppearance="@style/TextAppearance.SoulBot.Section" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="需要时再开启"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:orientation="horizontal">
 
                 <com.google.android.material.button.MaterialButton
@@ -114,7 +143,7 @@
                     style="@style/Widget.SoulBot.OutlinedButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="4dp"
+                    android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     android:text="无障碍设置" />
 
@@ -123,7 +152,7 @@
                     style="@style/Widget.SoulBot.OutlinedButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
+                    android:layout_marginStart="5dp"
                     android:layout_weight="1"
                     android:text="悬浮窗权限" />
             </LinearLayout>
@@ -131,16 +160,16 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
+                android:layout_marginTop="27dp"
                 android:text="当前配置"
                 android:textAppearance="@style/TextAppearance.SoulBot.Section" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                app:cardCornerRadius="16dp"
+                app:cardCornerRadius="22dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="0dp">
 
@@ -148,15 +177,15 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="16dp">
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp">
 
                     <TextView
                         android:id="@+id/tvTaskSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="52dp"
                         android:gravity="center_vertical"
+                        android:minHeight="58dp"
                         android:text="任务模式"
                         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
@@ -169,8 +198,8 @@
                         android:id="@+id/tvModelSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="52dp"
                         android:gravity="center_vertical"
+                        android:minHeight="58dp"
                         android:text="模型服务"
                         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
@@ -183,8 +212,8 @@
                         android:id="@+id/tvProfileSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="52dp"
                         android:gravity="center_vertical"
+                        android:minHeight="58dp"
                         android:text="个人资料"
                         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
@@ -197,8 +226,8 @@
                         android:id="@+id/tvReplySummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="52dp"
                         android:gravity="center_vertical"
+                        android:minHeight="58dp"
                         android:text="学习功能"
                         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
                 </LinearLayout>
@@ -212,44 +241,53 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:cardCornerRadius="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                app:cardCornerRadius="22dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutlineVariant"
-                app:strokeWidth="1dp">
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="16dp">
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
+                        android:background="@drawable/bg_avatar_circle"
+                        android:gravity="center"
+                        android:text="友"
+                        android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+                        android:textColor="?attr/colorOnPrimaryContainer" />
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="联系人中心"
+                            android:text="联系人资料库"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
 
                         <TextView
                             android:id="@+id/tvDataSummary"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="3dp"
-                            android:text="查看每位联系人的记忆、历史与会话状态"
+                            android:layout_marginTop="4dp"
+                            android:text="查看联系人、记忆片段和聊天历史"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                     </LinearLayout>
 
                     <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
                         android:contentDescription="@null"
                         android:src="@drawable/ic_chevron_right" />
                 </LinearLayout>
@@ -259,7 +297,8 @@
                 android:id="@+id/tvDeviceSummary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="18dp"
+                android:lineSpacingExtra="3dp"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -268,7 +307,7 @@
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="7dp"
                 android:text="更多设置与诊断" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

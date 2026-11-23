@@ -1,6 +1,9 @@
 package com.soulbot.app.app
 
 import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.chip.Chip
 import com.soulbot.app.R
@@ -21,6 +24,8 @@ class ContactDetailActivity : BaseSettingsActivity() {
     private lateinit var tvIdentity: TextView
     private lateinit var tvLastMessage: TextView
     private lateinit var tvContent: TextView
+    private lateinit var tvAvatar: TextView
+    private lateinit var memoryEntriesLayout: LinearLayout
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +41,9 @@ class ContactDetailActivity : BaseSettingsActivity() {
         tvIdentity = findViewById(R.id.tvContactIdentityType)
         tvLastMessage = findViewById(R.id.tvContactLastMessage)
         tvContent = findViewById(R.id.tvContactSectionContent)
+        tvAvatar = findViewById(R.id.tvContactAvatar)
+        memoryEntriesLayout = findViewById(R.id.layoutContactMemoryEntries)
+        tvAvatar.text = displayName.firstOrNull()?.toString() ?: "友"
 
         if (threadId.isBlank()) {
             tvContent.text = "联系人身份无效，请返回联系人列表重新打开。"
@@ -72,8 +80,9 @@ class ContactDetailActivity : BaseSettingsActivity() {
         } else {
             "本机临时身份 · 当前根据昵称哈希区分，改名后可能形成新记录"
         }
+        val memoryCount = learningDatabase.contactMemoryEntries(threadId, 300).size
         tvSummary.text =
-            "${contact.messageCount} 条消息\n最近互动：${timeFormat.format(Date(contact.lastActivityAt))}"
+            "${contact.messageCount} 条消息 · $memoryCount 条记忆线索\n最近互动：${timeFormat.format(Date(contact.lastActivityAt))}"
         val speaker = if (contact.lastRole == "out") "我" else "对方"
         tvLastMessage.text = "最近一条（$speaker）：${contact.lastMessage}"
     }
@@ -86,17 +95,41 @@ class ContactDetailActivity : BaseSettingsActivity() {
         ).forEach { id ->
             findViewById<Chip>(id).isChecked = id == sectionId
         }
+        if (sectionId == R.id.chipContactMemory) {
+            renderMemoryTimeline()
+            return
+        }
+        memoryEntriesLayout.visibility = View.GONE
+        memoryEntriesLayout.removeAllViews()
+        tvContent.visibility = View.VISIBLE
         tvContent.text = when (sectionId) {
             R.id.chipContactHistory -> renderHistory()
             R.id.chipContactState -> renderStates(memoryDatabase.conversationStates(threadId))
-            else -> renderMemories()
+            else -> ""
         }
     }
 
-    private fun renderMemories(): String {
-        val memories = learningDatabase.contactMemories(threadId, 20)
-        if (memories.isEmpty()) return "暂无独立记忆片段。\n\n后续会从该联系人的真实互动中积累线索。"
-        return memories.mapIndexed { index, value -> "${index + 1}. $value" }.joinToString("\n\n")
+    private fun renderMemoryTimeline() {
+        val memories = learningDatabase.contactMemoryEntries(threadId, 100)
+        memoryEntriesLayout.removeAllViews()
+        if (memories.isEmpty()) {
+            memoryEntriesLayout.visibility = View.GONE
+            tvContent.visibility = View.VISIBLE
+            tvContent.text = "还没有记录到独立记忆片段。\n\n随着双方有实际聊天内容，系统会在本地记录可供后续上下文参考的线索。"
+            return
+        }
+
+        tvContent.visibility = View.GONE
+        memoryEntriesLayout.visibility = View.VISIBLE
+        memories.forEachIndexed { index, entry ->
+            val card = LayoutInflater.from(this)
+                .inflate(R.layout.item_contact_memory, memoryEntriesLayout, false)
+            card.findViewById<TextView>(R.id.tvMemoryOrder).text = (index + 1).toString()
+            card.findViewById<TextView>(R.id.tvMemoryTime).text =
+                timeFormat.format(Date(entry.createdAt))
+            card.findViewById<TextView>(R.id.tvMemoryContent).text = entry.content
+            memoryEntriesLayout.addView(card)
+        }
     }
 
     private fun renderHistory(): String {

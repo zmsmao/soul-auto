@@ -7,6 +7,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
+data class ContactMemoryEntry(
+    val id: Long,
+    val threadId: String,
+    val content: String,
+    val createdAt: Long,
+)
+
 class ChatLearningDatabase(context: Context) :
     SQLiteOpenHelper(context, "chat_learning.db", null, 5) {
 
@@ -203,6 +210,27 @@ class ChatLearningDatabase(context: Context) :
             arrayOf(contactId.trim().take(140), limit.coerceIn(1, 20).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) result += cursor.getString(0).orEmpty()
+        }
+        return result
+    }
+
+    fun contactMemoryEntries(contactId: String, limit: Int = 100): List<ContactMemoryEntry> {
+        val identity = contactId.trim().take(140)
+        if (identity.isBlank()) return emptyList()
+        val result = mutableListOf<ContactMemoryEntry>()
+        readableDatabase.rawQuery(
+            "SELECT id, thread_id, content, time FROM contact_memories " +
+                "WHERE thread_id=? ORDER BY time DESC, id DESC LIMIT ?",
+            arrayOf(identity, limit.coerceIn(1, 300).toString()),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += ContactMemoryEntry(
+                    id = cursor.getLong(0),
+                    threadId = cursor.getString(1),
+                    content = cursor.getString(2),
+                    createdAt = cursor.getLong(3),
+                )
+            }
         }
         return result
     }

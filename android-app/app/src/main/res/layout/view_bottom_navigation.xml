@@ -5,6 +5,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/colorSurface"
-    app:itemIconSize="22dp"
+    android:elevation="10dp"
+    app:itemActiveIndicatorColor="?attr/colorSecondaryContainer"
+    app:itemActiveIndicatorEnabled="true"
+    app:itemIconSize="23dp"
+    app:itemIconTint="@color/nav_item_tint"
+    app:itemTextColor="@color/nav_item_tint"
+    app:itemRippleColor="?attr/colorPrimaryContainer"
     app:labelVisibilityMode="labeled"
     app:menu="@menu/menu_primary_navigation" />
