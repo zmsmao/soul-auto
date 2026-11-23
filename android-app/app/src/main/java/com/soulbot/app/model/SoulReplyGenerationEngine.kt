@@ -179,7 +179,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
                         cancellation.cancel()
                         break
                     }
-                    Thread.host.sleep(400)
+                    Thread.sleep(400)
                 }
             } catch (_: InterruptedException) {
                 // Normal completion; stop the watcher without interrupting the worker.
@@ -441,7 +441,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
                         cancellation.cancel()
                         break
                     }
-                    Thread.host.sleep(400)
+                    Thread.sleep(400)
                 }
             } catch (_: InterruptedException) {
                 // Normal completion; stop the watcher without interrupting the worker.

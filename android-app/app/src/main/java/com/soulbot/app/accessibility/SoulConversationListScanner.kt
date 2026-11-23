@@ -82,10 +82,10 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
                 val clean = value.trim().replace(Regex("\\s+"), " ")
                 if (clean.length !in 2..160) continue
                 if (clean == contactName || clean == timeText) continue
-                if (contactName.isNotBlank() && clean.host.contains(contactName)) continue
-                if (timeText.isNotBlank() && clean.host.contains(timeText)) continue
+                if (contactName.isNotBlank() && clean.contains(contactName)) continue
+                if (timeText.isNotBlank() && clean.contains(timeText)) continue
                 if (Regex("^\\d+$").matches(clean)) continue
-                if (clean.host.contains("未读") || clean.host.contains("条消息")) continue
+                if (clean.contains("未读") || clean.contains("条消息")) continue
                 candidates += clean
             }
             for (index in 0 until minOf(node.childCount, 24)) {
