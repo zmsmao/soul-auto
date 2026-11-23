@@ -181,6 +181,62 @@ class SoulBotService : AccessibilityService() {
         })
     }
 
+    private val privateChatWorkflow: SoulPrivateChatWorkflow by lazy(LazyThreadSafetyMode.NONE) {
+        SoulPrivateChatWorkflow(object : SoulPrivateChatHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun isOnList(): Boolean = this@SoulBotService.isOnList()
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun findConversation(name: String): AccessibilityNodeInfo? =
+                this@SoulBotService.findConversation(name)
+            override fun setNextStep(action: String, delayMs: Long) =
+                this@SoulBotService.setNextStep(action, delayMs)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun gotoChatList(): Boolean = this@SoulBotService.gotoChatList()
+            override fun isExpectedConversation(name: String): Boolean =
+                this@SoulBotService.isExpectedConversation(name)
+            override fun waitForStableThread(name: String): List<Pair<String, String>> =
+                this@SoulBotService.waitForStableThread(name)
+            override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>) =
+                this@SoulBotService.learnFromManualReplies(name, thread)
+            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
+                this@SoulBotService.pendingIncomingVoiceBubbles()
+            override fun unseenIncomingEvents(
+                name: String,
+                thread: List<Pair<String, String>>,
+                seen: ConversationSeenTracker,
+                pendingCount: Int,
+            ): List<ConversationIncomingEvent> =
+                this@SoulBotService.unseenIncomingEvents(name, thread, seen, pendingCount)
+            override fun memoryThreadId(name: String): String = this@SoulBotService.memoryThreadId(name)
+            override fun currentIncomingMessageKeys(name: String): List<String> =
+                this@SoulBotService.currentIncomingMessageKeys(name)
+            override fun generateValidatedChatReply(
+                contactName: String,
+                thread: List<Pair<String, String>>,
+                focusIncoming: List<String>,
+            ): String? =
+                this@SoulBotService.generateValidatedChatReply(contactName, thread, focusIncoming)
+            override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
+            override fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean =
+                this@SoulBotService.send(
+                    text,
+                    expectedContact = expectedContact,
+                    expectedEventAnchor = expectedEventAnchor,
+                )
+            override fun recordAutomatedInteraction(
+                contactName: String,
+                incomingMessages: List<String>,
+                reply: String,
+            ) = this@SoulBotService.recordAutomatedInteraction(contactName, incomingMessages, reply)
+            override fun recordHistory(contactName: String, context: String, reply: String) {
+                historyDb?.record(contactName, context, reply)
+            }
+        })
+    }
+
     private val squareWorkflow: SoulSquareWorkflow by lazy(LazyThreadSafetyMode.NONE) {
         SoulSquareWorkflow(object : SoulSquareHost {
             override val context: android.content.Context get() = applicationContext
@@ -288,7 +344,6 @@ class SoulBotService : AccessibilityService() {
     private var replyReplayDb: ReplyReplayDatabase? = null
     private var conversationMemoryDb: ConversationMemoryDatabase? = null
     @Volatile private var activeGenerationCancellation: ModelCallCancellation? = null
-    @Volatile private var activeReplyName: String? = null
     private val restartHandler = Handler(Looper.getMainLooper())
     private var lastDiagnosticsSignature = ""
     private var lastDiagnosticsLogAt = 0L
@@ -1903,53 +1958,8 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 回复会话（仅会话列表起点） =====
 
-    private fun replyTo(name: String, seen: ConversationSeenTracker): Boolean {
-        val contactId = DiagnosticIdentity.contactId(applicationContext, name)
-        if (name.isBlank()) {
-            RuntimeLog.record(applicationContext, "conversation reply skipped; reason=blank_name")
-            return false
-        }
-        if (!reserveReply(name)) {
-            RuntimeLog.record(applicationContext, "conversation reply skipped; reason=reply_busy; contactId=$contactId")
-            return false
-        }
-        RuntimeLog.record(applicationContext, "conversation reply started; contactId=$contactId")
-        return try {
-            replyToReserved(name, seen).also { sent ->
-                RuntimeLog.record(
-                    applicationContext,
-                    "conversation reply ended; contactId=$contactId; sent=$sent",
-                )
-            }
-        } catch (stopped: StoppedException) {
-            throw stopped
-        } catch (error: Throwable) {
-            RuntimeLog.record(
-                applicationContext,
-                "conversation reply crashed; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}",
-                error,
-            )
-            setNextStep("$name 的会话发生变化，返回列表重试", 1200)
-            if (running && currentScreen() != SoulScreen.QIYU_POPUP) {
-                runCatching { gotoChatList() }
-            }
-            false
-        } finally {
-            releaseReply(name)
-        }
-    }
-
-    @Synchronized
-    private fun reserveReply(name: String): Boolean {
-        if (activeReplyName != null) return false
-        activeReplyName = name
-        return true
-    }
-
-    @Synchronized
-    private fun releaseReply(name: String) {
-        if (activeReplyName == name) activeReplyName = null
-    }
+    private fun replyTo(name: String, seen: ConversationSeenTracker): Boolean =
+        privateChatWorkflow.replyTo(name, seen)
 
     private fun displayedConversationName(): String {
         val primary = findByIds(ID_PROFILE_NAME).filter(::isVisibleOnScreen).map(::textOf)
@@ -1975,158 +1985,12 @@ class SoulBotService : AccessibilityService() {
         return comparableText(displayed) == comparableText(name)
     }
 
-    private fun openConversationForReply(name: String): Boolean {
-        val contactId = DiagnosticIdentity.contactId(applicationContext, name)
-        repeat(2) { attempt ->
-            if (!running || !isOnList()) return false
-            val item = findConversation(name) ?: return false
-            setNextStep(if (attempt == 0) "打开 $name 的会话" else "重新定位 $name 的会话")
-            if (!tapNode(item)) {
-                sleep(500)
-                return@repeat
-            }
-            sleep(1500)
-            if (currentScreen() == SoulScreen.QIYU_POPUP) return false
-            if (isOnChat() && isExpectedConversation(name)) {
-                RuntimeLog.record(
-                    applicationContext,
-                    "conversation opened; contactId=$contactId; attempt=${attempt + 1}",
-                )
-                return true
-            }
-
-            setNextStep("会话列表刚刚更新，重新定位 $name", 800)
-            if (isOnChat()) gotoChatList()
-            sleep(800)
-        }
-        RuntimeLog.record(applicationContext, "conversation open failed; contactId=$contactId; attempts=2")
-        return false
-    }
-
-    private fun replyToReserved(name: String, seen: ConversationSeenTracker): Boolean {
-        if (!isOnList() || !openConversationForReply(name)) return false
-        return replyToCurrentConversation(name, seen)
-    }
-
     private fun currentConversationHasChanged(name: String, thread: List<Pair<String, String>>): Boolean =
         running && isOnChat() && isExpectedConversation(name) &&
             (pendingIncomingVoiceBubbles().isNotEmpty() || incomingSignature(readThread()) != incomingSignature(thread))
 
-    /** Continue in place: messages received in an open chat may no longer have a list badge. */
-    private fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean {
-        if (!running || !isOnChat() || !isExpectedConversation(name)) return false
-        replyCycle@ while (running && isOnChat()) {
-            // 等对方连续一段时间不再发新消息，并先完成所有可见语音的转写。
-            val thread = waitForStableThread(name)
-            if (!running || !isOnChat() || !isExpectedConversation(name)) return false
-            learnFromManualReplies(name, thread)
-            val incoming = thread.filter { it.first == "in" }
-            RuntimeLog.record(
-                applicationContext,
-                "conversation loaded; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}; messages=${thread.size}; incoming=${incoming.size}; pendingVoice=${pendingIncomingVoiceBubbles().size}",
-            )
-            if (incoming.isEmpty()) {
-                RuntimeLog.record(applicationContext, "conversation reply aborted; reason=no_readable_incoming")
-                setNextStep("未读内容不可读取，返回会话列表", 1200)
-                sleep(1200)
-                gotoChatList()
-                return false
-            }
-            val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
-            val newEvents = unseenIncomingEvents(name, thread, seen, pendingCount)
-            val new = newEvents.map { it.text }
-            if (new.isEmpty()) {
-                RuntimeLog.record(applicationContext, "conversation reply skipped; reason=no_unseen_message")
-                gotoChatList()
-                return false
-            }
-            if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
-                seen.markSeenEvents(memoryThreadId(name), newEvents)
-                RuntimeLog.record(
-                    applicationContext,
-                    "conversation reply paused; reason=repeated_low_information; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}",
-                )
-                setNextStep("$name 连续简短回应，本轮自然停顿")
-                gotoChatList()
-                return false
-            }
-            val eventAnchor = currentIncomingMessageKeys(name).joinToString(",")
-
-            val reply = generateValidatedChatReply(name, thread, new)
-            if (reply.isNullOrBlank()) {
-                if (!isExpectedConversation(name)) return false
-                val refreshedAfterCancel = readThread()
-                if (pendingIncomingVoiceBubbles().isNotEmpty() ||
-                    currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
-                ) {
-                    RuntimeLog.record(applicationContext, "conversation reply regenerated; reason=generation_cancelled_for_new_message")
-                    setNextStep("收到新消息，改用最新上下文重新准备回复", MESSAGE_SETTLE_MS)
-                    continue@replyCycle
-                }
-                RuntimeLog.record(applicationContext, "conversation reply aborted; reason=generation_failed")
-                val reason = ModelRouter.lastError.ifBlank { "连续生成内容不合格" }.take(36)
-                setNextStep("本轮回复失败：$reason，返回列表避免卡住", 2000)
-                sleep(2000)
-                gotoChatList()
-                return false
-            }
-            run {
-                val normalized = normalizeReply(reply)
-                val repeated = thread.filter { it.first == "out" }
-                    .map { normalizeReply(it.second) }
-                    .any { it.isNotEmpty() && it == normalized }
-                if (repeated) {
-                    RuntimeLog.record(applicationContext, "conversation reply aborted; reason=duplicate_output")
-                    setNextStep("回复内容与历史重复，本轮不发送并返回列表", 1500)
-                    sleep(1500)
-                    gotoChatList()
-                    return false
-                }
-            }
-
-            // 模型生成期间对方可能又发了文字或语音。此时废弃旧回复，重新等待并生成。
-            if (pendingIncomingVoiceBubbles().isNotEmpty() ||
-                currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
-            ) {
-                RuntimeLog.record(applicationContext, "conversation reply regenerated; reason=incoming_changed")
-                setNextStep("收到更新消息，重新准备回复", MESSAGE_SETTLE_MS)
-                sleep(500)
-                continue@replyCycle
-            }
-            if (!isExpectedConversation(name)) {
-                RuntimeLog.record(applicationContext, "conversation reply cancelled; reason=conversation_changed")
-                setNextStep("会话已切换，取消本次发送并重新检查列表", 800)
-                gotoChatList()
-                return false
-            }
-
-            val sent = send(
-                reply,
-                expectedContact = name,
-                expectedEventAnchor = eventAnchor,
-            )
-            if (sent) {
-                RuntimeLog.record(applicationContext, "conversation reply confirmed; unseenMessages=${new.size}")
-                seen.markSeenEvents(memoryThreadId(name), newEvents)
-                recordAutomatedInteraction(name, new, reply)
-                historyDb?.record(name, incoming.last().second, reply)
-                gotoChatList()
-                return true
-            } else if (running && isOnChat()) {
-                if (pendingIncomingVoiceBubbles().isNotEmpty() ||
-                    currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
-                ) {
-                    RuntimeLog.record(applicationContext, "conversation reply regenerated; reason=incoming_changed_before_send")
-                    setNextStep("发送前收到新消息，使用最新上下文重新准备回复", MESSAGE_SETTLE_MS)
-                    continue@replyCycle
-                }
-                RuntimeLog.record(applicationContext, "conversation reply send failed; chatStillVisible=true")
-                setNextStep("回复未完成，保留当前会话")
-            }
-            return false
-        }
-        return false
-    }
+    private fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
+        privateChatWorkflow.replyToCurrentConversation(name, seen)
 
     // ===== 收到的新招呼 =====
 
