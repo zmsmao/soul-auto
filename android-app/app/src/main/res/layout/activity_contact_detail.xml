@@ -134,7 +134,7 @@
                             android:text="自动整理记忆"
                             android:textColor="@color/apple_text"
                             android:textSize="16sp"
-                            android:textStyle="medium" />
+                            android:textStyle="normal" />
 
                         <TextView
                             android:layout_width="match_parent"

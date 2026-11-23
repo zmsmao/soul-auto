@@ -241,6 +241,15 @@ class ContactMemoryDatabase(context: Context) :
 
         db.beginTransaction()
         try {
+            // A clear/disable action removes processing source rows. Refuse to
+            // commit results from an in-flight request after its source was purged.
+            val sourcesStillProcessing = evidence.all { item ->
+                db.rawQuery(
+                    "SELECT 1 FROM contact_memory_sources WHERE event_key=? AND thread_id=? AND scene=? AND status='PROCESSING' LIMIT 1",
+                    arrayOf(item.source.eventKey, scope, item.source.scene),
+                ).use { cursor -> cursor.moveToFirst() }
+            }
+            if (!sourcesStillProcessing) return null
             val matches = mutableListOf<Pair<Long, String>>()
             db.rawQuery(
                 "SELECT id, content FROM contact_memory_facts WHERE thread_id=? AND category=? " +
@@ -652,6 +661,14 @@ class ContactMemoryDatabase(context: Context) :
         }
         return ContactMemoryImportResult(added, skipped, invalid)
     }
+
+    /** Drop queued source text when the user disables extraction. */
+    fun clearPendingSources(): Int =
+        writableDatabase.delete(
+            "contact_memory_sources",
+            "status IN ('PENDING','PROCESSING')",
+            null,
+        )
 
     fun clearAll() {
         writableDatabase.beginTransaction()

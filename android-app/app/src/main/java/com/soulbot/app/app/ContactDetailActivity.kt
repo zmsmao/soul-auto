@@ -76,7 +76,8 @@ class ContactDetailActivity : BaseSettingsActivity() {
                     scheduleExistingMessages()
                     showMessage("已开启后台记忆整理；整理结果暂不参与自动回复")
                 } else {
-                    showMessage("已暂停新的记忆整理")
+                    structuredMemoryDatabase.clearPendingSources()
+                    showMessage("已暂停整理，并清除尚未处理的本地队列")
                 }
             }
         }
