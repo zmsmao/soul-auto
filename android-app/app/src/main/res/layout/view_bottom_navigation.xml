@@ -6,8 +6,6 @@
     android:layout_height="wrap_content"
     android:background="?attr/colorSurface"
     android:elevation="10dp"
-    app:itemActiveIndicatorColor="?attr/colorSecondaryContainer"
-    app:itemActiveIndicatorEnabled="true"
     app:itemIconSize="23dp"
     app:itemIconTint="@color/nav_item_tint"
     app:itemTextColor="@color/nav_item_tint"
