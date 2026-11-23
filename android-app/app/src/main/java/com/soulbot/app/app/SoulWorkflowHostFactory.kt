@@ -1,6 +1,5 @@
 package com.soulbot.app.app
 
-import com.soulbot.app.*
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
