@@ -31,7 +31,7 @@ import com.soulbot.app.workflow.square.SoulSquareWorkflow
 internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val automationHost: SoulAutomationHost by lazy(LazyThreadSafetyMode.NONE) {
             object : SoulAutomationHost {
-                override val isRunning: Boolean get() = service.running
+                override val isRunning: Boolean get() = SoulBotService.running
                 override fun setNextStep(action: String, delayMs: Long) = service.setNextStep(action, delayMs)
                 override fun sleep(ms: Long) = service.sleep(ms)
                 override fun currentScreen(): SoulScreen = service.currentScreen()
@@ -72,7 +72,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val soulMatchWorkflow: SoulMatchWorkflow by lazy(LazyThreadSafetyMode.NONE) {
             SoulMatchWorkflow(object : SoulMatchHost {
                 override val context: android.content.Context get() = service.applicationContext
-                override val isRunning: Boolean get() = service.running
+                override val isRunning: Boolean get() = SoulBotService.running
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun soulMatchProfileTexts(): List<String> = service.soulMatchProfileTexts()
                 override fun setNextStep(action: String, delayMs: Long) = service.setNextStep(action, delayMs)
@@ -121,7 +121,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val privateChatWorkflow: SoulPrivateChatWorkflow by lazy(LazyThreadSafetyMode.NONE) {
             SoulPrivateChatWorkflow(object : SoulPrivateChatHost {
                 override val context: android.content.Context get() = service.applicationContext
-                override val isRunning: Boolean get() = service.running
+                override val isRunning: Boolean get() = SoulBotService.running
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun isOnList(): Boolean = service.isOnList()
                 override fun isOnChat(): Boolean = service.isOnChat()
@@ -178,7 +178,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val greetingWorkflow: SoulGreetingWorkflow by lazy(LazyThreadSafetyMode.NONE) {
             SoulGreetingWorkflow(object : SoulGreetingHost {
                 override val context: android.content.Context get() = service.applicationContext
-                override val isRunning: Boolean get() = service.running
+                override val isRunning: Boolean get() = SoulBotService.running
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun findVisibleById(id: String): AccessibilityNodeInfo? =
                     service.findVisibleById(id)
@@ -240,8 +240,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val squareWorkflow: SoulSquareWorkflow by lazy(LazyThreadSafetyMode.NONE) {
             SoulSquareWorkflow(object : SoulSquareHost {
                 override val context: android.content.Context get() = service.applicationContext
-                override val isRunning: Boolean get() = service.running
-                override fun setStatusText(text: String) { service.statusText = text }
+                override val isRunning: Boolean get() = SoulBotService.running
+                override fun setStatusText(text: String) { SoulBotService.statusText = text }
                 override fun setNextStep(action: String, delayMs: Long) = service.setNextStep(action, delayMs)
                 override fun sleep(ms: Long) = service.sleep(ms)
                 override fun currentScreen(): SoulScreen = service.currentScreen()
@@ -292,7 +292,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
     val qiyuWorkflow: SoulQiyuWorkflow by lazy(LazyThreadSafetyMode.NONE) {
             SoulQiyuWorkflow(object : SoulQiyuHost {
                 override val context: android.content.Context get() = service.applicationContext
-                override val isRunning: Boolean get() = service.running
+                override val isRunning: Boolean get() = SoulBotService.running
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun findVisibleById(id: String): AccessibilityNodeInfo? = service.findVisibleById(id)
                 override fun textOf(node: AccessibilityNodeInfo?): String = service.textOf(node)
