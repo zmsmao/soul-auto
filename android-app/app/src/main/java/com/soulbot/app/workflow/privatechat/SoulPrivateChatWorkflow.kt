@@ -1,4 +1,6 @@
-package com.soulbot.app
+package com.soulbot.app.workflow.privatechat
+
+import com.soulbot.app.*
 
 
 /** Owns ordinary private-chat entry, reservation and reply processing. */

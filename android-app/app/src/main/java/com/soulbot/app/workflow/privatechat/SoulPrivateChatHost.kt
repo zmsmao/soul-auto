@@ -1,4 +1,6 @@
-package com.soulbot.app
+package com.soulbot.app.workflow.privatechat
+
+import com.soulbot.app.*
 
 import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo

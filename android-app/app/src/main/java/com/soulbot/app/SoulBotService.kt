@@ -8,6 +8,10 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.random.Random
+import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
+import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
+import com.soulbot.app.workflow.greeting.SoulGreetingHost
+import com.soulbot.app.workflow.greeting.SoulGreetingWorkflow
 
 class SoulBotService : AccessibilityService() {
 
@@ -221,6 +225,68 @@ class SoulBotService : AccessibilityService() {
             ): String? =
                 this@SoulBotService.generateValidatedChatReply(contactName, thread, focusIncoming)
             override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
+            override fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean =
+                this@SoulBotService.send(
+                    text,
+                    expectedContact = expectedContact,
+                    expectedEventAnchor = expectedEventAnchor,
+                )
+            override fun recordAutomatedInteraction(
+                contactName: String,
+                incomingMessages: List<String>,
+                reply: String,
+            ) = this@SoulBotService.recordAutomatedInteraction(contactName, incomingMessages, reply)
+            override fun recordHistory(contactName: String, context: String, reply: String) {
+                historyDb?.record(contactName, context, reply)
+            }
+        })
+    }
+
+    private val greetingWorkflow: SoulGreetingWorkflow by lazy(LazyThreadSafetyMode.NONE) {
+        SoulGreetingWorkflow(object : SoulGreetingHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun findVisibleById(id: String): AccessibilityNodeInfo? =
+                this@SoulBotService.findVisibleById(id)
+            override fun findById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findById(id)
+            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
+            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
+                this@SoulBotService.isVisibleOnScreen(node)
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+            override fun setNextStep(action: String, delayMs: Long) =
+                this@SoulBotService.setNextStep(action, delayMs)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun isExpectedConversation(name: String): Boolean =
+                this@SoulBotService.isExpectedConversation(name)
+            override fun pressBack() = this@SoulBotService.pressBack()
+            override fun handleQiyu(): Boolean = this@SoulBotService.handleQiyu()
+            override fun waitForStableThread(name: String): List<Pair<String, String>> =
+                this@SoulBotService.waitForStableThread(name)
+            override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>) =
+                this@SoulBotService.learnFromManualReplies(name, thread)
+            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
+                this@SoulBotService.pendingIncomingVoiceBubbles()
+            override fun unseenIncomingEvents(
+                name: String,
+                thread: List<Pair<String, String>>,
+                seen: ConversationSeenTracker,
+                pendingCount: Int,
+            ): List<ConversationIncomingEvent> =
+                this@SoulBotService.unseenIncomingEvents(name, thread, seen, pendingCount)
+            override fun memoryThreadId(name: String): String = this@SoulBotService.memoryThreadId(name)
+            override fun currentIncomingMessageKeys(name: String): List<String> =
+                this@SoulBotService.currentIncomingMessageKeys(name)
+            override fun generateValidatedChatReply(
+                contactName: String,
+                thread: List<Pair<String, String>>,
+                focusIncoming: List<String>,
+            ): String? =
+                this@SoulBotService.generateValidatedChatReply(contactName, thread, focusIncoming)
+            override fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
+                this@SoulBotService.replyToCurrentConversation(name, seen)
             override fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean =
                 this@SoulBotService.send(
                     text,
@@ -1995,155 +2061,24 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 收到的新招呼 =====
 
-    private fun hasGreeting(): Boolean = findVisibleById(ID_GREETING_TITLE) != null
+    private fun hasGreeting(): Boolean = greetingWorkflow.hasGreeting()
 
     /** Hidden tab-bar nodes remain in Soul's accessibility tree; only a visible dot is unread. */
     private fun hasUnreadRedDot(): Boolean = findVisibleById(ID_MSG_RED_DOT) != null
 
-    private fun openGreetingList(): Boolean {
-        setNextStep("打开新招呼列表")
-        for (i in 0 until 2) {
-            if (currentScreen() == SoulScreen.GREETING_LIST) return true
-            findById(ID_GREETING_TITLE)?.let { tapNode(it) }
-            sleep(1500)
-        }
-        return currentScreen() == SoulScreen.GREETING_LIST
-    }
+    private fun openGreetingList(): Boolean = greetingWorkflow.openGreetingList()
 
     private fun scanGreetingUsers(
         handledKeys: Set<String>,
         greetDb: GreetDatabase,
-    ): List<String> {
-        if (currentScreen() != SoulScreen.GREETING_LIST) return emptyList()
-        val visibleNames = findByIds(ID_CONV_NAME)
-            .filter(::isVisibleOnScreen)
-            .map(::textOf)
-        return GreetingSessionPolicy.pendingUsers(visibleNames, handledKeys)
-            .filter { name ->
-                greetDb.shouldGreet(
-                    "新招呼:$name",
-                    GreetingSessionPolicy.SYSTEM_GREETING_CONTEXT,
-                )
-            }
-    }
+    ): List<String> = greetingWorkflow.scanGreetingUsers(handledKeys, greetDb)
 
     private fun replyToGreeting(
         name: String,
         seen: ConversationSeenTracker,
         handledKeys: MutableSet<String>,
         greetDb: GreetDatabase,
-    ): Boolean {
-        if (currentScreen() != SoulScreen.GREETING_LIST) return false
-        val greetingKey = GreetingSessionPolicy.userKey(name)
-        if (greetingKey.isBlank() || !handledKeys.add(greetingKey)) return false
-        val nameNode = findByIds(ID_CONV_NAME)
-            .filter(::isVisibleOnScreen)
-            .firstOrNull { textOf(it) == name } ?: return false
-        setNextStep("打开 $name 的招呼")
-        tapNode(nameNode)
-        sleep(1500)
-        if (!isOnChat()) {
-            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-            else { pressBack(); sleep(1200) }
-            return false
-        }
-        if (!isExpectedConversation(name)) {
-            setNextStep("招呼列表发生变化，取消错误会话", 800)
-            pressBack()
-            sleep(800)
-            return false
-        }
-        val thread = waitForStableThread(name)
-        if (!running || !isOnChat() || !isExpectedConversation(name)) return false
-        learnFromManualReplies(name, thread)
-        val incoming = thread.filter { it.first == "in" }
-        val systemGreetingName = "新招呼:$name"
-        if (incoming.isEmpty()) {
-            if (pendingIncomingVoiceBubbles().isNotEmpty()) {
-                setNextStep("$name 的语音尚未转写，本轮暂不处理", 1200)
-                pressBack()
-                sleep(1200)
-                return false
-            }
-            // Soul can show an app-generated preview under "new greetings" even
-            // though the person never sent a chat message. Persist the decision so
-            // an accessibility-service/worker restart cannot reopen the same row.
-            greetDb.recordGreet(
-                systemGreetingName,
-                GreetingSessionPolicy.SYSTEM_GREETING_CONTEXT,
-            )
-            RuntimeLog.record(
-                applicationContext,
-                "greeting ignored; reason=system_only; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}",
-            )
-            setNextStep("$name 只有系统招呼，没有真实消息，已忽略", 1200)
-            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-            else { pressBack(); sleep(1200) }
-            return false
-        }
-        val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
-        val newEvents = unseenIncomingEvents(name, thread, seen, pendingCount)
-        val new = newEvents.map { it.text }
-        if (incoming.isNotEmpty() && new.isEmpty()) {
-            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-            else { pressBack(); sleep(1200) }
-            return false
-        }
-        val replyContext = new.last()
-        if (!greetDb.shouldGreet(systemGreetingName, replyContext)) {
-            setNextStep("$name 的这条招呼已处理，返回列表", 800)
-            pressBack()
-            sleep(800)
-            return false
-        }
-        if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
-            seen.markSeenEvents(memoryThreadId(name), newEvents)
-            greetDb.recordGreet(systemGreetingName, replyContext)
-            setNextStep("$name 连续简短回应，本轮自然停顿")
-            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-            else { pressBack(); sleep(800) }
-            return false
-        }
-        val greetingEventKey = currentIncomingMessageKeys(name).joinToString(",")
-        val reply = generateValidatedChatReply(name, thread, new) ?: run {
-            if (isExpectedConversation(name) &&
-                currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
-            ) {
-                return replyToCurrentConversation(name, seen)
-            }
-            setNextStep("招呼回复生成失败，返回列表避免卡住", 1200)
-            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-            else { pressBack(); sleep(1200) }
-            return false
-        }
-        if (currentScreen() == SoulScreen.QIYU_POPUP) {
-            handleQiyu()
-            return false
-        }
-        val sent = send(
-            reply,
-            expectedContact = name,
-            expectedEventAnchor = greetingEventKey,
-        )
-        if (sent) {
-            seen.markSeenEvents(memoryThreadId(name), newEvents)
-            greetDb.recordGreet(systemGreetingName, replyContext)
-            recordAutomatedInteraction(name, new, reply)
-            historyDb?.record(name, replyContext, reply)
-            setNextStep("已确认给 $name 发出消息，返回招呼列表", 800)
-        } else if (isOnChat() && isExpectedConversation(name) &&
-            currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
-        ) {
-            RuntimeLog.record(applicationContext, "greeting reply regenerated; reason=incoming_changed_before_send")
-            return replyToCurrentConversation(name, seen)
-        } else {
-            setNextStep("给 $name 的消息未发出，本轮不再重复进入", 1500)
-            sleep(1500)
-        }
-        if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
-        else { pressBack(); sleep(1200) }
-        return sent
-    }
+    ): Boolean = greetingWorkflow.replyToGreeting(name, seen, handledKeys, greetDb)
 
     // ===== 广场 =====
 
