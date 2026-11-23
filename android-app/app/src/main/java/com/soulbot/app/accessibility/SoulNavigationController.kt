@@ -32,7 +32,7 @@ internal class SoulNavigationController(
     private fun isOnList(): Boolean = screenNow() == SoulScreen.LIST
     private fun isOnSquare(): Boolean = screenNow() == SoulScreen.SQUARE
     fun selectedSquareChannel(): String =
-        ui.findByIds(SoulBotService.ID_SQUARE_CHANNEL_TAB)
+        ui.findByIds(SoulAccessibilityIds.ID_SQUARE_CHANNEL_TAB)
             .firstOrNull {
                 runCatching { it.isSelected }.getOrDefault(false) && ui.isVisibleOnScreen(it)
             }
@@ -40,7 +40,7 @@ internal class SoulNavigationController(
             .orEmpty()
     fun ensureLocalSquareChannel(): String? {
         if (!isOnSquare()) return null
-        val localTab = ui.findByIds(SoulBotService.ID_SQUARE_CHANNEL_TAB)
+        val localTab = ui.findByIds(SoulAccessibilityIds.ID_SQUARE_CHANNEL_TAB)
             .filter({ ui.isVisibleOnScreen(it) })
             .firstOrNull {
                 val title = ui.textOf(it)
@@ -66,7 +66,7 @@ internal class SoulNavigationController(
 
         // RecyclerView exposes this action on supported Soul versions and can jump
         // directly to the first row without depending on device height.
-        ui.findById(SoulBotService.ID_CONV_LIST)?.let { list ->
+        ui.findById(SoulAccessibilityIds.ID_CONV_LIST)?.let { list ->
             val args = Bundle().apply {
                 putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_ROW_INT, 0)
             }
@@ -85,13 +85,13 @@ internal class SoulNavigationController(
         repeat(SoulBotService.MAX_SCROLLS_TO_TOP) {
             if (!isOnList()) return
             val before = conversationListSnapshot()
-            val list = ui.findById(SoulBotService.ID_CONV_LIST)
+            val list = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
             val accepted = runCatching {
                 list?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
             }.getOrDefault(false)
             if (!accepted) {
                 // Fallback for Soul versions whose list does not publish scroll actions.
-                ui.swipeVertically(SoulBotService.ID_CONV_LIST, 0.30f, 0.86f, 450)
+                ui.swipeVertically(SoulAccessibilityIds.ID_CONV_LIST, 0.30f, 0.86f, 450)
             }
             pause(500)
             val after = conversationListSnapshot()
@@ -115,7 +115,7 @@ internal class SoulNavigationController(
         if (screenNow() == SoulScreen.QIYU_POPUP) return false
         updateStatus("打开同城广场")
         for (i in 0 until 3) {
-            val tab = ui.findById(SoulBotService.ID_SQUARE_TAB)
+            val tab = ui.findById(SoulAccessibilityIds.ID_SQUARE_TAB)
             if (tab != null) {
                 ui.tapNode(tab)
                 for (w in 0 until 8) {
@@ -135,7 +135,7 @@ internal class SoulNavigationController(
         if (screenNow() == SoulScreen.QIYU_POPUP) return false
         updateStatus("返回会话列表")
         for (i in 0 until 3) {
-            val tab = ui.findById(SoulBotService.ID_MSG_TAB)
+            val tab = ui.findById(SoulAccessibilityIds.ID_MSG_TAB)
             if (tab != null) {
                 ui.tapNode(tab)
                 for (w in 0 until 8) {
@@ -155,7 +155,7 @@ internal class SoulNavigationController(
         if (isPlanetSurface()) return true
         updateStatus("打开星球里的灵魂匹配")
         for (i in 0 until 3) {
-            val tab = ui.findVisibleById(SoulBotService.ID_PLANET_TAB)
+            val tab = ui.findVisibleById(SoulAccessibilityIds.ID_PLANET_TAB)
                 ?: ui.findExactText("星球").maxByOrNull { ui.rect(it).top }
             if (tab != null) {
                 ui.tapNode(tab)

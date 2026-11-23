@@ -36,7 +36,7 @@ internal class SoulMessageReader(
             ?.let({ ui.rect(it) })
             ?.toUiRegion()
         val hasReadReceipt = readReceipts.any { ui.contains(bounds, ui.rect(it)) }
-        val contentBounds = ui.findByIds(SoulBotService.ID_CONTENT_TEXT)
+        val contentBounds = ui.findByIds(SoulAccessibilityIds.ID_CONTENT_TEXT)
             .firstOrNull { ui.contains(bounds, ui.rect(it)) }
             ?.let({ ui.rect(it) })
             ?.toUiRegion()
@@ -58,9 +58,9 @@ internal class SoulMessageReader(
             item.findAccessibilityNodeInfosByViewId(id) ?: emptyList()
         }.getOrDefault(emptyList())
 
-        if (descendantsById(SoulBotService.ID_EXPRESSION).isNotEmpty()) return "[表情]"
+        if (descendantsById(SoulAccessibilityIds.ID_EXPRESSION).isNotEmpty()) return "[表情]"
 
-        val sharedPostText = descendantsById(SoulBotService.ID_SHARED_POST_TEXT)
+        val sharedPostText = descendantsById(SoulAccessibilityIds.ID_SHARED_POST_TEXT)
             .asSequence()
             .map({ ui.textOf(it) })
             .firstOrNull(String::isNotBlank)
@@ -90,10 +90,10 @@ internal class SoulMessageReader(
     }
     fun readThread(): List<Pair<String, String>> {
         if (!isChatActive()) return emptyList()
-        val items = ui.findByIds(SoulBotService.ID_CHAT_ITEM).sortedBy { ui.rect(it).top }
-        val avatars = ui.findByIds(SoulBotService.ID_CHAT_AVATAR)
-        val texts = ui.findByIds(SoulBotService.ID_CONTENT_TEXT)
-        val readReceipts = ui.findByIds(SoulBotService.ID_MESSAGE_READ)
+        val items = ui.findByIds(SoulAccessibilityIds.ID_CHAT_ITEM).sortedBy { ui.rect(it).top }
+        val avatars = ui.findByIds(SoulAccessibilityIds.ID_CHAT_AVATAR)
+        val texts = ui.findByIds(SoulAccessibilityIds.ID_CONTENT_TEXT)
+        val readReceipts = ui.findByIds(SoulAccessibilityIds.ID_MESSAGE_READ)
         val result = mutableListOf<Pair<String, String>>()
         for (item in items) {
             val ib = ui.rect(item)
@@ -113,10 +113,10 @@ internal class SoulMessageReader(
     fun currentIncomingMessageKeys(contactName: String): List<String> {
         if (!isChatActive() || !isExpectedConversation(contactName)) return emptyList()
         val threadId = memoryThreadId(contactName)
-        val items = ui.findByIds(SoulBotService.ID_CHAT_ITEM).sortedBy { ui.rect(it).top }
-        val avatars = ui.findByIds(SoulBotService.ID_CHAT_AVATAR)
-        val texts = ui.findByIds(SoulBotService.ID_CONTENT_TEXT)
-        val readReceipts = ui.findByIds(SoulBotService.ID_MESSAGE_READ)
+        val items = ui.findByIds(SoulAccessibilityIds.ID_CHAT_ITEM).sortedBy { ui.rect(it).top }
+        val avatars = ui.findByIds(SoulAccessibilityIds.ID_CHAT_AVATAR)
+        val texts = ui.findByIds(SoulAccessibilityIds.ID_CONTENT_TEXT)
+        val readReceipts = ui.findByIds(SoulAccessibilityIds.ID_MESSAGE_READ)
         val occurrences = mutableMapOf<String, Int>()
         val keys = mutableListOf<String>()
         var previousAnchor = ""

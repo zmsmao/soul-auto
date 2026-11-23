@@ -35,7 +35,7 @@ class SoulBotService : AccessibilityService() {
         @Volatile var statusText: String = "已停止"
         @Volatile var statusDeadline: Long = 0  // 下次动作的绝对时间戳（毫秒），0=无倒计时
 
-        const val SOUL_PACKAGE = "cn.soulapp.android"
+        const val SOUL_PACKAGE = SoulAccessibilityIds.SOUL_PACKAGE
         const val DM_INTERVAL = 240L  // 广场私信间隔（秒）
         const val CONTEXT_LEN = 20
         const val MAX_SCROLLS_TO_TOP = 20
@@ -51,42 +51,42 @@ class SoulBotService : AccessibilityService() {
         const val VOICE_TRANSCRIPT_START_GRACE_MS = 1500L
 
         // Soul 控件 id
-        const val ID_INPUT_BOX = "cn.soulapp.android:id/et_sendmessage"
-        const val ID_CONTENT_TEXT = "cn.soulapp.android:id/content_text"
-        const val ID_SEND_BUTTON = "cn.soulapp.android:id/btn_send"
-        const val ID_CHAT_ITEM = "cn.soulapp.android:id/item_root"
-        const val ID_CHAT_AVATAR = "cn.soulapp.android:id/chat_avatar"
-        const val ID_MESSAGE_READ = "cn.soulapp.android:id/message_read"
-        const val ID_VOICE_BUBBLE = "cn.soulapp.android:id/voice_bubble"
-        const val ID_AUDIO_CONTENT = "cn.soulapp.android:id/audioContent"
-        const val ID_EXPRESSION = "cn.soulapp.android:id/llExpression"
-        const val ID_SHARED_POST_TEXT = "cn.soulapp.android:id/expandable_text"
-        const val ID_CONV_LIST = "cn.soulapp.android:id/conversation_list"
-        const val ID_CONV_ITEM = "cn.soulapp.android:id/item_content_root"
-        const val ID_CONV_NAME = "cn.soulapp.android:id/name"
-        const val ID_CONV_TIME = "cn.soulapp.android:id/time"
-        const val ID_UNREAD_BADGE = "cn.soulapp.android:id/unread_msg_number"
-        const val ID_SQUARE_TAB = "cn.soulapp.android:id/main_tab_square"
-        const val ID_MSG_TAB = "cn.soulapp.android:id/main_tab_msg"
-        const val ID_MSG_RED_DOT = "cn.soulapp.android:id/main_tab_msg_red_dot"
-        const val ID_SQUARE_CARD = "cn.soulapp.android:id/llSquare"
-        const val ID_SQUARE_TEXT = "cn.soulapp.android:id/square_item_text"
-        const val ID_SQUARE_AVATAR = "cn.soulapp.android:id/flAvatar"
-        const val ID_SQUARE_PAGER = "cn.soulapp.android:id/pager_square"
-        const val ID_SQUARE_CHANNEL_TAB = "cn.soulapp.android:id/tv_tab"
-        const val ID_GIFT_CLOSE = "cn.soulapp.android:id/tv_btn_close"
-        const val ID_NO_SEND_CLOSE = "cn.soulapp.android:id/tv_no_send_close"
-        const val ID_CHAT_SECRET = "cn.soulapp.android:id/tv_chat_secret"
-        const val ID_PROFILE_NAME = "cn.soulapp.android:id/titlebar_text_tv"
-        const val ID_QIYU_CHAT = "cn.soulapp.android:id/tv_love_chat"
-        const val ID_QIYU_SIGNATURE = "cn.soulapp.android:id/tv_love_signature"
-        const val ID_QIYU_REASON = "cn.soulapp.android:id/tv_recall_reason"
-        const val ID_QIYU_CLOSE = "cn.soulapp.android:id/iv_love_close"
-        const val ID_GREETING_TITLE = "cn.soulapp.android:id/tv_greeting_title"
-        const val ID_GREETING_TIPS = "cn.soulapp.android:id/tv_tips"
-        const val ID_PLANET_TAB = "cn.soulapp.android:id/main_tab_planet"
-        const val ID_GENERIC_TITLE = "cn.soulapp.android:id/tv_title"
-        const val ID_SOUL_MATCH_PERCENT = "cn.soulapp.android:id/pipeidu_new"
+        const val ID_INPUT_BOX = SoulAccessibilityIds.ID_INPUT_BOX
+        const val ID_CONTENT_TEXT = SoulAccessibilityIds.ID_CONTENT_TEXT
+        const val ID_SEND_BUTTON = SoulAccessibilityIds.ID_SEND_BUTTON
+        const val ID_CHAT_ITEM = SoulAccessibilityIds.ID_CHAT_ITEM
+        const val ID_CHAT_AVATAR = SoulAccessibilityIds.ID_CHAT_AVATAR
+        const val ID_MESSAGE_READ = SoulAccessibilityIds.ID_MESSAGE_READ
+        const val ID_VOICE_BUBBLE = SoulAccessibilityIds.ID_VOICE_BUBBLE
+        const val ID_AUDIO_CONTENT = SoulAccessibilityIds.ID_AUDIO_CONTENT
+        const val ID_EXPRESSION = SoulAccessibilityIds.ID_EXPRESSION
+        const val ID_SHARED_POST_TEXT = SoulAccessibilityIds.ID_SHARED_POST_TEXT
+        const val ID_CONV_LIST = SoulAccessibilityIds.ID_CONV_LIST
+        const val ID_CONV_ITEM = SoulAccessibilityIds.ID_CONV_ITEM
+        const val ID_CONV_NAME = SoulAccessibilityIds.ID_CONV_NAME
+        const val ID_CONV_TIME = SoulAccessibilityIds.ID_CONV_TIME
+        const val ID_UNREAD_BADGE = SoulAccessibilityIds.ID_UNREAD_BADGE
+        const val ID_SQUARE_TAB = SoulAccessibilityIds.ID_SQUARE_TAB
+        const val ID_MSG_TAB = SoulAccessibilityIds.ID_MSG_TAB
+        const val ID_MSG_RED_DOT = SoulAccessibilityIds.ID_MSG_RED_DOT
+        const val ID_SQUARE_CARD = SoulAccessibilityIds.ID_SQUARE_CARD
+        const val ID_SQUARE_TEXT = SoulAccessibilityIds.ID_SQUARE_TEXT
+        const val ID_SQUARE_AVATAR = SoulAccessibilityIds.ID_SQUARE_AVATAR
+        const val ID_SQUARE_PAGER = SoulAccessibilityIds.ID_SQUARE_PAGER
+        const val ID_SQUARE_CHANNEL_TAB = SoulAccessibilityIds.ID_SQUARE_CHANNEL_TAB
+        const val ID_GIFT_CLOSE = SoulAccessibilityIds.ID_GIFT_CLOSE
+        const val ID_NO_SEND_CLOSE = SoulAccessibilityIds.ID_NO_SEND_CLOSE
+        const val ID_CHAT_SECRET = SoulAccessibilityIds.ID_CHAT_SECRET
+        const val ID_PROFILE_NAME = SoulAccessibilityIds.ID_PROFILE_NAME
+        const val ID_QIYU_CHAT = SoulAccessibilityIds.ID_QIYU_CHAT
+        const val ID_QIYU_SIGNATURE = SoulAccessibilityIds.ID_QIYU_SIGNATURE
+        const val ID_QIYU_REASON = SoulAccessibilityIds.ID_QIYU_REASON
+        const val ID_QIYU_CLOSE = SoulAccessibilityIds.ID_QIYU_CLOSE
+        const val ID_GREETING_TITLE = SoulAccessibilityIds.ID_GREETING_TITLE
+        const val ID_GREETING_TIPS = SoulAccessibilityIds.ID_GREETING_TIPS
+        const val ID_PLANET_TAB = SoulAccessibilityIds.ID_PLANET_TAB
+        const val ID_GENERIC_TITLE = SoulAccessibilityIds.ID_GENERIC_TITLE
+        const val ID_SOUL_MATCH_PERCENT = SoulAccessibilityIds.ID_SOUL_MATCH_PERCENT
         const val SOUL_MATCH_TIMEOUT_MS = 180_000L
     }
 
