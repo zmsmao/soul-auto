@@ -23,4 +23,11 @@
     <color name="state_danger">#B54755</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
+    <color name="apple_page">#F2F2F7</color>
+    <color name="apple_card">#FFFFFF</color>
+    <color name="apple_text">#1C1C1E</color>
+    <color name="apple_secondary">#8E8E93</color>
+    <color name="apple_blue">#007AFF</color>
+    <color name="apple_separator">#D1D1D6</color>
+    <color name="apple_soft">#E5E5EA</color>
 </resources>

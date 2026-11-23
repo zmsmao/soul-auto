@@ -29,6 +29,11 @@
                 <com.google.android.material.button.MaterialButton android:id="@+id/btnExportConversationMemory" style="@style/Widget.SoulBot.PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="导出全部聊天记忆" />
                 <com.google.android.material.button.MaterialButton android:id="@+id/btnImportConversationMemory" style="@style/Widget.SoulBot.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="导入并合并聊天记忆" />
 
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="长期记忆（含原文证据）" android:textAppearance="@style/TextAppearance.SoulBot.Section" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="结构化记忆使用独立文件备份；导出会保留联系人身份、记忆状态和证据引用。" android:textAppearance="@style/TextAppearance.Material3.BodySmall" android:textColor="?attr/colorOnSurfaceVariant" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnExportContactMemory" style="@style/Widget.SoulBot.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="11dp" android:text="导出长期记忆与证据" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnImportContactMemory" style="@style/Widget.SoulBot.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="导入长期记忆与证据" />
+
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="32dp" android:text="危险操作" android:textAppearance="@style/TextAppearance.SoulBot.Section" android:textColor="?attr/colorError" />
                 <com.google.android.material.button.MaterialButton android:id="@+id/btnClearConversationMemory" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:minHeight="48dp" android:text="清空完整聊天记忆" android:textColor="?attr/colorError" app:strokeColor="?attr/colorError" />
             </LinearLayout>

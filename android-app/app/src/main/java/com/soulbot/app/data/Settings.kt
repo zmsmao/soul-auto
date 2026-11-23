@@ -188,4 +188,12 @@ object Prefs {
     fun getContactMemoryEnabled(ctx: Context) = getBoolean(ctx, "contact_memory_enabled", true)
     fun setContactMemoryEnabled(ctx: Context, enabled: Boolean) =
         setBoolean(ctx, "contact_memory_enabled", enabled)
+
+    // Structured long-term memory extraction is explicitly opt-in because it
+    // sends selected incoming-message excerpts to the configured model endpoint.
+    fun getContactMemoryExtractionEnabled(ctx: Context) =
+        getBoolean(ctx, "contact_memory_extraction_enabled", false)
+
+    fun setContactMemoryExtractionEnabled(ctx: Context, enabled: Boolean) =
+        setBoolean(ctx, "contact_memory_extraction_enabled", enabled)
 }

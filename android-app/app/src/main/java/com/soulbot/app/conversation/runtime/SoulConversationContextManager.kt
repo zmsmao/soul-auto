@@ -12,6 +12,7 @@ import com.soulbot.app.model.ReplyPreferencePrompt
 import com.soulbot.app.conversation.context.ContextFragment
 import com.soulbot.app.conversation.context.PersonaContextProvider
 import com.soulbot.app.conversation.context.ContactMemoryContextProvider
+import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -72,6 +73,17 @@ internal class SoulConversationContextManager(private val host: SoulConversation
             DiagnosticIdentity.contactId(host.context, contactName),
         )
 
+    private fun scheduleContactMemoryExtraction(threadId: String, scene: ReplyScene) {
+        if (!Prefs.getContactMemoryExtractionEnabled(host.context)) return
+        val entries = host.memoryDatabase?.contactEntries(threadId, 120).orEmpty()
+            .filter { it.scene == scene.name && it.role == "in" }
+        if (entries.isNotEmpty()) {
+            ContactMemoryExtractionScheduler.enqueue(
+                host.context, threadId, scene.name, entries,
+            )
+        }
+    }
+
     fun contextFragments(
         contactName: String,
         latestMessage: String,
@@ -127,6 +139,7 @@ internal class SoulConversationContextManager(private val host: SoulConversation
                 error,
             )
         }
+        scheduleContactMemoryExtraction(threadId, scene)
         val db = host.learningDatabase ?: return
         val manualSamples = ManualStyleLearner.extract(thread, scene) { reply ->
             db.isAutomatedReply(threadId, reply)
@@ -161,6 +174,7 @@ internal class SoulConversationContextManager(private val host: SoulConversation
                 error,
             )
         }
+        if (opening == null) scheduleContactMemoryExtraction(threadId, scene)
         val db = host.learningDatabase ?: return
         if (opening != null) {
             runCatching {

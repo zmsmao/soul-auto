@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
+    android:background="@color/apple_page"
     android:orientation="vertical">
 
     <include layout="@layout/view_toolbar" />
@@ -19,120 +19,169 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingStart="20dp"
-            android:paddingTop="10dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="28dp">
+            android:paddingStart="18dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="30dp">
 
-            <com.google.android.material.card.MaterialCardView
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardBackgroundColor="?attr/colorPrimaryContainer"
-                app:cardCornerRadius="24dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                android:text="联系人"
+                android:textColor="@color/apple_text"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/bg_apple_group"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvContactAvatar"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
+                    android:background="@drawable/bg_avatar_circle"
+                    android:gravity="center"
+                    android:text="友"
+                    android:textColor="@color/apple_blue"
+                    android:textSize="23sp"
+                    android:textStyle="bold" />
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                    <LinearLayout
+                    <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:text="联系人档案"
+                        android:textColor="@color/apple_text"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:id="@+id/tvContactAvatar"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:background="@drawable/bg_avatar_circle"
-                            android:gravity="center"
-                            android:text="友"
-                            android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
-                            android:textColor="?attr/colorOnPrimaryContainer" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="13dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="联系人档案"
-                                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                                android:textColor="?attr/colorOnPrimaryContainer" />
-
-                            <TextView
-                                android:id="@+id/tvContactIdentityType"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="3dp"
-                                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                                android:textColor="?attr/colorOnPrimaryContainer" />
-                        </LinearLayout>
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/tvContactIdentityType"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/apple_secondary"
+                        android:textSize="13sp" />
 
                     <TextView
                         android:id="@+id/tvContactDetailSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
-                        android:lineSpacingExtra="3dp"
-                        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                        android:textColor="?attr/colorOnPrimaryContainer" />
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="14dp"
-                        android:background="?attr/colorOnPrimaryContainer"
-                        android:alpha="0.16" />
-
-                    <TextView
-                        android:id="@+id/tvContactLastMessage"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:lineSpacingExtra="3dp"
-                        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                        android:textColor="?attr/colorOnPrimaryContainer" />
+                        android:layout_marginTop="7dp"
+                        android:textColor="@color/apple_secondary"
+                        android:textSize="13sp" />
                 </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="25dp"
-                android:text="联系人上下文"
-                android:textAppearance="@style/TextAppearance.SoulBot.Section" />
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="26dp"
+                android:text="长期记忆"
+                android:textColor="@color/apple_text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="查看系统已记录的线索、原始对话和当前会话状态"
-                android:textAppearance="@style/TextAppearance.SoulBot.Supporting" />
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="5dp"
+                android:text="从聊天原文整理出的信息，保留来源，允许随时纠正。"
+                android:textColor="@color/apple_secondary"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="13dp"
+                android:background="@drawable/bg_apple_group"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="13dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="13dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="自动整理记忆"
+                            android:textColor="@color/apple_text"
+                            android:textSize="16sp"
+                            android:textStyle="medium" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="3dp"
+                            android:text="对全部联系人生效 · 使用已配置的模型提炼"
+                            android:textColor="@color/apple_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchContactMemoryExtraction"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:thumbTint="@color/apple_card"
+                        app:trackTint="@color/apple_soft" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="11dp"
+                    android:layout_marginBottom="9dp"
+                    android:background="@color/apple_separator" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="提炼任务在后台批量执行，可能产生模型 API 用量。当前只保存和展示，不会参与自动回复。"
+                    android:textColor="@color/apple_secondary"
+                    android:textSize="12sp"
+                    android:lineSpacingExtra="2dp" />
+            </LinearLayout>
 
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:fillViewport="false"
+                android:layout_marginTop="18dp"
                 android:scrollbars="none">
 
                 <com.google.android.material.chip.ChipGroup
                     android:id="@+id/groupContactSections"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    app:singleSelection="true"
+                    app:chipSpacingHorizontal="7dp"
                     app:selectionRequired="true"
-                    app:chipSpacingHorizontal="7dp">
+                    app:singleSelection="true">
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chipContactMemory"
@@ -140,7 +189,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"
-                        android:text="记忆片段" />
+                        android:text="记忆" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chipContactHistory"
@@ -158,43 +207,64 @@
                 </com.google.android.material.chip.ChipGroup>
             </HorizontalScrollView>
 
-            <com.google.android.material.card.MaterialCardView
+            <TextView
+                android:id="@+id/tvContactMemorySummary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                app:cardCornerRadius="22dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="12dp"
+                android:textColor="@color/apple_secondary"
+                android:textSize="12sp" />
 
-                <LinearLayout
-                    android:id="@+id/layoutContactMemoryEntries"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="14dp"
-                    android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/layoutContactMemoryEntries"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
 
-                <TextView
-                    android:id="@+id/tvContactSectionContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="220dp"
-                    android:lineSpacingExtra="4dp"
-                    android:padding="18dp"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:textIsSelectable="true" />
-            </com.google.android.material.card.MaterialCardView>
+            <TextView
+                android:id="@+id/tvContactSectionContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="9dp"
+                android:background="@drawable/bg_apple_group"
+                android:lineSpacingExtra="4dp"
+                android:minHeight="160dp"
+                android:padding="16dp"
+                android:textColor="@color/apple_text"
+                android:textSize="14sp"
+                android:textIsSelectable="true"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvContactLegacyHeading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="22dp"
+                android:text="旧版聊天线索"
+                android:textColor="@color/apple_text"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/layoutContactLegacyEntries"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
 
             <TextView
                 android:id="@+id/tvContactSectionFootnote"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="13dp"
                 android:lineSpacingExtra="2dp"
-                android:text="记忆片段是系统已记录的聊天线索，尚不等同于经过确认的事实或性格判断。"
-                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant" />
+                android:text="记忆不是人物画像；存在冲突或缺少证据的内容不会被视为已确认事实。"
+                android:textColor="@color/apple_secondary"
+                android:textSize="12sp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </LinearLayout>

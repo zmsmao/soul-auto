@@ -3,12 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurface"
-    app:cardCornerRadius="18dp"
+    android:layout_marginBottom="9dp"
+    app:cardBackgroundColor="@color/apple_card"
+    app:cardCornerRadius="17dp"
     app:cardElevation="0dp"
-    app:strokeColor="?attr/colorOutlineVariant"
-    app:strokeWidth="1dp">
+    app:strokeColor="@color/apple_separator"
+    app:strokeWidth="0.5dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -23,40 +23,58 @@
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/tvMemoryOrder"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:background="@drawable/bg_avatar_circle"
-                android:gravity="center"
-                android:text="1"
-                android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                android:textColor="?attr/colorOnPrimaryContainer" />
+                android:id="@+id/tvMemoryCategory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="兴趣偏好"
+                android:textColor="@color/apple_blue"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvMemoryStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:text="有效"
+                android:textColor="@color/apple_secondary"
+                android:textSize="11sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/tvMemoryTime"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                android:textColor="?attr/colorOnSurfaceVariant" />
-
-            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="聊天线索"
-                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
-                android:textColor="?attr/colorPrimary" />
+                android:textColor="@color/apple_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvMemoryOrder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/tvMemoryContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="9dp"
             android:lineSpacingExtra="3dp"
-            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/apple_text"
+            android:textSize="16sp"
             android:textIsSelectable="true" />
+
+        <TextView
+            android:id="@+id/tvMemoryEvidence"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/apple_secondary"
+            android:textSize="12sp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
