@@ -7,6 +7,7 @@ import com.soulbot.app.model.ModelCallCancellation
 import com.soulbot.app.model.ModelClient
 import com.soulbot.app.model.ModelEndpoint
 import com.soulbot.app.model.ModelEndpointRules
+import com.soulbot.app.model.ReplayCandidate
 import com.soulbot.app.model.ReplyReplayCase
 import com.soulbot.app.model.ReplyReplayLogic
 import com.soulbot.app.model.ReplyReplayPrompt
