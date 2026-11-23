@@ -91,79 +91,6 @@ class SoulBotService : AccessibilityService() {
     }
 
 
-    private val messageSender: SoulMessageSender by lazy(LazyThreadSafetyMode.NONE) {
-        SoulMessageSender(object : SoulMessageSenderHost {
-            override val context: android.content.Context get() = applicationContext
-            override val isRunning: Boolean get() = running
-            override val memoryDatabase: ConversationMemoryDatabase? get() = conversationMemoryDb
-            override val random: Random get() = this@SoulBotService.random
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun splitReply(text: String): List<String> = this@SoulBotService.splitReply(text)
-            override fun hasPendingQiyu(): Boolean = this@SoulBotService.hasPendingQiyu()
-            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
-            override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
-            override fun currentIncomingMessageKeys(contactName: String): List<String> =
-                this@SoulBotService.currentIncomingMessageKeys(contactName)
-            override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
-            override fun outgoingMessageCount(): Int = this@SoulBotService.outgoingMessageCount()
-            override fun hasConfirmedConversationName(name: String): Boolean =
-                this@SoulBotService.hasConfirmedConversationName(name)
-            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
-            override fun findById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findById(id)
-            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
-            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
-            override fun setText(node: AccessibilityNodeInfo, text: String): Boolean = this@SoulBotService.setText(node, text)
-            override fun outgoingOccurrenceCount(text: String): Int = this@SoulBotService.outgoingOccurrenceCount(text)
-            override fun visibleMessageOccurrenceCount(text: String): Int = this@SoulBotService.visibleMessageOccurrenceCount(text)
-            override fun findVisibleById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findVisibleById(id)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-        })
-    }
-
-    private val voiceMessageController: SoulVoiceMessageController by lazy(LazyThreadSafetyMode.NONE) {
-        SoulVoiceMessageController(object : SoulVoiceMessageHost {
-            override val context: android.content.Context get() = applicationContext
-            override val isRunning: Boolean get() = running
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
-            override fun findExactText(text: String): List<AccessibilityNodeInfo> = this@SoulBotService.findExactText(text)
-            override fun descendantsById(root: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo> =
-                this@SoulBotService.descendantsById(root, id)
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun contains(outer: Rect, inner: Rect): Boolean = this@SoulBotService.contains(outer, inner)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-            override fun messageRole(
-                item: AccessibilityNodeInfo,
-                avatars: List<AccessibilityNodeInfo>,
-                readReceipts: List<AccessibilityNodeInfo>,
-            ): String = this@SoulBotService.messageRole(item, avatars, readReceipts)
-            override fun activeWindowRegion(): UiRegion = this@SoulBotService.activeWindowRegion()
-            override fun dp(value: Int): Int = this@SoulBotService.dp(value)
-            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.isVisibleOnScreen(node)
-            override fun setNextStep(action: String, delayMs: Long) =
-                this@SoulBotService.setNextStep(action, delayMs)
-            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
-            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
-            override fun longPressNode(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.longPressNode(node)
-            override fun tap(x: Float, y: Float): Boolean = this@SoulBotService.tap(x, y)
-        })
-    }
-
-    private val conversationListScanner: SoulConversationListScanner by lazy(LazyThreadSafetyMode.NONE) {
-        SoulConversationListScanner(object : SoulConversationListHost {
-            override val context: android.content.Context get() = applicationContext
-            override fun isOnList(): Boolean = this@SoulBotService.isOnList()
-            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
-            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.isVisibleOnScreen(node)
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun contains(outer: Rect, inner: Rect): Boolean = this@SoulBotService.contains(outer, inner)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-        })
-    }
-
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -578,9 +505,13 @@ class SoulBotService : AccessibilityService() {
         running = false
         statusText = "用户手动停止"
         statusDeadline = 0
-        activeGenera    private fun conversationListSnapshot(): String = conversationListScanner.snapshot()
+        activeGenerationCancellation?.cancel()
+        worker?.interrupt()
+        // runLoop() clears the reference in finally. Keeping it until then prevents
+        // a second worker from starting while the interrupted one is still unwinding.
+    }
 
-== 基础辅助 =====
+    // ===== 基础辅助 =====
 
     private fun root(): AccessibilityNodeInfo? = pageUi.root()
 
@@ -814,7 +745,76 @@ class SoulBotService : AccessibilityService() {
 
     private fun returnToList(): Boolean = navigation.returnToList()
 
-    private fun gotoSquare(): Boolean = navigation.gotoSquare()    private fun send(
+    private fun gotoSquare(): Boolean = navigation.gotoSquare()
+
+    private fun gotoChatList(): Boolean = navigation.gotoChatList()
+
+    private fun gotoSoulPlanet(): Boolean = navigation.gotoSoulPlanet()
+
+    private fun gotoModeIdleSurface(mode: AutomationMode): Boolean = navigation.gotoModeIdleSurface(mode)
+
+    private fun backToSquare(): Boolean = navigation.backToSquare()
+
+    private fun thinkDelay(): Long {
+        val min = Prefs.getThinkMin(applicationContext).coerceAtLeast(0)
+        val max = Prefs.getThinkMax(applicationContext).coerceAtLeast(min + 1)
+        return random.nextLong(min.toLong(), max.toLong()) * 1000L
+    }
+
+    private fun waitUnlessQiyu(delayMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + delayMs
+        while (running && System.currentTimeMillis() < deadline) {
+            if (currentScreen() == SoulScreen.QIYU_POPUP) {
+                handleQiyu()
+                return false
+            }
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining <= 0L) break
+            sleep(minOf(250L, remaining))
+        }
+        return running
+    }
+
+    private fun replyDelay(timeStr: String): Long {
+        val minutesAgo = UnreadConversationPolicy.ageMinutes(timeStr)
+        if (minutesAgo >= 1) return 0L   // 消息已发超过 1 分钟，立即回
+        return thinkDelay()
+    }
+
+    // ===== 拆分回复 =====
+
+    private fun splitReply(text: String): List<String> {
+        // Model formatting must not turn one thought into three incomplete bubbles.
+        val singleBubble = text.trim().replace(Regex("""\s*\n+\s*"""), " ")
+        return listOf(singleBubble)
+    }
+
+    // ===== 发送（仅聊天界面） =====
+
+    private fun outgoingOccurrenceCount(text: String): Int {
+        val target = normalizeReply(text)
+        if (target.isEmpty()) return 0
+        return readThread()
+            .asSequence()
+            .filter { it.first == "out" }
+            .map { normalizeReply(it.second) }
+            .count { it == target }
+    }
+
+    /** Total visible outgoing count reconciles an uncertain click even when the retry text differs. */
+    private fun outgoingMessageCount(): Int = readThread().count { it.first == "out" }
+
+    private fun visibleMessageOccurrenceCount(text: String): Int {
+        val target = normalizeReply(text)
+        if (target.isEmpty()) return 0
+        return findByIds(ID_CONTENT_TEXT)
+            .asSequence()
+            .filter(::isVisibleOnScreen)
+            .map { normalizeReply(textOf(it)) }
+            .count { it == target }
+    }
+
+    private fun send(
         text: String,
         expectedContact: String? = null,
         inputTimeoutMs: Long? = null,
@@ -823,19 +823,140 @@ class SoulBotService : AccessibilityService() {
         idempotencyKey: String? = null,
         sceneOverride: ReplyScene? = null,
         expectedEventAnchor: String? = null,
-    ): Boolean = messageSender.send(
-        text = text,
-        expectedContact = expectedContact,
-        inputTimeoutMs = inputTimeoutMs,
-        onInputWritten = onInputWritten,
-        onSendClick = onSendClick,
-        idempotencyKey = idempotencyKey,
-        sceneOverride = sceneOverride,
-        expectedEventAnchor = expectedEventAnchor,
-    )
+    ): Boolean {
+        if (!isOnChat()) {
+            RuntimeLog.record(applicationContext, "message send rejected; reason=not_on_chat")
+            return false
+        }
+        val pieces = splitReply(text)
+        val sendScene = sceneOverride ?: when {
+            hasPendingQiyu() -> ReplyScene.QIYU
+            currentScreen() == SoulScreen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
+            else -> ReplyScene.CHAT
+        }
+        val sendThreadId = expectedContact?.let(::memoryThreadId).orEmpty()
+        val incomingEventKeys = expectedContact?.let(::currentIncomingMessageKeys).orEmpty()
+        val incomingEventAnchor = incomingEventKeys.joinToString(",")
+        if (expectedEventAnchor != null && incomingEventAnchor != expectedEventAnchor) {
+            RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_input")
+            return false
+        }
+        val generatedSendKey = expectedContact?.let {
+            ConversationIdentity.replySendKey(sendThreadId, sendScene.name, incomingEventKeys, text)
+        }
+        val durableSendKey = (idempotencyKey ?: generatedSendKey)?.takeIf { conversationMemoryDb != null }
+        fun expectedEventIsCurrent(): Boolean {
+            if (expectedContact == null || expectedEventAnchor == null) return true
+            return currentIncomingMessageKeys(expectedContact).joinToString(",") == expectedEventAnchor
+        }
+        val reservation = durableSendKey?.let { key ->
+            conversationMemoryDb?.reserveSendAttempt(
+                sendKey = key,
+                threadId = sendThreadId,
+                scene = sendScene,
+                bodyHash = ConversationIdentity.digest(normalizeReply(text)),
+                eventAnchor = incomingEventKeys.joinToString(","),
+                outgoingBaseline = outgoingMessageCount(),
+            )
+        }
+        if (durableSendKey != null && reservation != null) {
+            when (reservation.disposition) {
+                SendAttemptDisposition.ALREADY_CONFIRMED -> {
+                    if (!expectedEventIsCurrent()) return false
+                    RuntimeLog.record(applicationContext, "message send suppressed; reason=already_confirmed")
+                    return true
+                }
+                SendAttemptDisposition.UNCERTAIN -> {
+                    if (outgoingMessageCount() > reservation.outgoingBaseline) {
+                        conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
+                        return expectedEventIsCurrent()
+                    }
+                    if (!expectedEventIsCurrent()) return false
+                    conversationMemoryDb?.markSendAttemptUncertain(durableSendKey)
+                    RuntimeLog.record(applicationContext, "message send suppressed; reason=previous_click_unconfirmed")
+                    return false
+                }
+                SendAttemptDisposition.READY -> Unit
+            }
+        }
+        val attemptId = System.nanoTime().toString(36)
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        RuntimeLog.record(
+            applicationContext,
+            "message send started; attemptId=$attemptId; parts=${pieces.size}; chars=${text.length}",
+        )
+        for ((i, piece) in pieces.withIndex()) {
+            var inputReady = false
+            val inputDeadline = inputTimeoutMs?.let { System.currentTimeMillis() + it }
+            while (running && isOnChat() && !inputReady) {
+                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
+                if (inputDeadline != null && System.currentTimeMillis() >= inputDeadline) {
+                    RuntimeLog.record(applicationContext, "message input timed out; attemptId=$attemptId; part=${i + 1}")
+                    return false
+                }
+                setNextStep("输入第 ${i + 1} 段回复")
+                val input = findById(ID_INPUT_BOX)
+                if (input == null) {
+                    RuntimeLog.record(
+                        applicationContext,
+                        "message input missing; attemptId=$attemptId; part=${i + 1}",
+                    )
+                    setNextStep("等待输入框后重试", SQUARE_RETRY_DELAY_MS)
+                    sleep(SQUARE_RETRY_DELAY_MS)
+                    continue
+                }
+                tapNode(input)
+                sleep(300)
+                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
+                if (!setText(input, piece)) {
+                    RuntimeLog.record(
+                        applicationContext,
+                        "message input injection failed; attemptId=$attemptId; part=${i + 1}",
+                    )
+                    setNextStep("输入失败，重新输入第 ${i + 1} 段", SQUARE_RETRY_DELAY_MS)
+                    sleep(SQUARE_RETRY_DELAY_MS)
+                    continue
+                }
+                onInputWritten(piece)
+                inputReady = true
+            }
+            if (!inputReady) return false
+            if (!expectedEventIsCurrent()) {
+                RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_after_input")
+                return false
+            }
 
+            sleep(500)
+            val beforeOutgoingCount = outgoingOccurrenceCount(piece)
+            val beforeVisibleCount = visibleMessageOccurrenceCount(piece)
+            val sendButton = findVisibleById(ID_SEND_BUTTON) ?: run {
+                RuntimeLog.record(
+                    applicationContext,
+                    "message send button missing; attemptId=$attemptId; part=${i + 1}",
+                )
+                setNextStep("未找到发送按钮，重新检查", 5000)
+                sleep(5000)
+                return false
+            }
 
-  break
+            var sent = false
+            var durableClickPerformed = false
+            for (sendAttempt in 0 until (if (durableSendKey == null) 2 else 1)) {
+                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
+                setNextStep(
+                    if (sendAttempt == 0) "发送第 ${i + 1} 段回复"
+                    else "上次点击未生效，再发送一次",
+                )
+                val currentButton = findVisibleById(ID_SEND_BUTTON) ?: break
+                if (!expectedEventIsCurrent()) {
+                    RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_click")
+                    return false
+                }
+                if (durableSendKey != null) conversationMemoryDb?.markSendAttemptClicked(durableSendKey)
+                val clickAccepted = tapNode(if (sendAttempt == 0) sendButton else currentButton)
+                if (!clickAccepted) {
+                    if (durableSendKey != null) conversationMemoryDb?.markSendAttemptPrepared(durableSendKey)
+                    break
                 }
                 onSendClick()
                 if (durableSendKey != null) durableClickPerformed = true
@@ -849,21 +970,190 @@ class SoulBotService : AccessibilityService() {
                         sent = true
                         break
                     }
-                      private fun transcriptForVoice(
+                    val remaining = confirmDeadline - System.currentTimeMillis()
+                    setNextStep("确认第 ${i + 1} 段已出现在聊天中", remaining)
+                    sleep(500)
+                }
+
+                if (sent) {
+                    if (durableSendKey != null) conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
+                    break
+                }
+                // Only click again when the original text is still in the input box.
+                // If it has disappeared, the result is ambiguous and another click could duplicate it.
+                if (normalizeReply(textOf(findVisibleById(ID_INPUT_BOX))) != normalizeReply(piece)) break
+            }
+            if (!sent) {
+                if (durableSendKey != null && durableClickPerformed) {
+                    conversationMemoryDb?.markSendAttemptUncertain(durableSendKey)
+                }
+                RuntimeLog.record(
+                    applicationContext,
+                    "message send unconfirmed; attemptId=$attemptId; part=${i + 1}; durationMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+                )
+                setNextStep("消息未确认发出，停止重复点击", 1500)
+                sleep(1500)
+                return false
+            }
+            if (i < pieces.size - 1) {
+                val nextPartDelay = random.nextLong(2000, 5000)
+                setNextStep("发送第 " + (i + 2) + " 段回复", nextPartDelay)
+                sleep(nextPartDelay)
+            }
+        }
+        RuntimeLog.record(
+            applicationContext,
+            "message send confirmed; attemptId=$attemptId; parts=${pieces.size}; durationMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+        )
+        return true
+    }
+
+    // ===== 读聊天消息（仅聊天界面） =====
+
+    private fun messageRole(item: AccessibilityNodeInfo, avatars: List<AccessibilityNodeInfo>, readReceipts: List<AccessibilityNodeInfo>): String = messageReader.messageRole(item, avatars, readReceipts)
+
+    private fun descendantsById(
+        node: AccessibilityNodeInfo,
+        id: String,
+    ): List<AccessibilityNodeInfo> = runCatching {
+        node.findAccessibilityNodeInfosByViewId(id) ?: emptyList()
+    }.getOrDefault(emptyList())
+
+    private fun Rect.toUiRegion(): UiRegion = UiRegion(left, top, right, bottom)
+
+    private fun transcriptForVoice(
         bubble: AccessibilityNodeInfo,
         item: AccessibilityNodeInfo? = null,
-    ): String = voiceMessageController.transcriptForVoice(bubble, item)
+    ): String {
+        // Prefer the actual message subtree. Some Soul releases render the
+        // transcript as a sibling below the item, so fall back to geometric
+        // ownership among all currently visible voice bubbles.
+        item?.let { messageItem ->
+            descendantsById(messageItem, ID_AUDIO_CONTENT)
+                .asSequence()
+                .filter(::isVisibleOnScreen)
+                .map(::textOf)
+                .firstOrNull(String::isNotBlank)
+                ?.let { return it }
+        }
 
-    private fun voiceTranscriptFrom(item: AccessibilityNodeInfo): String =
-        voiceMessageController.voiceTranscriptFrom(item)
+        val voiceBounds = rect(bubble)
+        val voices = findByIds(ID_VOICE_BUBBLE)
+            .filter(::isVisibleOnScreen)
+            .map { rect(it).toUiRegion() }
+        val transcripts = findByIds(ID_AUDIO_CONTENT)
+            .filter(::isVisibleOnScreen)
+            .map { TranscriptCandidate(textOf(it), rect(it).toUiRegion()) }
+        return VoiceTranscriptPolicy.transcriptFor(
+            targetVoice = voiceBounds.toUiRegion(),
+            visibleVoices = voices,
+            transcripts = transcripts,
+            maxHorizontalDistance = activeWindowRegion().width / 2,
+            maxVerticalDistance = maxOf(dp(180), voiceBounds.height() * 4),
+        )
+    }
 
-    private fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
-        voiceMessageController.pendingIncomingVoiceBubbles()
+    private fun voiceTranscriptFrom(item: AccessibilityNodeInfo): String {
+        val bubble = descendantsById(item, ID_VOICE_BUBBLE).firstOrNull()
+            ?: findByIds(ID_VOICE_BUBBLE).firstOrNull { contains(rect(item), rect(it)) }
+            ?: return ""
+        return transcriptForVoice(bubble, item)
+    }
 
-    private fun convertIncomingVoiceMessages(): Boolean =
-        voiceMessageController.convertIncomingVoiceMessages()
+    private fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> {
+        if (!isOnChat()) return emptyList()
+        val items = findByIds(ID_CHAT_ITEM)
+        val avatars = findByIds(ID_CHAT_AVATAR)
+        val messageDots = findByIds(ID_MESSAGE_READ)
+        return findByIds(ID_VOICE_BUBBLE).filter { bubble ->
+            val bubbleBounds = rect(bubble)
+            val item = items.firstOrNull { contains(rect(it), bubbleBounds) }
+            val hasUnreadDot = item != null && messageDots.any { dot ->
+                val dotBounds = rect(dot)
+                contains(rect(item), dotBounds) &&
+                    dotBounds.centerX() > bubbleBounds.right &&
+                    dotBounds.centerY() > bubbleBounds.centerY()
+            }
+            item != null &&
+                messageRole(item, avatars, messageDots) == "in" &&
+                hasUnreadDot &&
+                transcriptForVoice(bubble, item).isBlank()
+        }
+    }
 
-r stableSince = System.currentTimeMillis()
+    private fun voiceActionNear(voiceBounds: Rect): AccessibilityNodeInfo? =
+        findExactText("转文字")
+            .filter { action ->
+                val bounds = rect(action)
+                kotlin.math.abs(bounds.centerY() - voiceBounds.centerY()) < maxOf(dp(180), voiceBounds.height() * 3) &&
+                    kotlin.math.abs(bounds.centerX() - voiceBounds.centerX()) < activeWindowRegion().width / 2
+            }
+            .minByOrNull { action ->
+                val bounds = rect(action)
+                kotlin.math.abs(bounds.centerY() - voiceBounds.centerY()) * 4 +
+                    kotlin.math.abs(bounds.centerX() - voiceBounds.centerX())
+            }
+
+    private fun convertIncomingVoiceMessages(): Boolean {
+        val initialPending = pendingIncomingVoiceBubbles().size
+        if (initialPending > 0) {
+            RuntimeLog.record(applicationContext, "voice transcription batch started; pending=$initialPending")
+        }
+        repeat(8) { index ->
+            val bubble = pendingIncomingVoiceBubbles().lastOrNull() ?: return true
+            if (!running || !isOnChat()) return false
+            val voiceBounds = rect(bubble)
+
+            val directButton = voiceActionNear(voiceBounds)
+            if (directButton != null) {
+                RuntimeLog.record(applicationContext, "voice transcription action; path=direct; index=${index + 1}")
+                setNextStep("点击未读语音旁的转文字")
+                tapNode(directButton)
+                sleep(700)
+            } else {
+                setNextStep("长按第 ${index + 1} 条未读语音")
+                if (!longPressNode(bubble)) return false
+                sleep(700)
+
+                // Prefer the semantic menu item when this Soul version exposes it.
+                // Keep a coordinate fallback only for the self-drawn menu variant.
+                val menuButton = voiceActionNear(voiceBounds)
+                if (menuButton != null) {
+                    RuntimeLog.record(applicationContext, "voice transcription action; path=semantic_menu; index=${index + 1}")
+                    DeviceCompatibilityStore.recordVoiceMenuOffset(
+                        applicationContext,
+                        voiceBounds.toUiRegion(),
+                        rect(menuButton).toUiRegion(),
+                        activeWindowRegion(),
+                    )
+                    setNextStep("点击语音菜单中的转文字")
+                    tapNode(menuButton)
+                } else {
+                    val activeArea = activeWindowRegion()
+                    val menuPoint = DeviceCompatibilityStore.learnedVoiceMenuPoint(
+                        applicationContext,
+                        voiceBounds.toUiRegion(),
+                        activeArea,
+                        edgeInset = dp(8),
+                    ) ?: AdaptiveUiPolicy.voiceMenuFallback(
+                        voiceBounds.toUiRegion(),
+                        activeArea,
+                        offsetPx = dp(56),
+                        edgeInset = dp(8),
+                    )
+                    RuntimeLog.record(
+                        applicationContext,
+                        "voice transcription action; path=coordinate_fallback; learned=${DeviceCompatibilityStore.hasLearnedVoiceMenuOffset(applicationContext)}; index=${index + 1}",
+                    )
+                    setNextStep("点击语音菜单中的转文字")
+                    tap(menuPoint.x.toFloat(), menuPoint.y.toFloat())
+                }
+                sleep(700)
+            }
+
+            val startedAt = System.currentTimeMillis()
+            var lastTranscript = ""
+            var stableSince = System.currentTimeMillis()
             while (running && isOnChat() && System.currentTimeMillis() - startedAt < 30_000L) {
                 val currentBubble = findByIds(ID_VOICE_BUBBLE)
                     .filter(::isVisibleOnScreen)
@@ -994,10 +1284,97 @@ r stableSince = System.currentTimeMillis()
 
     // ===== 扫未读（仅会话列表） =====
 
-    private fun scanUnread(): List<UnreadConversationCandidate> = conversationListScanner.scanUnread()
+    private fun scanUnread(): List<UnreadConversationCandidate> {
+        if (!isOnList()) return emptyList()
+        val items = findByIds(ID_CONV_ITEM)
+            .filter(::isVisibleOnScreen)
+            .sortedBy { rect(it).top }
+        val names = findByIds(ID_CONV_NAME).filter(::isVisibleOnScreen)
+        val times = findByIds(ID_CONV_TIME).filter(::isVisibleOnScreen)
+        // Soul keeps recycled/hidden unread badges in the accessibility tree. Using
+        // them made an already-read row reopen forever and wait for content that
+        // could never be "unread" again.
+        val badges = findByIds(ID_UNREAD_BADGE).filter(::isVisibleOnScreen)
+        val result = mutableListOf<UnreadConversationCandidate>()
+        for ((displayOrder, item) in items.withIndex()) {
+            val ib = rect(item)
+            val hasBadge = badges.any { contains(ib, rect(it)) }
+            if (!hasBadge) continue
+            var name = ""
+            for (n in names) { if (contains(ib, rect(n))) { name = textOf(n); break } }
+            var time = ""
+            for (tm in times) { if (contains(ib, rect(tm))) { time = textOf(tm); break } }
+            if (name.isNotBlank()) {
+                result += UnreadConversationCandidate(
+                    name = name,
+                    timeText = time,
+                    displayOrder = displayOrder,
+                    previewText = conversationRowPreview(item, name, time),
+                )
+            }
+        }
+        val ordered = UnreadConversationPolicy.oldestFirst(result)
+        RuntimeLog.record(
+            applicationContext,
+            "unread scan completed; visibleRows=${items.size}; visibleBadges=${badges.size}; candidates=${ordered.size}; selectedContact=${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(applicationContext, it.name) } ?: "none"}",
+        )
+        return ordered
+    }
 
-    private fun findConversation(name: String): AccessibilityNodeInfo? =
-        conversationListScanner.findConversation(name)
+    private fun conversationRowPreview(
+        row: AccessibilityNodeInfo,
+        contactName: String,
+        timeText: String,
+    ): String {
+        val candidates = mutableListOf<String>()
+        var visited = 0
+
+        fun collect(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 5 || visited >= 80) return
+            visited++
+            val values = listOf(
+                node.text?.toString().orEmpty(),
+                node.contentDescription?.toString().orEmpty(),
+            )
+            for (value in values) {
+                val clean = value.trim().replace(Regex("\\s+"), " ")
+                if (clean.length !in 2..160) continue
+                if (clean == contactName || clean == timeText) continue
+                if (contactName.isNotBlank() && clean.contains(contactName)) continue
+                if (timeText.isNotBlank() && clean.contains(timeText)) continue
+                if (Regex("^\\d+$").matches(clean)) continue
+                if (clean.contains("未读") || clean.contains("条消息")) continue
+                candidates += clean
+            }
+            for (index in 0 until minOf(node.childCount, 24)) {
+                val child = node.getChild(index) ?: continue
+                collect(child, depth + 1)
+                if (visited >= 80) break
+            }
+        }
+
+        collect(row, 0)
+        val distinct = candidates.distinct()
+        return distinct.maxByOrNull(UnreadConversationPolicy::priorityScore)
+            ?.takeIf { UnreadConversationPolicy.priorityScore(it) > 0 }
+            ?: distinct.firstOrNull()
+            ?: ""
+    }
+
+    private fun findConversation(name: String): AccessibilityNodeInfo? {
+        if (!isOnList()) return null
+        val items = findByIds(ID_CONV_ITEM).filter(::isVisibleOnScreen)
+        val names = findByIds(ID_CONV_NAME).filter(::isVisibleOnScreen)
+        for (item in items) {
+            val ib = rect(item)
+            for (n in names) {
+                if (contains(ib, rect(n)) && textOf(n) == name) return item
+            }
+        }
+        return null
+    }
+
+    // ===== LLM =====
 
     private fun normalizeReply(text: String): String =
         text.trim().replace(Regex("""[\s，。！？!?、~～]+"""), "")
