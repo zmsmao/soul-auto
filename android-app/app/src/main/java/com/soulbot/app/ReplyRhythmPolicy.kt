@@ -1,6 +1,6 @@
 package com.soulbot.app
 
-/** Prompt advice, not a question quota or a gate that can cause generation retries. */
+/** Prompt advice and pre-send pacing decisions; it is never a question quota. */
 object ReplyRhythmPolicy {
     fun guidance(
         thread: List<Pair<String, String>>,

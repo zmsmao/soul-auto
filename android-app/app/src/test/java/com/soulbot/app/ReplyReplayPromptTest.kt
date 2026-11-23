@@ -168,7 +168,10 @@ class ReplyReplayPromptTest {
             assertTrue(prompt.contains("不要刻意忽冷忽热"))
             assertTrue(prompt.contains("不要输出模型名称"))
             assertTrue(prompt.contains("不进入技术说明"))
-            assertFalse(prompt.contains("必须如实回答是否 AI"))
+            assertFalse(prompt.contains("必须如实回答"))
+            assertTrue(prompt.contains("怎么突然这么觉得"))
+            assertTrue(prompt.contains("这算夸我还是嫌弃我"))
+            assertTrue(prompt.contains("像说明书"))
         }
         assertTrue(live.contains("今天真实日期是"))
         assertFalse(historical.contains("今天真实日期是"))

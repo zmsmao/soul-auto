@@ -14,7 +14,7 @@ internal data class UnreadConversationCandidate(
     val previewText: String = "",
 )
 
-/** Orders unread conversations by message age instead of accessibility-node order. */
+/** Prioritizes high-intent/emotional previews, then orders equal-priority unread rows by age. */
 internal object UnreadConversationPolicy {
     private const val MINUTES_PER_DAY = 24L * 60L
     private const val UNKNOWN_AGE_MINUTES = MINUTES_PER_DAY
