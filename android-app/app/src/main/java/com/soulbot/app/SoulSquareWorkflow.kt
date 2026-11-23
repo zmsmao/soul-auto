@@ -20,7 +20,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
         if (!host.isOnSquare()) return emptyList()
         if (host.selectedSquareChannel() != expectedChannel) return emptyList()
         val cards = host.findByIds(SoulBotService.ID_SQUARE_CARD)
-            .filter(::isVisibleOnScreen)
+            .filter(host::isVisibleOnScreen)
             .sortedBy { host.rect(it).top }
         val result = mutableListOf<SquarePostCandidate>()
         for (card in cards) {
@@ -30,12 +30,12 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             // through this card's own subtree, never through global geometry.
             val text = host.descendantsById(card, SoulBotService.ID_SQUARE_TEXT)
                 .asSequence()
-                .filter(::isVisibleOnScreen)
-                .map(::textOf)
+                .filter(host::isVisibleOnScreen)
+                .map(host::textOf)
                 .firstOrNull(String::isNotBlank)
                 .orEmpty()
             val avatar = host.descendantsById(card, SoulBotService.ID_SQUARE_AVATAR)
-                .firstOrNull(::isVisibleOnScreen)
+                .firstOrNull(host::isVisibleOnScreen)
             if (text.isNotBlank() && avatar != null) {
                 result += SquarePostCandidate(
                     text = text,
