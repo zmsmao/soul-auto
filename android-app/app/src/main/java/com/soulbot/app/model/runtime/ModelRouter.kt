@@ -1,6 +1,10 @@
-package com.soulbot.app.model
+package com.soulbot.app.model.runtime
 
 import com.soulbot.app.data.ModelEndpointPrefs
+import com.soulbot.app.model.ModelCallCancellation
+import com.soulbot.app.model.ModelClient
+import com.soulbot.app.model.ModelEndpointRules
+import com.soulbot.app.model.ModelFailoverPolicy
 
 import com.soulbot.app.diagnostics.RuntimeLog
 

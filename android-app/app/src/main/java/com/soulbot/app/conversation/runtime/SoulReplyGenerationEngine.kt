@@ -6,6 +6,8 @@ import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*
+import com.soulbot.app.model.runtime.ModelRouteOutcome
+import com.soulbot.app.model.runtime.ModelRouter
 import com.soulbot.app.policy.*
 
 internal interface SoulReplyGenerationHost {
