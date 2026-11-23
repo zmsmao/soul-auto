@@ -1,6 +1,10 @@
 package com.soulbot.app.diagnostics
 
 import com.soulbot.app.accessibility.SoulAccessibilityIds
+import com.soulbot.app.accessibility.AdaptiveUiPolicy
+import com.soulbot.app.accessibility.UiOffsetRatio
+import com.soulbot.app.accessibility.UiPoint
+import com.soulbot.app.accessibility.UiRegion
 
 import android.content.Context
 import android.content.res.Configuration
