@@ -4,7 +4,7 @@ import com.soulbot.app.accessibility.SoulScreen
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
-import com.soulbot.app.policy.UnreadConversationCandidate
+import com.soulbot.app.conversation.UnreadConversationCandidate
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Operations the scheduler may request from the Android page agent. */

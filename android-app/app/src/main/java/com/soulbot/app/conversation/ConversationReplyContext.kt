@@ -1,5 +1,6 @@
 package com.soulbot.app.conversation
 
+
 data class ReplyContextAnalysis(
     val focusIncoming: List<String>,
     val latestIsLowInformation: Boolean,
@@ -76,6 +77,12 @@ object ConversationReplyContext {
                 !reportedOrNegated && closingClues.any { comparable.contains(comparableText(it)) }
             }
     }
+
+    /** Contextual advice only: never a schedule that forces a question. */
+    fun responseGuidance(
+        thread: List<Pair<String, String>>,
+        focusIncoming: List<String>,
+    ): String = ReplyRhythmPolicy.guidance(thread, focusIncoming)
 
     fun hasEngagingHook(reply: String): Boolean {
         val comparable = comparableText(reply)

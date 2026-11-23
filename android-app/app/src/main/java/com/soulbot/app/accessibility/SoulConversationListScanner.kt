@@ -3,10 +3,8 @@ package com.soulbot.app.accessibility
 import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.*
-import com.soulbot.app.app.SoulBotService
 import com.soulbot.app.diagnostics.*
-import com.soulbot.app.policy.*
+import com.soulbot.app.conversation.*
 
 internal interface SoulConversationListHost {
     val context: Context

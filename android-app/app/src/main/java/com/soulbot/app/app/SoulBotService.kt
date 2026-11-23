@@ -107,8 +107,6 @@ class SoulBotService : AccessibilityService() {
             override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
             override fun currentIncomingMessageKeys(contactName: String): List<String> =
                 this@SoulBotService.currentIncomingMessageKeys(contactName)
-            override fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint =
-                OpeningReplyPolicy.fingerprint(reply, context)
             override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
             override fun outgoingMessageCount(): Int = this@SoulBotService.outgoingMessageCount()
             override fun hasConfirmedConversationName(name: String): Boolean =
@@ -213,6 +211,8 @@ class SoulBotService : AccessibilityService() {
             override val replyReplayDatabase: ReplyReplayDatabase? get() = replyReplayDb
             override fun currentIncomingMessageKeys(contactName: String): List<String> =
                 this@SoulBotService.currentIncomingMessageKeys(contactName)
+            override fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint =
+                OpeningReplyPolicy.fingerprint(reply, context)
             override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
             override fun isExpectedConversation(contactName: String): Boolean =
                 this@SoulBotService.isExpectedConversation(contactName)

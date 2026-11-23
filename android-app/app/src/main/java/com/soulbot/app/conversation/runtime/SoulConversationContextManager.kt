@@ -7,6 +7,7 @@ import com.soulbot.app.accessibility.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.conversation.*
+import com.soulbot.app.policy.ReplyPreferencePrompt
 
 internal interface SoulConversationContextHost {
     val context: Context

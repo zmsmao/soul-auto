@@ -1,6 +1,5 @@
-package com.soulbot.app.policy
+package com.soulbot.app.conversation
 
-import com.soulbot.app.conversation.ConversationReplyContext
 
 /** Prompt advice and pre-send pacing decisions; it is never a question quota. */
 object ReplyRhythmPolicy {
