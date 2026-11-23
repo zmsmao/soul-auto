@@ -1,4 +1,6 @@
 package com.soulbot.app.workflow.privatechat
+
+import com.soulbot.app.model.runtime.ModelRouter
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
