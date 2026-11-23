@@ -1,11 +1,14 @@
 package com.soulbot.app.automation
-import com.soulbot.app.*
-import com.soulbot.app.conversation.*
-import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
-import com.soulbot.app.policy.*
 
-import android.content.Context
+import com.soulbot.app.accessibility.SoulAccessibilityIds
+import com.soulbot.app.accessibility.SoulAccessibilityTiming
+import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.app.SoulBotService
+import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.data.AutomationMode
+import com.soulbot.app.data.GreetDatabase
+import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.policy.GreetingSessionPolicy
 
 /**
  * Owns task scheduling and page-priority decisions. It deliberately delegates

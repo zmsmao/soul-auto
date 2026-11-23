@@ -1,9 +1,10 @@
 package com.soulbot.app.automation
-import com.soulbot.app.*
-import com.soulbot.app.conversation.*
-import com.soulbot.app.data.*
-import com.soulbot.app.policy.*
 
+import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.data.AutomationMode
+import com.soulbot.app.data.GreetDatabase
+import com.soulbot.app.policy.UnreadConversationCandidate
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Operations the scheduler may request from the Android page agent. */

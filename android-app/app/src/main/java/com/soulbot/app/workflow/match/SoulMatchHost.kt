@@ -1,8 +1,10 @@
 package com.soulbot.app.workflow.match
-import com.soulbot.app.*
-import com.soulbot.app.conversation.*
-import com.soulbot.app.policy.*
 
+import com.soulbot.app.accessibility.SoulScreen
+import com.soulbot.app.conversation.ConversationIncomingEvent
+import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.policy.OpeningContext
+import com.soulbot.app.policy.ReplyScene
 import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 
