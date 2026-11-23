@@ -99,9 +99,9 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             return false
         }
         val route = OpeningConversationRoute.action(thread, host.hasConversationHistory(contactName, ReplyScene.SOUL_MATCH))
-        learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
+        host.learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
-        val newIncomingEvents = unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
+        val newIncomingEvents = host.unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
         val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
         if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
