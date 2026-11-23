@@ -120,6 +120,67 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
+    private fun handleSoulMatchChat(
+        handledMatches: MutableSet<String>,
+        greetDb: GreetDatabase,
+        seen: ConversationSeenTracker,
+    ): Boolean = soulMatchWorkflow.handleSoulMatchChat(handledMatches, greetDb, seen)
+
+    private fun handlePlanetChatIdle(
+        handledMatches: MutableSet<String>,
+        greetDb: GreetDatabase,
+        seen: ConversationSeenTracker,
+    ) = soulMatchWorkflow.handlePlanetChatIdle(handledMatches, greetDb, seen)
+
+    private val soulMatchWorkflow: SoulMatchWorkflow by lazy(LazyThreadSafetyMode.NONE) {
+        SoulMatchWorkflow(object : SoulMatchHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun soulMatchProfileTexts(): List<String> = this@SoulBotService.soulMatchProfileTexts()
+            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun waitUnlessQiyu(delayMs: Long): Boolean = this@SoulBotService.waitUnlessQiyu(delayMs)
+            override fun convertIncomingVoiceMessages(): Boolean = this@SoulBotService.convertIncomingVoiceMessages()
+            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
+            override fun isExpectedConversation(name: String): Boolean = this@SoulBotService.isExpectedConversation(name)
+            override fun currentIncomingMessageKeys(name: String): List<String> = this@SoulBotService.currentIncomingMessageKeys(name)
+            override fun hasConversationHistory(name: String, scene: ReplyScene): Boolean =
+                conversationMemoryDb?.hasHistory(memoryThreadId(name), scene) == true
+            override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>, scene: ReplyScene) =
+                this@SoulBotService.learnFromManualReplies(name, thread, scene)
+            override fun unseenIncomingEvents(name: String, thread: List<Pair<String, String>>, seen: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent> =
+                this@SoulBotService.unseenIncomingEvents(name, thread, seen, pendingCount)
+            override fun memoryThreadId(name: String): String = this@SoulBotService.memoryThreadId(name)
+            override fun hasUnreadRedDot(): Boolean = this@SoulBotService.hasUnreadRedDot()
+            override fun gotoChatList(): Boolean = this@SoulBotService.gotoChatList()
+            override fun gotoSoulPlanet(): Boolean = this@SoulBotService.gotoSoulPlanet()
+            override fun isSoulForeground(): Boolean = this@SoulBotService.isSoulForeground()
+            override fun findExactText(text: String): List<AccessibilityNodeInfo> = this@SoulBotService.findExactText(text)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun handleQiyu(): Boolean = this@SoulBotService.handleQiyu()
+            override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                this@SoulBotService.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
+            override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
+                this@SoulBotService.generateValidatedOpening(action, context)
+            override fun currentConversationHasChanged(name: String, thread: List<Pair<String, String>>): Boolean =
+                this@SoulBotService.currentConversationHasChanged(name, thread)
+            override fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
+                this@SoulBotService.replyToCurrentConversation(name, seen)
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> = this@SoulBotService.pendingIncomingVoiceBubbles()
+            override fun thinkDelay(): Long = this@SoulBotService.thinkDelay()
+            override fun send(text: String, expectedContact: String?, idempotencyKey: String?, sceneOverride: ReplyScene?, expectedEventAnchor: String?): Boolean =
+                this@SoulBotService.send(text, expectedContact = expectedContact, idempotencyKey = idempotencyKey, sceneOverride = sceneOverride, expectedEventAnchor = expectedEventAnchor)
+            override fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String, opening: OpeningContext?, scene: ReplyScene) =
+                this@SoulBotService.recordAutomatedInteraction(contactName, incomingMessages, reply, opening, scene)
+            override fun recordHistory(contactName: String, context: String, reply: String) {
+                historyDb?.record(contactName, context, reply)
+            }
+            override fun isSoulPlanetSurface(): Boolean = this@SoulBotService.isSoulPlanetSurface()
+        })
+    }
+
     private val squareWorkflow: SoulSquareWorkflow by lazy(LazyThreadSafetyMode.NONE) {
         SoulSquareWorkflow(object : SoulSquareHost {
             override val context: android.content.Context get() = applicationContext
@@ -555,50 +616,6 @@ class SoulBotService : AccessibilityService() {
     private fun gotoSoulPlanet(): Boolean = navigation.gotoSoulPlanet()
 
     private fun gotoModeIdleSurface(mode: AutomationMode): Boolean = navigation.gotoModeIdleSurface(mode)
-
-    private fun startSoulMatch(): Boolean {
-        if (!isSoulPlanetSurface()) return false
-        val startButton = findExactText("开始匹配").firstOrNull()
-        if (startButton != null) {
-            setNextStep("点击“开始匹配”")
-            if (!tapNode(startButton)) return false
-            sleep(800)
-        } else {
-            // The button disappears while matching. Re-entering this method in that
-            // state should continue waiting instead of tapping arbitrary coordinates.
-            setNextStep("等待正在进行的灵魂匹配")
-        }
-
-        val deadline = System.currentTimeMillis() + SOUL_MATCH_TIMEOUT_MS
-        while (running && isSoulForeground() && System.currentTimeMillis() < deadline) {
-            when (currentScreen()) {
-                SoulScreen.SOUL_MATCH_CHAT -> return true
-                SoulScreen.QIYU_POPUP -> {
-                    handleQiyu()
-                    return false
-                }
-                else -> Unit
-            }
-            if (hasUnreadRedDot()) {
-                setNextStep("发现聊天消息，暂停匹配并优先回复")
-                gotoChatList()
-                return false
-            }
-            val failed = listOf("匹配失败", "今日匹配次数已用完", "今日次数已用完")
-                .any { findExactText(it).isNotEmpty() }
-            if (failed) {
-                setNextStep("本次灵魂匹配未成功")
-                return false
-            }
-            val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0L) break
-            setNextStep("等待灵魂匹配完成", remaining)
-            sleep(minOf(1000L, remaining))
-        }
-        if (!running) return false
-        setNextStep("灵魂匹配等待超时，本轮跳过")
-        return false
-    }
 
     private fun backToSquare(): Boolean = navigation.backToSquare()
 
@@ -1882,186 +1899,6 @@ class SoulBotService : AccessibilityService() {
 
     private fun readQiyuSignature(): String {
         return SoulMatchContent.gravityTags(visibleTitleTexts())
-    }
-
-    private fun handleSoulMatchChat(
-        handledMatches: MutableSet<String>,
-        greetDb: GreetDatabase,
-        seen: ConversationSeenTracker,
-    ): Boolean {
-        if (currentScreen() != SoulScreen.SOUL_MATCH_CHAT) return false
-
-        var titleTexts = soulMatchProfileTexts()
-        var gravityTags = SoulMatchContent.gravityTags(titleTexts)
-        var zodiac = SoulMatchContent.zodiac(titleTexts)
-        var contactName = SoulMatchContent.displayName(titleTexts)
-        for (attempt in 0 until 10) {
-            if (contactName.isNotBlank()) break
-            setNextStep("读取匹配资料（引力签、昵称或星座）", (10L - attempt) * 500L)
-            sleep(500)
-            titleTexts = soulMatchProfileTexts()
-            gravityTags = SoulMatchContent.gravityTags(titleTexts)
-            zodiac = SoulMatchContent.zodiac(titleTexts)
-            contactName = SoulMatchContent.displayName(titleTexts)
-        }
-
-        setNextStep("检查匹配聊天是否已有新消息", MESSAGE_SETTLE_MS)
-        if (!waitUnlessQiyu(MESSAGE_SETTLE_MS)) return false
-        if (!convertIncomingVoiceMessages()) {
-            setNextStep("匹配聊天语音尚未转写，本轮不回复", 1200)
-            sleep(1200)
-            return false
-        }
-        val thread = readThread()
-        if (!isExpectedConversation(contactName)) return false
-        val eventAnchor = currentIncomingMessageKeys(contactName).joinToString(",")
-        val openingBasis = SoulMatchContent.openingBasis(contactName, gravityTags, zodiac)
-        if (contactName.isBlank()) {
-            setNextStep("未确认匹配联系人，本轮不发送")
-            gotoSoulPlanet()
-            return false
-        }
-        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.SOUL_MATCH) == true)
-        learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
-        val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
-        val newIncomingEvents = unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
-        val newIncoming = newIncomingEvents.map { it.text }
-        val replyingToMessage = newIncoming.isNotEmpty()
-        if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
-            seen.markSeenEvents(memoryThreadId(contactName), newIncomingEvents)
-            setNextStep("匹配聊天连续收到简短回应，本轮自然停顿")
-            gotoSoulPlanet()
-            return false
-        }
-        if (route == OpeningConversationAction.SKIP ||
-            (route == OpeningConversationAction.REPLY && !replyingToMessage)
-        ) {
-            setNextStep("已有会话且没有待回复内容，不重复破冰")
-            gotoSoulPlanet()
-            return false
-        }
-        val openingContext = OpeningContext(ReplyScene.SOUL_MATCH, contactName, gravityTags, zodiac)
-
-        val matchKey = SoulMatchContent.sessionKey(contactName, openingBasis)
-        val persistentName = "灵魂匹配:$contactName"
-        if (!replyingToMessage &&
-            (matchKey in handledMatches || !greetDb.shouldGreet(persistentName, openingBasis))
-        ) {
-            RuntimeLog.record(
-                applicationContext,
-                "soul match skipped; reason=already_handled; contactId=${DiagnosticIdentity.contactId(applicationContext, contactName)}",
-            )
-            setNextStep("该灵魂匹配已处理，返回星球页", 1200)
-            sleep(1200)
-            gotoSoulPlanet()
-            return false
-        }
-
-        val finalReply = if (replyingToMessage) {
-            generateValidatedChatReply(contactName, thread, newIncoming, ReplyScene.SOUL_MATCH)
-        } else {
-            generateValidatedOpening(
-                "根据 $contactName 的匹配资料生成开场白",
-                openingContext,
-            )
-        }
-        if (finalReply == null) {
-            if (currentConversationHasChanged(contactName, thread) ||
-                currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
-            ) {
-                return replyToCurrentConversation(contactName, seen)
-            }
-            RuntimeLog.record(applicationContext, "soul-match reply generation exhausted")
-            setNextStep("匹配回复生成失败，返回星球避免卡住", 2000)
-            sleep(2000)
-            gotoSoulPlanet()
-            return false
-        }
-
-        val delay = thinkDelay()
-        setNextStep("准备向 $contactName 发送匹配开场白", delay)
-        if (!waitUnlessQiyu(delay)) return false
-        if (!running) return false
-        if (!isOnChat()) {
-            RuntimeLog.record(applicationContext, "soul match send cancelled; reason=chat_screen_changed")
-            setNextStep("聊天界面已变化，重新检测", 1000)
-            sleep(1000)
-            return false
-        }
-        if (!isExpectedConversation(contactName) || pendingIncomingVoiceBubbles().isNotEmpty() ||
-            incomingSignature(readThread()) != incomingSignature(thread) ||
-            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
-        ) {
-            setNextStep("收到更新消息，重新按最新内容准备回复", MESSAGE_SETTLE_MS)
-            if (isOnChat() && isExpectedConversation(contactName)) {
-                return replyToCurrentConversation(contactName, seen)
-            }
-            return false
-        }
-        val matchOpeningKey = if (replyingToMessage) null else {
-            ConversationIdentity.sendKey(
-                memoryThreadId(contactName),
-                ReplyScene.SOUL_MATCH.name,
-                listOf(ConversationIdentity.digest(matchKey)),
-                finalReply,
-            )
-        }
-        val sent = send(
-            finalReply,
-            expectedContact = contactName,
-            idempotencyKey = matchOpeningKey,
-            sceneOverride = ReplyScene.SOUL_MATCH,
-            expectedEventAnchor = eventAnchor,
-        )
-        if (sent) {
-            handledMatches += matchKey
-            greetDb.recordGreet(persistentName, openingBasis)
-            if (replyingToMessage) seen.markSeenEvents(memoryThreadId(contactName), newIncomingEvents)
-            val contextMessages = if (replyingToMessage) newIncoming else listOf(openingBasis)
-            val historyContext = if (replyingToMessage) {
-                newIncoming.last()
-            } else {
-                "灵魂匹配资料：$openingBasis"
-            }
-            recordAutomatedInteraction(contactName, contextMessages, finalReply, openingContext.takeUnless { replyingToMessage }, scene = ReplyScene.SOUL_MATCH)
-            historyDb?.record(contactName, historyContext, finalReply)
-            setNextStep("灵魂匹配开场白已发送，返回星球页", 1200)
-            sleep(1200)
-            gotoSoulPlanet()
-        } else if (isOnChat() && isExpectedConversation(contactName) &&
-            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
-        ) {
-            RuntimeLog.record(applicationContext, "soul match reply regenerated; reason=incoming_changed_before_send")
-            return replyToCurrentConversation(contactName, seen)
-        }
-        return sent
-    }
-
-    private fun handlePlanetChatIdle(
-        handledMatches: MutableSet<String>,
-        greetDb: GreetDatabase,
-        seen: ConversationSeenTracker,
-    ) {
-        if (!isSoulPlanetSurface() && !gotoSoulPlanet()) return
-        if (hasUnreadRedDot()) {
-            setNextStep("发现新的聊天消息，优先处理")
-            gotoChatList()
-            return
-        }
-
-        setNextStep("没有新的聊天消息，立即开始下一次灵魂匹配")
-        if (gotoSoulPlanet() && startSoulMatch()) {
-            handleSoulMatchChat(handledMatches, greetDb, seen)
-        } else if (running) {
-            if (hasUnreadRedDot()) {
-                gotoChatList()
-            } else if (isSoulPlanetSurface()) {
-                setNextStep("本次匹配未完成，短暂检查后继续匹配", 1500)
-                sleep(1500)
-            } else {
-                gotoSoulPlanet()
-            }
-        }
     }
 
     // ===== 回复会话（仅会话列表起点） =====
