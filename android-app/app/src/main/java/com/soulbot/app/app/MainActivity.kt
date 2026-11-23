@@ -18,7 +18,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
 import com.soulbot.app.data.ConversationMemoryDatabase
 import com.soulbot.app.data.ModelEndpointPrefs
-import com.soulbot.app.data.ModelEndpointRules
+import com.soulbot.app.model.ModelEndpointRules
 import com.soulbot.app.data.Prefs
 import com.soulbot.app.diagnostics.DeviceCompatibilityStore
 import com.soulbot.app.diagnostics.DeviceProfileSnapshot

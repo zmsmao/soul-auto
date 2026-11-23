@@ -2,6 +2,7 @@ package com.soulbot.app.app
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
+import com.soulbot.app.conversation.context.ContextFragment
 import com.soulbot.app.conversation.runtime.SoulConversationContextHost
 import com.soulbot.app.conversation.runtime.SoulConversationContextManager
 import com.soulbot.app.conversation.runtime.SoulReplyGenerationEngine
