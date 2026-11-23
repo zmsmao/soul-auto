@@ -83,7 +83,7 @@ class ReplyPipelinePolicyTest {
         val instructions = ReplyPipelinePolicy.reviewInstructions()
         assertTrue(instructions.contains("假性时间框架与 Push-Pull 是允许选择的策略"))
         assertTrue(instructions.contains("策略按场景选择，不是每轮必用"))
-        assertTrue(instructions.contains("轻度时间框架是例外"))
+        assertTrue(instructions.contains("轻量时间框架是例外"))
     }
 
     @Test
