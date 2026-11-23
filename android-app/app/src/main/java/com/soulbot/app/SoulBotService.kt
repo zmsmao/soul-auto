@@ -1558,12 +1558,12 @@ class SoulBotService : AccessibilityService() {
                 node.contentDescription?.toString().orEmpty(),
             )
             for (value in values) {
-                val clean = value.trim().replace(Regex("\s+"), " ")
+                val clean = value.trim().replace(Regex("\\s+"), " ")
                 if (clean.length !in 2..160) continue
                 if (clean == contactName || clean == timeText) continue
                 if (contactName.isNotBlank() && clean.contains(contactName)) continue
                 if (timeText.isNotBlank() && clean.contains(timeText)) continue
-                if (Regex("^\d+$").matches(clean)) continue
+                if (Regex("^\\d+$").matches(clean)) continue
                 if (clean.contains("未读") || clean.contains("条消息")) continue
                 candidates += clean
             }
