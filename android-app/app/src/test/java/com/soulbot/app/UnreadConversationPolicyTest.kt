@@ -37,6 +37,19 @@ class UnreadConversationPolicyTest {
     }
 
     @Test
+    fun `same priority and timestamp preserve top to bottom display order`() {
+        val rows = listOf(
+            UnreadConversationCandidate("顶部", "刚刚", 0, "方便加个微信吗"),
+            UnreadConversationCandidate("底部", "刚刚", 1, "哪天见面？"),
+        )
+
+        assertEquals(
+            listOf("顶部", "底部"),
+            UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
+        )
+    }
+
+    @Test
     fun `priority score recognises contact meeting photo and emotional signals`() {
         assertEquals(100, UnreadConversationPolicy.priorityScore("方便加个微信吗"))
         assertEquals(100, UnreadConversationPolicy.priorityScore("哪天见面？"))

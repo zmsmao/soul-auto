@@ -27,7 +27,7 @@ internal object UnreadConversationPolicy {
             compareByDescending<UnreadConversationCandidate> { priorityScore(it.previewText) }
                 .thenBy { parsedAgeMinutes(it.timeText, now) == null }
                 .thenByDescending { parsedAgeMinutes(it.timeText, now) ?: Long.MIN_VALUE }
-                .thenByDescending { it.displayOrder },
+                .thenBy { it.displayOrder },
         )
 
     /**
