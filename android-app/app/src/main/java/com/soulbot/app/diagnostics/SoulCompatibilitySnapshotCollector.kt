@@ -6,6 +6,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.soulbot.app.*
 import com.soulbot.app.app.SoulBotService
 import com.soulbot.app.policy.*
+import com.soulbot.app.accessibility.AdaptiveUiPolicy
+import com.soulbot.app.accessibility.UiRegion
 
 internal interface SoulCompatibilitySnapshotHost {
     val context: Context
@@ -22,6 +24,8 @@ internal interface SoulCompatibilitySnapshotHost {
 }
 
 internal class SoulCompatibilitySnapshotCollector(private val host: SoulCompatibilitySnapshotHost) {
+    private fun Rect.toUiRegion(): UiRegion = UiRegion(left, top, right, bottom)
+
     fun capture() {
         if (host.isSamplerClosed() || host.isCurrentThreadInterrupted()) return
         host.lastDiagnosticVisited = 0
