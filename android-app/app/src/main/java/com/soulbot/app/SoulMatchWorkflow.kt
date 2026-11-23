@@ -18,7 +18,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
     ) = handlePlanetChatIdleInternal(handledMatches, greetDb, seen)
 
     private fun startSoulMatch(): Boolean {
-        if (!host.isSoulPlanetSurface() return false
+        if (!host.isSoulPlanetSurface()) return false
         val startButton = host.findExactText("开始匹配").firstOrNull()
         if (startButton != null) {
             host.setNextStep("点击“开始匹配”")
@@ -219,7 +219,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         greetDb: GreetDatabase,
         seen: ConversationSeenTracker,
     ) {
-        if (!host.isSoulPlanetSurface( && !host.gotoSoulPlanet()) return
+        if (!host.isSoulPlanetSurface() && !host.gotoSoulPlanet()) return
         if (host.hasUnreadRedDot()) {
             host.setNextStep("发现新的聊天消息，优先处理")
             host.gotoChatList()
@@ -232,7 +232,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         } else if (host.isRunning) {
             if (host.hasUnreadRedDot()) {
                 host.gotoChatList()
-            } else if (host.isSoulPlanetSurface() {
+            } else if (host.isSoulPlanetSurface()) {
                 host.setNextStep("本次匹配未完成，短暂检查后继续匹配", 1500)
                 host.sleep(1500)
             } else {
