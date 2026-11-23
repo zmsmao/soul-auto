@@ -1,5 +1,7 @@
 package com.soulbot.app.workflow
 
+import com.soulbot.app.comparableText
+
 /** Pure parsing helpers for the title texts exposed by Soul's match chat header. */
 object SoulMatchContent {
     private val metadataPrefixes = listOf(
