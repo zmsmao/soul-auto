@@ -10,7 +10,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.random.Random
 
-class SoulBotService : AccessibilityService(), SoulAutomationHost {
+class SoulBotService : AccessibilityService() {
 
     companion object {
         @Volatile var running = false
@@ -87,6 +87,45 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
     private val messageReader: SoulMessageReader by lazy(LazyThreadSafetyMode.NONE) { SoulMessageReader(pageUi, ::isOnChat, ::isExpectedConversation, ::memoryThreadId, ::normalizeReply, ::voiceTranscriptFrom) }
 
     private val navigation: SoulNavigationController by lazy(LazyThreadSafetyMode.NONE) { SoulNavigationController(applicationContext, pageUi, ::isSoulForeground, ::currentScreen, ::isSoulPlanetSurface, { action -> setNextStep(action) }, ::sleep, ::conversationListSnapshot) }
+
+    private val automationHost: SoulAutomationHost by lazy(LazyThreadSafetyMode.NONE) {
+        object : SoulAutomationHost {
+            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun hasUnreadRedDot(): Boolean = this@SoulBotService.hasUnreadRedDot()
+            override fun findVisibleById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findVisibleById(id)
+            override fun hasPendingQiyu(): Boolean = this@SoulBotService.hasPendingQiyu()
+            override fun clearPendingQiyu() = this@SoulBotService.clearPendingQiyu()
+            override fun handleQiyu(): Boolean = this@SoulBotService.handleQiyu()
+            override fun resumePendingQiyu(): Boolean = this@SoulBotService.resumePendingQiyu()
+            override fun gotoChatList(): Boolean = this@SoulBotService.gotoChatList()
+            override fun skipNoSend() = this@SoulBotService.skipNoSend()
+            override fun skipGift() = this@SoulBotService.skipGift()
+            override fun gotoModeIdleSurface(mode: AutomationMode): Boolean = this@SoulBotService.gotoModeIdleSurface(mode)
+            override fun handleSoulMatchChat(handledMatches: MutableSet<String>, greetDb: GreetDatabase, seen: ConversationSeenTracker): Boolean =
+                this@SoulBotService.handleSoulMatchChat(handledMatches, greetDb, seen)
+            override fun handlePlanetChatIdle(handledMatches: MutableSet<String>, greetDb: GreetDatabase, seen: ConversationSeenTracker) =
+                this@SoulBotService.handlePlanetChatIdle(handledMatches, greetDb, seen)
+            override fun isOnSquare(): Boolean = this@SoulBotService.isOnSquare()
+            override fun gotoSquare(): Boolean = this@SoulBotService.gotoSquare()
+            override fun browseSquareOnce(seenDm: MutableSet<String>, attemptedDmProfiles: MutableSet<String>, greetDb: GreetDatabase): Boolean =
+                this@SoulBotService.browseSquareOnce(seenDm, attemptedDmProfiles, greetDb)
+            override fun scanUnread(): List<UnreadConversationCandidate> = this@SoulBotService.scanUnread()
+            override fun replyDelay(timeStr: String): Long = this@SoulBotService.replyDelay(timeStr)
+            override fun waitUnlessQiyu(delayMs: Long): Boolean = this@SoulBotService.waitUnlessQiyu(delayMs)
+            override fun replyTo(name: String, seen: ConversationSeenTracker): Boolean = this@SoulBotService.replyTo(name, seen)
+            override fun scrollConversationToTop() = this@SoulBotService.scrollConversationToTop()
+            override fun hasGreeting(): Boolean = this@SoulBotService.hasGreeting()
+            override fun openGreetingList(): Boolean = this@SoulBotService.openGreetingList()
+            override fun scanGreetingUsers(handledKeys: Set<String>, greetDb: GreetDatabase): List<String> =
+                this@SoulBotService.scanGreetingUsers(handledKeys, greetDb)
+            override fun replyToGreeting(name: String, seen: ConversationSeenTracker, handledKeys: MutableSet<String>, greetDb: GreetDatabase): Boolean =
+                this@SoulBotService.replyToGreeting(name, seen, handledKeys, greetDb)
+            override fun pressBack() = this@SoulBotService.pressBack()
+            override fun gotoSoulPlanet(): Boolean = this@SoulBotService.gotoSoulPlanet()
+        }
+    }
 
     private val random = Random.Default
     private var worker: Thread? = null
@@ -228,7 +267,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
             .sortedBy { it.first }
             .joinToString("|") { (top, name) -> "$top:$name" }
 
-    override fun scrollConversationToTop() = navigation.scrollConversationToTop()
+    private fun scrollConversationToTop() = navigation.scrollConversationToTop()
 
     private fun findById(id: String): AccessibilityNodeInfo? = pageUi.findById(id)
 
@@ -236,7 +275,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     private fun findExactText(text: String): List<AccessibilityNodeInfo> = pageUi.findExactText(text)
 
-    override fun findVisibleById(id: String): AccessibilityNodeInfo? = pageUi.findVisibleById(id)
+    private fun findVisibleById(id: String): AccessibilityNodeInfo? = pageUi.findVisibleById(id)
 
     private fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean = pageUi.isVisibleOnScreen(node)
 
@@ -252,9 +291,9 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long = 300) = pageUi.swipe(x1, y1, x2, y2, duration)
 
-    override fun pressBack() = pageUi.pressBack()
+    private fun pressBack() = pageUi.pressBack()
 
-    override fun setNextStep(action: String, delayMs: Long) {
+    private fun setNextStep(action: String, delayMs: Long = 0L) {
         if (statusText != action) {
             RuntimeLog.record(
                 applicationContext,
@@ -278,7 +317,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         else -> "AUTOMATION"
     }
 
-    override fun sleep(ms: Long) {
+    private fun sleep(ms: Long) {
         // Short UI waits also get a real countdown. A longer deadline that was
         // explicitly reported by the workflow (for example the next square visit)
         // always takes precedence over these internal waits.
@@ -314,7 +353,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     private fun isSoulPlanetSurface(): Boolean = screenDetector.isSoulPlanetSurface()
 
-    override fun currentScreen(): SoulScreen = screenDetector.currentScreen()
+    private fun currentScreen(): SoulScreen = screenDetector.currentScreen()
 
     private fun captureCompatibilitySnapshot() {
         if (diagnosticsSampler.isClosed() || Thread.currentThread().isInterrupted) return
@@ -427,7 +466,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return screen == SoulScreen.CHAT || screen == SoulScreen.SOUL_MATCH_CHAT
     }
     private fun isOnList() = currentScreen() == SoulScreen.LIST
-    override fun isOnSquare() = currentScreen() == SoulScreen.SQUARE
+    private fun isOnSquare() = currentScreen() == SoulScreen.SQUARE
     private fun isOnProfile() = currentScreen() == SoulScreen.PROFILE
     private fun isOnGift() = currentScreen() == SoulScreen.GIFT
     private fun isOnNoSend() = currentScreen() == SoulScreen.NO_SEND
@@ -438,13 +477,13 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     private fun returnToList(): Boolean = navigation.returnToList()
 
-    override fun gotoSquare(): Boolean = navigation.gotoSquare()
+    private fun gotoSquare(): Boolean = navigation.gotoSquare()
 
-    override fun gotoChatList(): Boolean = navigation.gotoChatList()
+    private fun gotoChatList(): Boolean = navigation.gotoChatList()
 
-    override fun gotoSoulPlanet(): Boolean = navigation.gotoSoulPlanet()
+    private fun gotoSoulPlanet(): Boolean = navigation.gotoSoulPlanet()
 
-    override fun gotoModeIdleSurface(mode: AutomationMode): Boolean = navigation.gotoModeIdleSurface(mode)
+    private fun gotoModeIdleSurface(mode: AutomationMode): Boolean = navigation.gotoModeIdleSurface(mode)
 
     private fun startSoulMatch(): Boolean {
         if (!isSoulPlanetSurface()) return false
@@ -498,7 +537,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return random.nextLong(min.toLong(), max.toLong()) * 1000L
     }
 
-    override fun waitUnlessQiyu(delayMs: Long): Boolean {
+    private fun waitUnlessQiyu(delayMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + delayMs
         while (running && System.currentTimeMillis() < deadline) {
             if (currentScreen() == SoulScreen.QIYU_POPUP) {
@@ -512,7 +551,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return running
     }
 
-    override fun replyDelay(timeStr: String): Long {
+    private fun replyDelay(timeStr: String): Long {
         val minutesAgo = UnreadConversationPolicy.ageMinutes(timeStr)
         if (minutesAgo >= 1) return 0L   // 消息已发超过 1 分钟，立即回
         return thinkDelay()
@@ -1021,7 +1060,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     // ===== 扫未读（仅会话列表） =====
 
-    override fun scanUnread(): List<UnreadConversationCandidate> {
+    private fun scanUnread(): List<UnreadConversationCandidate> {
         if (!isOnList()) return emptyList()
         val items = findByIds(ID_CONV_ITEM)
             .filter(::isVisibleOnScreen)
@@ -1762,15 +1801,15 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         }
     }
 
-    override fun hasPendingQiyu(): Boolean = pendingQiyu != null
+    private fun hasPendingQiyu(): Boolean = pendingQiyu != null
 
-    override fun clearPendingQiyu() { pendingQiyu = null }
+    private fun clearPendingQiyu() { pendingQiyu = null }
 
     private fun readQiyuSignature(): String {
         return SoulMatchContent.gravityTags(visibleTitleTexts())
     }
 
-    override fun handleSoulMatchChat(
+    private fun handleSoulMatchChat(
         handledMatches: MutableSet<String>,
         greetDb: GreetDatabase,
         seen: ConversationSeenTracker,
@@ -1923,7 +1962,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return sent
     }
 
-    override fun handlePlanetChatIdle(
+    private fun handlePlanetChatIdle(
         handledMatches: MutableSet<String>,
         greetDb: GreetDatabase,
         seen: ConversationSeenTracker,
@@ -1950,7 +1989,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         }
     }
 
-    override fun handleQiyu(): Boolean {
+    private fun handleQiyu(): Boolean {
         if (currentScreen() != SoulScreen.QIYU_POPUP) return false
         val chatBtn = findVisibleById(ID_QIYU_CHAT) ?: return false
         val signature = textOf(findVisibleById(ID_QIYU_SIGNATURE))
@@ -1982,7 +2021,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
     }
 
     /** A missing title is a loading/compatibility issue, not permission to abandon the encounter. */
-    override fun resumePendingQiyu(): Boolean {
+    private fun resumePendingQiyu(): Boolean {
         val session = pendingQiyu ?: return false
         val remaining = session.retryAt - System.currentTimeMillis()
         if (remaining > 0L) {
@@ -2191,7 +2230,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     // ===== 回复会话（仅会话列表起点） =====
 
-    override fun replyTo(name: String, seen: ConversationSeenTracker): Boolean {
+    private fun replyTo(name: String, seen: ConversationSeenTracker): Boolean {
         val contactId = DiagnosticIdentity.contactId(applicationContext, name)
         if (name.isBlank()) {
             RuntimeLog.record(applicationContext, "conversation reply skipped; reason=blank_name")
@@ -2418,12 +2457,12 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     // ===== 收到的新招呼 =====
 
-    override fun hasGreeting(): Boolean = findVisibleById(ID_GREETING_TITLE) != null
+    private fun hasGreeting(): Boolean = findVisibleById(ID_GREETING_TITLE) != null
 
     /** Hidden tab-bar nodes remain in Soul's accessibility tree; only a visible dot is unread. */
-    override fun hasUnreadRedDot(): Boolean = findVisibleById(ID_MSG_RED_DOT) != null
+    private fun hasUnreadRedDot(): Boolean = findVisibleById(ID_MSG_RED_DOT) != null
 
-    override fun openGreetingList(): Boolean {
+    private fun openGreetingList(): Boolean {
         setNextStep("打开新招呼列表")
         for (i in 0 until 2) {
             if (currentScreen() == SoulScreen.GREETING_LIST) return true
@@ -2433,7 +2472,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return currentScreen() == SoulScreen.GREETING_LIST
     }
 
-    override fun scanGreetingUsers(
+    private fun scanGreetingUsers(
         handledKeys: Set<String>,
         greetDb: GreetDatabase,
     ): List<String> {
@@ -2450,7 +2489,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
             }
     }
 
-    override fun replyToGreeting(
+    private fun replyToGreeting(
         name: String,
         seen: ConversationSeenTracker,
         handledKeys: MutableSet<String>,
@@ -2636,7 +2675,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
     private fun getProfileName(): String =
         if (isOnProfile()) textOf(findById(ID_PROFILE_NAME)) else ""
 
-    override fun skipGift() {
+    private fun skipGift() {
         if (isOnGift()) {
             setNextStep("关闭礼物弹窗")
             findById(ID_GIFT_CLOSE)?.let { tapNode(it) }
@@ -2644,7 +2683,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         }
     }
 
-    override fun skipNoSend() {
+    private fun skipNoSend() {
         if (isOnNoSend()) {
             setNextStep("点击“先不聊了”")
             findById(ID_NO_SEND_CLOSE)?.let { tapNode(it) }
@@ -2673,7 +2712,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
         return false
     }
 
-    override fun browseSquareOnce(
+    private fun browseSquareOnce(
         seenDm: MutableSet<String>,
         attemptedDmProfiles: MutableSet<String>,
         greetDb: GreetDatabase,
@@ -3016,7 +3055,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
             automationMode = automationMode,
             squareIntervalSeconds = squareInterval,
             greetDb = greetDb,
-            host = this,
+            host = automationHost,
         ).run()
     }
 }
