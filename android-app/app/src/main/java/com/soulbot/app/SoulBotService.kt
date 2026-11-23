@@ -3645,18 +3645,18 @@ class SoulBotService : AccessibilityService() {
                                 },
                             )
                             replyTo(name, seen)
-                        } else if (hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
-                            // Only handle greetings after the private inbox has no unread row.
-                            setNextStep("私聊未读已处理，开始处理新招呼")
-                            openGreetingList()
                         } else if (hasUnreadRedDot() && !unreadTopSearchComplete) {
-                            // The tab red dot can remain stale after all rows are read.
-                            // Scan from the top once before accepting that the inbox is empty.
-                            setNextStep("回到会话顶部")
+                            // Scan from the top once before accepting that the private inbox is empty.
+                            // This prevents a greeting task from hiding unread rows above the current viewport.
+                            setNextStep("回到会话顶部，优先检查私聊未读")
                             scrollConversationToTop()
                             unreadTopSearchComplete = true
                             setNextStep("重新检查未读消息", 800)
                             sleep(800)
+                        } else if (hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
+                            // Only handle greetings after the private inbox has been scanned and has no unread row.
+                            setNextStep("私聊未读已处理，开始处理新招呼")
+                            openGreetingList()
                         } else {
                             if (!hasUnreadRedDot()) unreadTopSearchComplete = false
                             // With no private unread rows (or a stale, fully scanned dot),
