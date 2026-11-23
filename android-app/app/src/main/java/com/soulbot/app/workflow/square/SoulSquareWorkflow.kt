@@ -33,7 +33,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
     private fun readPosts(expectedChannel: String): List<SquarePostCandidate> {
         if (!host.isOnSquare()) return emptyList()
         if (host.selectedSquareChannel() != expectedChannel) return emptyList()
-        val cards = host.findByIds(SoulBotService.ID_SQUARE_CARD)
+        val cards = host.findByIds(SoulAccessibilityIds.ID_SQUARE_CARD)
             .filter(host::isVisibleOnScreen)
             .sortedBy { host.rect(it).top }
         val result = mutableListOf<SquarePostCandidate>()
@@ -42,13 +42,13 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             // ViewPager keeps neighbouring channels in the accessibility tree and
             // their cards can share screen coordinates. Bind the text and avatar
             // through this card's own subtree, never through global geometry.
-            val text = host.descendantsById(card, SoulBotService.ID_SQUARE_TEXT)
+            val text = host.descendantsById(card, SoulAccessibilityIds.ID_SQUARE_TEXT)
                 .asSequence()
                 .filter(host::isVisibleOnScreen)
                 .map(host::textOf)
                 .firstOrNull(String::isNotBlank)
                 .orEmpty()
-            val avatar = host.descendantsById(card, SoulBotService.ID_SQUARE_AVATAR)
+            val avatar = host.descendantsById(card, SoulAccessibilityIds.ID_SQUARE_AVATAR)
                 .firstOrNull(host::isVisibleOnScreen)
             if (text.isNotBlank() && avatar != null) {
                 result += SquarePostCandidate(
@@ -65,7 +65,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
         posts.joinToString("|") { it.viewportKey }
 
     private fun waitForStableSquarePosts(expectedChannel: String): List<SquarePostCandidate> {
-        val deadline = System.currentTimeMillis() + SoulBotService.SQUARE_POST_LOAD_TIMEOUT_MS
+        val deadline = System.currentTimeMillis() + SoulSquareTiming.SQUARE_POST_LOAD_TIMEOUT_MS
         var latest = emptyList<SquarePostCandidate>()
         var lastSignature = ""
         var stableSince = System.currentTimeMillis()
@@ -78,7 +78,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             }
             latest = current
             val stableFor = System.currentTimeMillis() - stableSince
-            if (latest.isNotEmpty() && stableFor >= SoulBotService.SQUARE_POST_STABLE_MS) return latest
+            if (latest.isNotEmpty() && stableFor >= SoulSquareTiming.SQUARE_POST_STABLE_MS) return latest
 
             val remaining = deadline - System.currentTimeMillis()
             if (remaining <= 0L) return latest
@@ -87,14 +87,14 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             } else {
                 "确认本屏 ${latest.size} 条动态已加载"
             }
-            host.setNextStep(action, minOf(remaining, SoulBotService.SQUARE_POST_STABLE_MS))
+            host.setNextStep(action, minOf(remaining, SoulSquareTiming.SQUARE_POST_STABLE_MS))
             host.sleep(minOf(300L, remaining))
         }
         return latest
     }
 
     private fun getProfileName(): String =
-        if (host.isOnProfile()) host.textOf(host.findById(SoulBotService.ID_PROFILE_NAME)) else ""
+        if (host.isOnProfile()) host.textOf(host.findById(SoulAccessibilityIds.ID_PROFILE_NAME)) else ""
 
     private fun openProfile(avatar: AccessibilityNodeInfo): Boolean {
         val bounds = host.rect(avatar)
@@ -128,13 +128,13 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             RuntimeLog.record(host.context, "square browse aborted; reason=local_channel_missing")
             return false
         }
-        RuntimeLog.record(host.context, "square browse started; maxViewports=$SoulBotService.SQUARE_MAX_VIEWPORTS")
+        RuntimeLog.record(host.context, "square browse started; maxViewports=$SoulSquareTiming.SQUARE_MAX_VIEWPORTS")
         host.setNextStep("浏览同城·$channel")
         val handledInViewport = mutableSetOf<String>()
         val transientFailures = mutableMapOf<String, Int>()
         var viewportCount = 0
         var lastScrolledFrom = ""
-        while (viewportCount < SoulBotService.SQUARE_MAX_VIEWPORTS) {
+        while (viewportCount < SoulSquareTiming.SQUARE_MAX_VIEWPORTS) {
             if (host.currentScreen() == SoulScreen.QIYU_POPUP || host.hasUnreadRedDot()) return false
             if (host.selectedSquareChannel() != channel) {
                 RuntimeLog.record(host.context, "square browse stopped; reason=channel_changed")
@@ -165,7 +165,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 if (remaining != null) continue
 
                 val signature = squarePostSignature(confirmedPosts)
-                val prepareDelay = if (signature == lastScrolledFrom) 3000L else SoulBotService.SQUARE_SCROLL_PREPARE_MS
+                val prepareDelay = if (signature == lastScrolledFrom) 3000L else SoulSquareTiming.SQUARE_SCROLL_PREPARE_MS
                 host.setNextStep("本屏动态已检查，${prepareDelay / 1000} 秒后下滑", prepareDelay)
                 host.sleep(prepareDelay)
                 if (host.currentScreen() == SoulScreen.QIYU_POPUP || host.hasUnreadRedDot()) return false
@@ -174,9 +174,9 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 lastScrolledFrom = signature
                 // Shorter and slower than the old half-screen fling. The overlap
                 // keeps cards near both edges visible on the next pass.
-                host.swipeVertically(SoulBotService.ID_SQUARE_PAGER, 0.76f, 0.50f, 650)
-                host.setNextStep("等待下方动态加载", SoulBotService.SQUARE_SCROLL_SETTLE_MS)
-                host.sleep(SoulBotService.SQUARE_SCROLL_SETTLE_MS)
+                host.swipeVertically(SoulAccessibilityIds.ID_SQUARE_PAGER, 0.76f, 0.50f, 650)
+                host.setNextStep("等待下方动态加载", SoulSquareTiming.SQUARE_SCROLL_SETTLE_MS)
+                host.sleep(SoulSquareTiming.SQUARE_SCROLL_SETTLE_MS)
                 viewportCount++
                 handledInViewport.clear()
                 transientFailures.clear()
@@ -240,7 +240,7 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 continue
             }
 
-            val secret = host.findById(SoulBotService.ID_CHAT_SECRET)
+            val secret = host.findById(SoulAccessibilityIds.ID_CHAT_SECRET)
             if (secret == null) {
                 handledInViewport += viewportKey
                 if (!host.backToSquare()) return false

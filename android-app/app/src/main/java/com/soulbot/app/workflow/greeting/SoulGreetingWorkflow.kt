@@ -18,13 +18,13 @@ import com.soulbot.app.*
 
 /** Owns new-greeting discovery and reply processing. */
 internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
-    fun hasGreeting(): Boolean = host.findVisibleById(SoulBotService.ID_GREETING_TITLE) != null
+    fun hasGreeting(): Boolean = host.findVisibleById(SoulAccessibilityIds.ID_GREETING_TITLE) != null
 
     fun openGreetingList(): Boolean {
         host.setNextStep("打开新招呼列表")
         for (i in 0 until 2) {
             if (host.currentScreen() == SoulScreen.GREETING_LIST) return true
-            host.findById(SoulBotService.ID_GREETING_TITLE)?.let { host.tapNode(it) }
+            host.findById(SoulAccessibilityIds.ID_GREETING_TITLE)?.let { host.tapNode(it) }
             host.sleep(1500)
         }
         return host.currentScreen() == SoulScreen.GREETING_LIST
@@ -35,7 +35,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
         greetDb: GreetDatabase,
     ): List<String> {
         if (host.currentScreen() != SoulScreen.GREETING_LIST) return emptyList()
-        val visibleNames = host.findByIds(SoulBotService.ID_CONV_NAME)
+        val visibleNames = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME)
             .filter(host::isVisibleOnScreen)
             .map(host::textOf)
         return GreetingSessionPolicy.pendingUsers(visibleNames, handledKeys)
@@ -56,7 +56,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
         if (host.currentScreen() != SoulScreen.GREETING_LIST) return false
         val greetingKey = GreetingSessionPolicy.userKey(name)
         if (greetingKey.isBlank() || !handledKeys.add(greetingKey)) return false
-        val nameNode = host.findByIds(SoulBotService.ID_CONV_NAME)
+        val nameNode = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME)
             .filter(host::isVisibleOnScreen)
             .firstOrNull { host.textOf(it) == name } ?: return false
         host.setNextStep("打开 $name 的招呼")

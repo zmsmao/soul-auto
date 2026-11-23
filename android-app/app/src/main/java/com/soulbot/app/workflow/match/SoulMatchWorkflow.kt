@@ -44,7 +44,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             host.setNextStep("等待正在进行的灵魂匹配")
         }
 
-        val deadline = System.currentTimeMillis() + SoulBotService.SOUL_MATCH_TIMEOUT_MS
+        val deadline = System.currentTimeMillis() + SOUL_MATCH_TIMEOUT_MS
         while (host.isRunning && host.isSoulForeground() && System.currentTimeMillis() < deadline) {
             when (host.currentScreen()) {
                 SoulScreen.SOUL_MATCH_CHAT -> return true
@@ -96,8 +96,8 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             contactName = SoulMatchContent.displayName(titleTexts)
         }
 
-        host.setNextStep("检查匹配聊天是否已有新消息", SoulBotService.MESSAGE_SETTLE_MS)
-        if (!host.waitUnlessQiyu(SoulBotService.MESSAGE_SETTLE_MS)) return false
+        host.setNextStep("检查匹配聊天是否已有新消息", ConversationTiming.MESSAGE_SETTLE_MS)
+        if (!host.waitUnlessQiyu(ConversationTiming.MESSAGE_SETTLE_MS)) return false
         if (!host.convertIncomingVoiceMessages()) {
             host.setNextStep("匹配聊天语音尚未转写，本轮不回复", 1200)
             host.sleep(1200)
@@ -183,7 +183,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             incomingSignature(host.readThread()) != incomingSignature(thread) ||
             host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
         ) {
-            host.setNextStep("收到更新消息，重新按最新内容准备回复", SoulBotService.MESSAGE_SETTLE_MS)
+            host.setNextStep("收到更新消息，重新按最新内容准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
             if (host.isOnChat() && host.isExpectedConversation(contactName)) {
                 return host.replyToCurrentConversation(contactName, seen)
             }
@@ -257,4 +257,8 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
     private fun incomingSignature(thread: List<Pair<String, String>>): String =
         thread.filter { it.first == "in" }.joinToString("\u0001") { it.second }
 
+
+    companion object {
+        const val SOUL_MATCH_TIMEOUT_MS = 180_000L
+    }
 }

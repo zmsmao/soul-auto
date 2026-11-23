@@ -150,7 +150,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
                 ) {
                     RuntimeLog.record(host.context, "conversation reply regenerated; reason=generation_cancelled_for_new_message")
-                    host.setNextStep("收到新消息，改用最新上下文重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
+                    host.setNextStep("收到新消息，改用最新上下文重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
                 RuntimeLog.record(host.context, "conversation reply aborted; reason=generation_failed")
@@ -179,7 +179,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                 host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
             ) {
                 RuntimeLog.record(host.context, "conversation reply regenerated; reason=incoming_changed")
-                host.setNextStep("收到更新消息，重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
+                host.setNextStep("收到更新消息，重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
                 host.sleep(500)
                 continue@replyCycle
             }
@@ -207,7 +207,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
                 ) {
                     RuntimeLog.record(host.context, "conversation reply regenerated; reason=incoming_changed_before_send")
-                    host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
+                    host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
                 RuntimeLog.record(host.context, "conversation reply send failed; chatStillVisible=true")

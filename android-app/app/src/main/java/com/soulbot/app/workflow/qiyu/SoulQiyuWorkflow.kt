@@ -29,9 +29,9 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
 
     private fun handleQiyu(): Boolean {
         if (host.currentScreen() != SoulScreen.QIYU_POPUP) return false
-        val chatBtn = host.findVisibleById(SoulBotService.ID_QIYU_CHAT) ?: return false
-        val signature = host.textOf(host.findVisibleById(SoulBotService.ID_QIYU_SIGNATURE))
-        val reason = host.textOf(host.findVisibleById(SoulBotService.ID_QIYU_REASON))
+        val chatBtn = host.findVisibleById(SoulAccessibilityIds.ID_QIYU_CHAT) ?: return false
+        val signature = host.textOf(host.findVisibleById(SoulAccessibilityIds.ID_QIYU_SIGNATURE))
+        val reason = host.textOf(host.findVisibleById(SoulAccessibilityIds.ID_QIYU_REASON))
         val session = pendingQiyu?.takeIf {
             it.contactName.isBlank() && it.signature == signature && it.reason == reason
         } ?: PendingQiyu(signature, reason)
@@ -104,7 +104,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
         var stableSince = System.currentTimeMillis()
         val loadDeadline = stableSince + QiyuConversationPolicy.LOAD_TIMEOUT_MS
         while (host.isRunning && host.isOnChat() && host.hasConfirmedConversationName(contactName) &&
-            System.currentTimeMillis() < loadDeadline && System.currentTimeMillis() - stableSince < SoulBotService.MESSAGE_SETTLE_MS) {
+            System.currentTimeMillis() < loadDeadline && System.currentTimeMillis() - stableSince < ConversationTiming.MESSAGE_SETTLE_MS) {
             host.setNextStep("确认奇遇铃聊天内容已加载", 500)
             host.sleep(500)
             val latest = host.readThread()
@@ -174,7 +174,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
     private fun sendPreparedQiyu(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         val contactName = session.contactName
         if (!host.isRunning || !host.isOnChat() || !host.hasConfirmedConversationName(contactName)) return false
-        val input = host.findVisibleById(SoulBotService.ID_INPUT_BOX)
+        val input = host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX)
             ?: return deferQiyu(session, "input_not_loaded", "奇遇铃输入框尚未读到，保留原草稿")
         val inputText = if (input.isShowingHintText) "" else host.textOf(input)
         val recovery = QiyuConversationPolicy.sendRecovery(
@@ -235,7 +235,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
     /** Never uses paste or replaces a user's edited draft when withdrawing an obsolete reply. */
     private fun clearOwnedQiyuDraft(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         if (!host.isRunning || prepared.clickedSend || !host.isOnChat() || !host.hasConfirmedConversationName(session.contactName)) return false
-        val input = host.findVisibleById(SoulBotService.ID_INPUT_BOX) ?: return false
+        val input = host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX) ?: return false
         val text = if (input.isShowingHintText) "" else host.textOf(input)
         if (QiyuConversationPolicy.draftRefresh(text, prepared.writtenText, prepared.clickedSend) !=
             QiyuDraftRefresh.CLEAR_OWNED_UNSENT) return false
@@ -245,7 +245,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
         val deadline = System.currentTimeMillis() + 1000L
         while (host.isRunning && System.currentTimeMillis() < deadline) {
             if (!host.isOnChat() || !host.hasConfirmedConversationName(session.contactName)) return false
-            val current = host.findVisibleById(SoulBotService.ID_INPUT_BOX) ?: return false
+            val current = host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX) ?: return false
             if (current.isShowingHintText || host.textOf(current).isEmpty()) return true
             host.sleep(100)
         }
