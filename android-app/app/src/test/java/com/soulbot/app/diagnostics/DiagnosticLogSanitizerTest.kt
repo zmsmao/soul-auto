@@ -6,6 +6,7 @@ import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.DiagnosticLogSanitizer
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 import com.soulbot.app.workflow.greeting.*
@@ -50,7 +51,7 @@ class DiagnosticLogSanitizerTest {
     @Test
     fun redactsJsonCredentialsAndBasicAuthUrls() {
         val source =
-            "{\"apiKey\":\"json-secret\",\"Authorization\":\"Bearer jwt.value\"} " +
+            "{\\"apiKey\\":\\"json-secret\\",\\"Authorization\\":\\"Bearer jwt.value\\"} " +
                 "Authorization=Basic dXNlcjpwYXNz " +
                 "https://user:password@example.com/v1"
 
@@ -65,11 +66,11 @@ class DiagnosticLogSanitizerTest {
 
     @Test
     fun singleLineNormalizesControlsAndAppliesHardLimit() {
-        val result = DiagnosticLogSanitizer.singleLine(" first\nsecond\r\u0000third ", 18)
+        val result = DiagnosticLogSanitizer.singleLine(" first\\nsecond\\r\\u0000third ", 18)
 
         assertEquals(18, result.length)
         assertEquals("first second  thi…", result)
-        assertFalse(result.contains('\n'))
+        assertFalse(result.contains('\\n'))
     }
 
     @Test
