@@ -3,7 +3,7 @@ package com.soulbot.app.accessibility
 import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.*
 import kotlin.math.abs
 
@@ -30,6 +30,9 @@ internal interface SoulVoiceMessageHost {
     fun sleep(ms: Long)
     fun longPressNode(node: AccessibilityNodeInfo): Boolean
     fun tap(x: Float, y: Float): Boolean
+    fun recordVoiceMenuOffset(voiceBounds: UiRegion, menuBounds: UiRegion, activeArea: UiRegion)
+    fun learnedVoiceMenuPoint(voiceBounds: UiRegion, activeArea: UiRegion, edgeInset: Int): UiPoint?
+    fun hasLearnedVoiceMenuOffset(): Boolean
 }
 
 internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost) {
@@ -134,8 +137,7 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
                 val menuButton = voiceActionNear(voiceBounds)
                 if (menuButton != null) {
                     RuntimeLog.record(host.context, "voice transcription action; path=semantic_menu; index=${index + 1}")
-                    DeviceCompatibilityStore.recordVoiceMenuOffset(
-                        host.context,
+                    host.recordVoiceMenuOffset(
                         voiceBounds.toUiRegion(),
                         host.rect(menuButton).toUiRegion(),
                         host.activeWindowRegion(),
@@ -144,8 +146,7 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
                     host.tapNode(menuButton)
                 } else {
                     val activeArea = host.activeWindowRegion()
-                    val menuPoint = DeviceCompatibilityStore.learnedVoiceMenuPoint(
-                        host.context,
+                    val menuPoint = host.learnedVoiceMenuPoint(
                         voiceBounds.toUiRegion(),
                         activeArea,
                         edgeInset = host.dp(8),
@@ -157,7 +158,7 @@ internal class SoulVoiceMessageController(private val host: SoulVoiceMessageHost
                     )
                     RuntimeLog.record(
                         host.context,
-                        "voice transcription action; path=coordinate_fallback; learned=${DeviceCompatibilityStore.hasLearnedVoiceMenuOffset(host.context)}; index=${index + 1}",
+                        "voice transcription action; path=coordinate_fallback; learned=${host.hasLearnedVoiceMenuOffset()}; index=${index + 1}",
                     )
                     host.setNextStep("点击语音菜单中的转文字")
                     host.tap(menuPoint.x.toFloat(), menuPoint.y.toFloat())

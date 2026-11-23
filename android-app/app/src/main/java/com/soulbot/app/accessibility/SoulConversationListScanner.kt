@@ -3,7 +3,8 @@ package com.soulbot.app.accessibility
 import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.logging.DiagnosticIdentity
 import com.soulbot.app.conversation.*
 
 internal interface SoulConversationListHost {

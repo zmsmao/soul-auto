@@ -5,7 +5,8 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.logging.DiagnosticIdentity
 import com.soulbot.app.conversation.*
 import com.soulbot.app.model.ReplyPreferencePrompt
 

@@ -1,5 +1,7 @@
 package com.soulbot.app.diagnostics
 
+import com.soulbot.app.logging.RuntimeLog
+
 import com.soulbot.app.conversation.ReplyNaturalness
 import com.soulbot.app.data.Prefs
 import com.soulbot.app.data.ReplyReplayDatabase

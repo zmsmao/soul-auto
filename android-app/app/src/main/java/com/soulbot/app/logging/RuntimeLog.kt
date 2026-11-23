@@ -1,4 +1,4 @@
-package com.soulbot.app.diagnostics
+package com.soulbot.app.logging
 
 import android.content.Context
 import android.os.Process

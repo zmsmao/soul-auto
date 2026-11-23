@@ -5,7 +5,7 @@ import com.soulbot.app.app.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 import com.soulbot.app.workflow.greeting.*

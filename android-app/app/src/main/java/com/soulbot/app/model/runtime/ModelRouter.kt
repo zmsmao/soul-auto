@@ -6,7 +6,7 @@ import com.soulbot.app.model.ModelClient
 import com.soulbot.app.model.ModelEndpointRules
 import com.soulbot.app.model.ModelFailoverPolicy
 
-import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.logging.RuntimeLog
 
 import android.content.Context
 import android.os.SystemClock

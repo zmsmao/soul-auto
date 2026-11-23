@@ -1,4 +1,4 @@
-package com.soulbot.app.diagnostics
+package com.soulbot.app.logging
 
 /** Pure Kotlin credential redaction used by runtime diagnostics and unit tests. */
 object DiagnosticLogSanitizer {

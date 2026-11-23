@@ -8,6 +8,7 @@ import com.soulbot.app.conversation.runtime.SoulReplyGenerationEngine
 import com.soulbot.app.conversation.runtime.SoulReplyGenerationHost
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 
@@ -151,6 +152,12 @@ class SoulBotService : AccessibilityService() {
             override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
             override fun longPressNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.longPressNode(node)
             override fun tap(x: Float, y: Float): Boolean = this@SoulBotService.tap(x, y)
+            override fun recordVoiceMenuOffset(voiceBounds: UiRegion, menuBounds: UiRegion, activeArea: UiRegion) =
+                DeviceCompatibilityStore.recordVoiceMenuOffset(applicationContext, voiceBounds, menuBounds, activeArea)
+            override fun learnedVoiceMenuPoint(voiceBounds: UiRegion, activeArea: UiRegion, edgeInset: Int): UiPoint? =
+                DeviceCompatibilityStore.learnedVoiceMenuPoint(applicationContext, voiceBounds, activeArea, edgeInset)
+            override fun hasLearnedVoiceMenuOffset(): Boolean =
+                DeviceCompatibilityStore.hasLearnedVoiceMenuOffset(applicationContext)
         })
     }
 

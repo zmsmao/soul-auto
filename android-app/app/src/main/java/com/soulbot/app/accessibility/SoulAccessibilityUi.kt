@@ -1,6 +1,6 @@
 package com.soulbot.app.accessibility
 
-import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.logging.RuntimeLog
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.ClipData

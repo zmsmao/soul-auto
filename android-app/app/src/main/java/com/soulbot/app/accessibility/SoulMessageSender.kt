@@ -4,7 +4,7 @@ import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.ConversationMemoryDatabase
-import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.*
 import kotlin.random.Random
 

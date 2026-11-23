@@ -3,7 +3,7 @@ package com.soulbot.app.automation
 import com.soulbot.app.data.GreetDatabase
 import com.soulbot.app.data.ModelEndpointPrefs
 import com.soulbot.app.data.Prefs
-import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.ModelEndpointRules
 import android.content.Context
 

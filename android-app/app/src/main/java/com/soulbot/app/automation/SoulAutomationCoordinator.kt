@@ -6,7 +6,7 @@ import com.soulbot.app.accessibility.SoulScreen
 import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
-import com.soulbot.app.diagnostics.RuntimeLog
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.GreetingSessionPolicy
 import android.content.Context
 

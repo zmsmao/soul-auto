@@ -4,7 +4,7 @@ import android.os.SystemClock
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.*
 import com.soulbot.app.model.runtime.ModelRouteOutcome
 import com.soulbot.app.model.runtime.ModelRouter
