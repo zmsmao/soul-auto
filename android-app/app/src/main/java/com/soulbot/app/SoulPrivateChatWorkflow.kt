@@ -1,7 +1,5 @@
 package com.soulbot.app
 
-import android.content.Context
-import android.view.accessibility.AccessibilityNodeInfo
 
 /** Owns ordinary private-chat entry, reservation and reply processing. */
 internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
@@ -131,12 +129,12 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             val reply = host.generateValidatedChatReply(name, thread, new)
             if (reply.isNullOrBlank()) {
                 if (!host.isExpectedConversation(name)) return false
-                val refreshedAfterCancel = readThread()
+                val refreshedAfterCancel = host.readThread()
                 if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
                     host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
                 ) {
                     RuntimeLog.record(host.context, "conversation reply regenerated; reason=generation_cancelled_for_new_message")
-                    host.setNextStep("收到新消息，改用最新上下文重新准备回复", MESSAGE_SETTLE_MS)
+                    host.setNextStep("收到新消息，改用最新上下文重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
                 RuntimeLog.record(host.context, "conversation reply aborted; reason=generation_failed")
@@ -165,7 +163,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                 host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
             ) {
                 RuntimeLog.record(host.context, "conversation reply regenerated; reason=incoming_changed")
-                host.setNextStep("收到更新消息，重新准备回复", MESSAGE_SETTLE_MS)
+                host.setNextStep("收到更新消息，重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
                 host.sleep(500)
                 continue@replyCycle
             }
@@ -193,7 +191,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
                 ) {
                     RuntimeLog.record(host.context, "conversation reply regenerated; reason=incoming_changed_before_send")
-                    host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", MESSAGE_SETTLE_MS)
+                    host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", SoulBotService.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
                 RuntimeLog.record(host.context, "conversation reply send failed; chatStillVisible=true")

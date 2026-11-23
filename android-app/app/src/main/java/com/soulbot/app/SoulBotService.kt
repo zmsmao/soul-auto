@@ -199,6 +199,7 @@ class SoulBotService : AccessibilityService() {
                 this@SoulBotService.isExpectedConversation(name)
             override fun waitForStableThread(name: String): List<Pair<String, String>> =
                 this@SoulBotService.waitForStableThread(name)
+            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
             override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>) =
                 this@SoulBotService.learnFromManualReplies(name, thread)
             override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =

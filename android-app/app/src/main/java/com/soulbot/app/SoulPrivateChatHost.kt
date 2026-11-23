@@ -17,6 +17,7 @@ internal interface SoulPrivateChatHost {
     fun gotoChatList(): Boolean
     fun isExpectedConversation(name: String): Boolean
     fun waitForStableThread(name: String): List<Pair<String, String>>
+    fun readThread(): List<Pair<String, String>>
     fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>)
     fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo>
     fun unseenIncomingEvents(
