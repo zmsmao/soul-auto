@@ -3,8 +3,6 @@ package com.soulbot.app.conversation
 import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.*
-import com.soulbot.app.app.SoulBotService
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
