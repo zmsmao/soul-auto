@@ -36,19 +36,19 @@ class SoulBotService : AccessibilityService() {
         @Volatile var statusDeadline: Long = 0  // 下次动作的绝对时间戳（毫秒），0=无倒计时
 
         const val SOUL_PACKAGE = SoulAccessibilityIds.SOUL_PACKAGE
-        const val DM_INTERVAL = 240L  // 广场私信间隔（秒）
-        const val CONTEXT_LEN = 20
-        const val MAX_SCROLLS_TO_TOP = 20
-        const val SQUARE_RETRY_DELAY_MS = 3000L
-        const val SQUARE_POST_LOAD_TIMEOUT_MS = 4500L
-        const val SQUARE_POST_STABLE_MS = 1200L
-        const val SQUARE_SCROLL_PREPARE_MS = 2000L
-        const val SQUARE_SCROLL_SETTLE_MS = 1600L
-        const val SQUARE_MAX_VIEWPORTS = 10
-        const val MESSAGE_SETTLE_MS = 3000L
-        const val MESSAGE_LOAD_TIMEOUT_MS = 8000L
-        const val VOICE_TRANSCRIPT_STABLE_MS = 2000L
-        const val VOICE_TRANSCRIPT_START_GRACE_MS = 1500L
+        const val DM_INTERVAL = SoulSquareTiming.DM_INTERVAL_SECONDS
+        const val CONTEXT_LEN = ReplyGenerationConfig.CONTEXT_LEN
+        const val MAX_SCROLLS_TO_TOP = SoulNavigationController.MAX_SCROLLS_TO_TOP
+        const val SQUARE_RETRY_DELAY_MS = SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS
+        const val SQUARE_POST_LOAD_TIMEOUT_MS = SoulSquareTiming.SQUARE_POST_LOAD_TIMEOUT_MS
+        const val SQUARE_POST_STABLE_MS = SoulSquareTiming.SQUARE_POST_STABLE_MS
+        const val SQUARE_SCROLL_PREPARE_MS = SoulSquareTiming.SQUARE_SCROLL_PREPARE_MS
+        const val SQUARE_SCROLL_SETTLE_MS = SoulSquareTiming.SQUARE_SCROLL_SETTLE_MS
+        const val SQUARE_MAX_VIEWPORTS = SoulSquareTiming.SQUARE_MAX_VIEWPORTS
+        const val MESSAGE_SETTLE_MS = ConversationTiming.MESSAGE_SETTLE_MS
+        const val MESSAGE_LOAD_TIMEOUT_MS = ConversationTiming.MESSAGE_LOAD_TIMEOUT_MS
+        const val VOICE_TRANSCRIPT_STABLE_MS = SoulVoiceMessageController.VOICE_TRANSCRIPT_STABLE_MS
+        const val VOICE_TRANSCRIPT_START_GRACE_MS = SoulVoiceMessageController.VOICE_TRANSCRIPT_START_GRACE_MS
 
         // Soul 控件 id
         const val ID_INPUT_BOX = SoulAccessibilityIds.ID_INPUT_BOX
@@ -87,7 +87,7 @@ class SoulBotService : AccessibilityService() {
         const val ID_PLANET_TAB = SoulAccessibilityIds.ID_PLANET_TAB
         const val ID_GENERIC_TITLE = SoulAccessibilityIds.ID_GENERIC_TITLE
         const val ID_SOUL_MATCH_PERCENT = SoulAccessibilityIds.ID_SOUL_MATCH_PERCENT
-        const val SOUL_MATCH_TIMEOUT_MS = 180_000L
+        const val SOUL_MATCH_TIMEOUT_MS = SoulMatchWorkflow.SOUL_MATCH_TIMEOUT_MS
     }
 
 
@@ -255,6 +255,7 @@ class SoulBotService : AccessibilityService() {
 
     private val automationHost: SoulAutomationHost by lazy(LazyThreadSafetyMode.NONE) {
         object : SoulAutomationHost {
+            override val isRunning: Boolean get() = running
             override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
             override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
             override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
