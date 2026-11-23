@@ -97,167 +97,15 @@ class SoulBotService : AccessibilityService() {
     }
 
 
-    private val messageSender: SoulMessageSender by lazy(LazyThreadSafetyMode.NONE) {
-        SoulMessageSender(object : SoulMessageSenderHost {
-            override val context: android.content.Context get() = applicationContext
-            override val isRunning: Boolean get() = running
-            override val memoryDatabase: ConversationMemoryDatabase? get() = conversationMemoryDb
-            override val random: Random get() = this@SoulBotService.random
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun splitReply(text: String): List<String> = this@SoulBotService.splitReply(text)
-            override fun hasPendingQiyu(): Boolean = this@SoulBotService.hasPendingQiyu()
-            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
-            override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
-            override fun currentIncomingMessageKeys(contactName: String): List<String> =
-                this@SoulBotService.currentIncomingMessageKeys(contactName)
-            override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
-            override fun outgoingMessageCount(): Int = this@SoulBotService.outgoingMessageCount()
-            override fun hasConfirmedConversationName(name: String): Boolean =
-                this@SoulBotService.hasConfirmedConversationName(name)
-            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
-            override fun findById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findById(id)
-            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
-            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
-            override fun setText(node: AccessibilityNodeInfo, text: String): Boolean = this@SoulBotService.setText(node, text)
-            override fun outgoingOccurrenceCount(text: String): Int = this@SoulBotService.outgoingOccurrenceCount(text)
-            override fun visibleMessageOccurrenceCount(text: String): Int = this@SoulBotService.visibleMessageOccurrenceCount(text)
-            override fun findVisibleById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findVisibleById(id)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-        })
+    private val serviceComponentFactory by lazy(LazyThreadSafetyMode.NONE) {
+        SoulServiceComponentFactory(this)
     }
-
-    private val voiceMessageController: SoulVoiceMessageController by lazy(LazyThreadSafetyMode.NONE) {
-        SoulVoiceMessageController(object : SoulVoiceMessageHost {
-            override val context: android.content.Context get() = applicationContext
-            override val isRunning: Boolean get() = running
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
-            override fun findExactText(text: String): List<AccessibilityNodeInfo> = this@SoulBotService.findExactText(text)
-            override fun descendantsById(root: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo> =
-                this@SoulBotService.descendantsById(root, id)
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun contains(outer: Rect, inner: Rect): Boolean = this@SoulBotService.contains(outer, inner)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-            override fun messageRole(
-                item: AccessibilityNodeInfo,
-                avatars: List<AccessibilityNodeInfo>,
-                readReceipts: List<AccessibilityNodeInfo>,
-            ): String = this@SoulBotService.messageRole(item, avatars, readReceipts)
-            override fun activeWindowRegion(): UiRegion = this@SoulBotService.activeWindowRegion()
-            override fun dp(value: Int): Int = this@SoulBotService.dp(value)
-            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.isVisibleOnScreen(node)
-            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
-            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
-            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
-            override fun longPressNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.longPressNode(node)
-            override fun tap(x: Float, y: Float): Boolean = this@SoulBotService.tap(x, y)
-            override fun recordVoiceMenuOffset(voiceBounds: UiRegion, menuBounds: UiRegion, activeArea: UiRegion) =
-                DeviceCompatibilityStore.recordVoiceMenuOffset(applicationContext, voiceBounds, menuBounds, activeArea)
-            override fun learnedVoiceMenuPoint(voiceBounds: UiRegion, activeArea: UiRegion, edgeInset: Int): UiPoint? =
-                DeviceCompatibilityStore.learnedVoiceMenuPoint(applicationContext, voiceBounds, activeArea, edgeInset)
-            override fun hasLearnedVoiceMenuOffset(): Boolean =
-                DeviceCompatibilityStore.hasLearnedVoiceMenuOffset(applicationContext)
-        })
-    }
-
-    private val conversationListScanner: SoulConversationListScanner by lazy(LazyThreadSafetyMode.NONE) {
-        SoulConversationListScanner(object : SoulConversationListHost {
-            override val context: android.content.Context get() = applicationContext
-            override fun isOnList(): Boolean = this@SoulBotService.isOnList()
-            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
-            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.isVisibleOnScreen(node)
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun contains(outer: Rect, inner: Rect): Boolean = this@SoulBotService.contains(outer, inner)
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-        })
-    }
-
-    private val replyGenerationEngine: SoulReplyGenerationEngine by lazy(LazyThreadSafetyMode.NONE) {
-        SoulReplyGenerationEngine(object : SoulReplyGenerationHost {
-            override val context: android.content.Context get() = applicationContext
-            override val isRunning: Boolean get() = running
-            override var learningDatabase: ChatLearningDatabase?
-                get() = learningDb
-                set(value) { learningDb = value }
-            override var memoryDatabase: ConversationMemoryDatabase?
-                get() = conversationMemoryDb
-                set(value) { conversationMemoryDb = value }
-            override var activeGenerationCancellation: ModelCallCancellation?
-                get() = this@SoulBotService.activeGenerationCancellation
-                set(value) { this@SoulBotService.activeGenerationCancellation = value }
-            override fun currentIncomingMessageKeys(contactName: String): List<String> =
-                this@SoulBotService.currentIncomingMessageKeys(contactName)
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun isExpectedConversation(contactName: String): Boolean =
-                this@SoulBotService.isExpectedConversation(contactName)
-            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
-                this@SoulBotService.pendingIncomingVoiceBubbles()
-            override fun hasUnreadRedDot(): Boolean = this@SoulBotService.hasUnreadRedDot()
-            override fun personalizationContext(
-                contactName: String,
-                latestMessage: String,
-                scene: ReplyScene,
-                includeMemory: Boolean,
-                styleQuery: String,
-                excludeContextKey: String,
-            ): String = this@SoulBotService.personalizationContext(
-                contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
-            )
-            override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
-            override fun setNextStep(action: String, delayMs: Long) =
-                this@SoulBotService.setNextStep(action, delayMs)
-            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
-        })
-    }
-
-    private val conversationContextManager: SoulConversationContextManager by lazy(LazyThreadSafetyMode.NONE) {
-        SoulConversationContextManager(object : SoulConversationContextHost {
-            override val context: android.content.Context get() = applicationContext
-            override val learningDatabase: ChatLearningDatabase? get() = learningDb
-            override val memoryDatabase: ConversationMemoryDatabase? get() = conversationMemoryDb
-            override val replyReplayDatabase: ReplyReplayDatabase? get() = replyReplayDb
-            override fun currentIncomingMessageKeys(contactName: String): List<String> =
-                this@SoulBotService.currentIncomingMessageKeys(contactName)
-            override fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint =
-                OpeningReplyPolicy.fingerprint(reply, context)
-            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
-            override fun isExpectedConversation(contactName: String): Boolean =
-                this@SoulBotService.isExpectedConversation(contactName)
-            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
-            override fun findVisibleById(id: String): AccessibilityNodeInfo? =
-                this@SoulBotService.findVisibleById(id)
-            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
-            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
-                this@SoulBotService.isVisibleOnScreen(node)
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun activeWindowRegion(): UiRegion = this@SoulBotService.activeWindowRegion()
-            override fun screenHeight(): Int = this@SoulBotService.screenHeight()
-        })
-    }
-
-    private val compatibilitySnapshotCollector: SoulCompatibilitySnapshotCollector by lazy(LazyThreadSafetyMode.NONE) {
-        SoulCompatibilitySnapshotCollector(object : SoulCompatibilitySnapshotHost {
-            override val context: android.content.Context get() = applicationContext
-            override var lastDiagnosticsSignature: String
-                get() = this@SoulBotService.lastDiagnosticsSignature
-                set(value) { this@SoulBotService.lastDiagnosticsSignature = value }
-            override var lastDiagnosticVisited: Int
-                get() = this@SoulBotService.lastDiagnosticVisited
-                set(value) { this@SoulBotService.lastDiagnosticVisited = value }
-            override var lastDiagnosticTruncated: Boolean
-                get() = this@SoulBotService.lastDiagnosticTruncated
-                set(value) { this@SoulBotService.lastDiagnosticTruncated = value }
-            override fun isSamplerClosed(): Boolean = diagnosticsSampler.isClosed()
-            override fun isCurrentThreadInterrupted(): Boolean = Thread.currentThread().isInterrupted
-            override fun root(): AccessibilityNodeInfo? = this@SoulBotService.root()
-            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
-            override fun screenWidth(): Int = this@SoulBotService.screenWidth()
-            override fun screenHeight(): Int = this@SoulBotService.screenHeight()
-            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
-        })
-    }
+    private val messageSender get() = serviceComponentFactory.messageSender
+    private val voiceMessageController get() = serviceComponentFactory.voiceMessageController
+    private val conversationListScanner get() = serviceComponentFactory.conversationListScanner
+    private val replyGenerationEngine get() = serviceComponentFactory.replyGenerationEngine
+    private val conversationContextManager get() = serviceComponentFactory.conversationContextManager
+    private val compatibilitySnapshotCollector get() = serviceComponentFactory.compatibilitySnapshotCollector
 
     private val workflowHostFactory by lazy(LazyThreadSafetyMode.NONE) { SoulWorkflowHostFactory(this) }
     private val automationHost: SoulAutomationHost get() = workflowHostFactory.automationHost
@@ -287,19 +135,19 @@ class SoulBotService : AccessibilityService() {
         seen: ConversationSeenTracker,
     ) = soulMatchWorkflow.handlePlanetChatIdle(handledMatches, greetDb, seen)
 
-    private val random = Random.Default
+    internal val random = Random.Default
     private var worker: Thread? = null
     internal var historyDb: HistoryDatabase? = null
-    private var learningDb: ChatLearningDatabase? = null
-    private var replyReplayDb: ReplyReplayDatabase? = null
+    internal var learningDb: ChatLearningDatabase? = null
+    internal var replyReplayDb: ReplyReplayDatabase? = null
     internal var conversationMemoryDb: ConversationMemoryDatabase? = null
-    @Volatile private var activeGenerationCancellation: ModelCallCancellation? = null
+    @Volatile internal var activeGenerationCancellation: ModelCallCancellation? = null
     private val restartHandler = Handler(Looper.getMainLooper())
-    private var lastDiagnosticsSignature = ""
+    internal var lastDiagnosticsSignature = ""
     private var lastDiagnosticsLogAt = 0L
-    private var lastDiagnosticVisited = 0
-    private var lastDiagnosticTruncated = false
-    private val diagnosticsSampler = CoalescingDiagnosticSampler(
+    internal var lastDiagnosticVisited = 0
+    internal var lastDiagnosticTruncated = false
+    internal val diagnosticsSampler = CoalescingDiagnosticSampler(
         sample = { captureCompatibilitySnapshot() },
         onComplete = { stats, error ->
             val now = android.os.SystemClock.elapsedRealtime()
@@ -382,17 +230,17 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 基础辅助 =====
 
-    private fun root(): AccessibilityNodeInfo? = pageUi.root()
+    internal fun root(): AccessibilityNodeInfo? = pageUi.root()
 
     internal fun isSoulForeground(): Boolean = pageUi.isSoulForeground()
 
-    private fun screenWidth(): Int = pageUi.screenWidth()
+    internal fun screenWidth(): Int = pageUi.screenWidth()
 
-    private fun screenHeight(): Int = pageUi.screenHeight()
+    internal fun screenHeight(): Int = pageUi.screenHeight()
 
     internal fun dp(value: Int): Int = pageUi.dp(value)
 
-    private fun activeWindowRegion(): UiRegion = pageUi.activeWindowRegion()
+    internal fun activeWindowRegion(): UiRegion = pageUi.activeWindowRegion()
 
     private fun visibleContainerRegion(id: String): UiRegion? = pageUi.visibleContainerRegion(id)
 
@@ -420,7 +268,7 @@ class SoulBotService : AccessibilityService() {
 
     internal fun tapNode(node: AccessibilityNodeInfo): Boolean = pageUi.tapNode(node)
 
-    private fun longPressNode(node: AccessibilityNodeInfo): Boolean = pageUi.longPressNode(node)
+    internal fun longPressNode(node: AccessibilityNodeInfo): Boolean = pageUi.longPressNode(node)
 
     private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long = 300) = pageUi.swipe(x1, y1, x2, y2, duration)
 
@@ -470,11 +318,11 @@ class SoulBotService : AccessibilityService() {
     private fun waitForInputText(expected: String, timeoutMs: Long = 1000): Boolean =
         pageUi.waitForInputText(expected, timeoutMs)
 
-    private fun setText(node: AccessibilityNodeInfo, text: String): Boolean =
+    internal fun setText(node: AccessibilityNodeInfo, text: String): Boolean =
         pageUi.setText(node, text)
 
 
-    private fun contains(outer: Rect, inner: Rect): Boolean = pageUi.contains(outer, inner)
+    internal fun contains(outer: Rect, inner: Rect): Boolean = pageUi.contains(outer, inner)
 
     internal fun visibleTitleTexts(): List<String> = screenDetector.visibleTitleTexts()
 
@@ -563,9 +411,9 @@ class SoulBotService : AccessibilityService() {
     }
 
     /** Total visible outgoing count reconciles an uncertain click even when the retry text differs. */
-    private fun outgoingMessageCount(): Int = readThread().count { it.first == "out" }
+    internal fun outgoingMessageCount(): Int = readThread().count { it.first == "out" }
 
-    private fun visibleMessageOccurrenceCount(text: String): Int {
+    internal fun visibleMessageOccurrenceCount(text: String): Int {
         val target = normalizeReply(text)
         if (target.isEmpty()) return 0
         return findByIds(ID_CONTENT_TEXT)
@@ -597,7 +445,7 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 读聊天消息（仅聊天界面） =====
 
-    private fun messageRole(item: AccessibilityNodeInfo, avatars: List<AccessibilityNodeInfo>, readReceipts: List<AccessibilityNodeInfo>): String = messageReader.messageRole(item, avatars, readReceipts)
+    internal fun messageRole(item: AccessibilityNodeInfo, avatars: List<AccessibilityNodeInfo>, readReceipts: List<AccessibilityNodeInfo>): String = messageReader.messageRole(item, avatars, readReceipts)
 
     internal fun descendantsById(
         node: AccessibilityNodeInfo,
@@ -704,7 +552,7 @@ class SoulBotService : AccessibilityService() {
     internal fun memoryThreadId(contactName: String): String =
         conversationContextManager.memoryThreadId(contactName)
 
-    private fun personalizationContext(
+    internal fun personalizationContext(
         contactName: String,
         latestMessage: String,
         scene: ReplyScene = ReplyScene.CHAT,
