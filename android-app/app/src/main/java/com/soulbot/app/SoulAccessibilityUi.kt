@@ -154,10 +154,10 @@ internal class SoulAccessibilityUi(
     fun waitForInputText(expected: String, timeoutMs: Long = 1000): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (textOf(findById(ID_INPUT_BOX)) == expected) return true
+            if (textOf(findById(SoulBotService.ID_INPUT_BOX)) == expected) return true
             pause(100)
         }
-        return textOf(findById(ID_INPUT_BOX)) == expected
+        return textOf(findById(SoulBotService.ID_INPUT_BOX)) == expected
     }
 
     fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
@@ -173,7 +173,7 @@ internal class SoulAccessibilityUi(
 
         // ACTION_SET_TEXT is unreliable in some Soul releases. Use the public
         // accessibility paste action as a fallback and restore the user's clipboard.
-        val input = findById(ID_INPUT_BOX) ?: return false
+        val input = findById(SoulBotService.ID_INPUT_BOX) ?: return false
         tapNode(input)
         runCatching { input.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
         val currentText = textOf(input)
