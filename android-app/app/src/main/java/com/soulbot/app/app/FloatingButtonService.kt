@@ -53,8 +53,6 @@ import kotlin.math.abs
 
 class FloatingButtonService : Service() {
 
-    private enum class DockSide { LEFT, RIGHT }
-
     private lateinit var windowManager: WindowManager
     private val overlayViewFactory: FloatingOverlayViewFactory by lazy(LazyThreadSafetyMode.NONE) {
         FloatingOverlayViewFactory(object : FloatingOverlayViewHost {
@@ -63,6 +61,21 @@ class FloatingButtonService : Service() {
             override fun safeOverlayRegion(): UiRegion = this@FloatingButtonService.safeOverlayRegion()
             override fun overlayParams(x: Int, y: Int): WindowManager.LayoutParams =
                 this@FloatingButtonService.overlayParams(x, y)
+        })
+    }
+
+    private val overlayMotionController: FloatingOverlayMotionController by lazy(LazyThreadSafetyMode.NONE) {
+        FloatingOverlayMotionController(object : FloatingOverlayMotionHost {
+            override val windowManager: WindowManager get() = this@FloatingButtonService.windowManager
+            override val handler: Handler get() = this@FloatingButtonService.handler
+            override val floatView: LinearLayout? get() = this@FloatingButtonService.floatView
+            override val windowParams: WindowManager.LayoutParams? get() = this@FloatingButtonService.windowParams
+            override val expandedView: LinearLayout? get() = this@FloatingButtonService.expandedView
+            override val collapsedView: LinearLayout? get() = this@FloatingButtonService.collapsedView
+            override fun dp(value: Int): Int = this@FloatingButtonService.dp(value)
+            override fun safeOverlayRegion(): UiRegion = this@FloatingButtonService.safeOverlayRegion()
+            override fun recordUiEvent(event: String, error: Throwable?) =
+                this@FloatingButtonService.recordUiEvent(event, error)
         })
     }
 
@@ -75,17 +88,8 @@ class FloatingButtonService : Service() {
     private var actionTv: TextView? = null
     private var statusDot: View? = null
     private var collapsedActionIcon: ImageView? = null
-    private var isCollapsed = false
-    private var isDockedToEdge = true
-    private val motionState = FloatingMotionState()
-    private val dragInProgress: Boolean get() = motionState.dragging
-    private var dragLayoutErrorReported = false
-    private var dockSide = DockSide.RIGHT
     private var lastRenderedRunning: Boolean? = null
     private var cachedOverlayRegion: UiRegion? = null
-    private var repositionListener: View.OnLayoutChangeListener? = null
-    private var repositionFallback: Runnable? = null
-    private var dragFramePending = false
     // Logging must not block touch dispatch behind file rotation or a SAF export.
     private val uiLogWorker = ThreadPoolExecutor(
         1, 1, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
@@ -96,14 +100,6 @@ class FloatingButtonService : Service() {
         ThreadPoolExecutor.DiscardOldestPolicy(),
     ).apply { allowCoreThreadTimeOut(true) }
     private val handler = Handler(Looper.getMainLooper())
-    private val dragFrame = Runnable {
-        dragFramePending = false
-        if (dragInProgress) applyPendingDragPosition()
-    }
-    private val autoCollapseRunnable = Runnable {
-        if (!dragInProgress && !isCollapsed && isDockedToEdge) setCollapsed(true)
-    }
-
     private val refreshRunnable = object : Runnable {
         override fun run() {
             updateStatusPanel()
@@ -232,327 +228,20 @@ class FloatingButtonService : Service() {
                 if (target !== views.statusArea) {
                     target.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-                attachDragAndClick(target)
+                overlayMotionController.attachDragAndClick(target)
             }
-        attachDragAndClick(views.action) { toggle() }
+        overlayMotionController.attachDragAndClick(views.action) { toggle() }
         listOf<View>(views.collapsed, views.collapsedActionIcon).forEach { target ->
             if (target !== views.collapsed) {
                 target.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            attachDragAndClick(target) { setCollapsed(false) }
+            overlayMotionController.attachDragAndClick(target) { overlayMotionController.setCollapsed(false) }
         }
 
-        root.post {
-            if (floatView !== root || dragInProgress) return@post
-            val currentSafeRegion = safeOverlayRegion()
-            lp.y = (currentSafeRegion.centerY - root.height / 2)
-                .coerceAtLeast(currentSafeRegion.top)
-            dockSide = DockSide.RIGHT
-            isDockedToEdge = true
-            snapToEdge()
-            scheduleAutoCollapse()
-        }
+        overlayMotionController.onInitialLayoutReady()
         updateStatusPanel()
     }
 
-
-    private fun attachDragAndClick(view: View, onClick: (() -> Unit)? = null) {
-        var initialX = 0
-        var initialY = 0
-        var touchX = 0f
-        var touchY = 0f
-        var moved = false
-        var gestureRegion: UiRegion? = null
-        var gestureWidth = 0
-        var gestureHeight = 0
-        var gestureStartedAt = 0L
-        var maxEventDelayMs = 0L
-        val movementThreshold = dp(6)
-
-        if (onClick != null) {
-            view.setOnClickListener {
-                onClick()
-                if (!isCollapsed) scheduleAutoCollapse()
-            }
-        } else {
-            view.setOnClickListener(null)
-        }
-        view.setOnTouchListener { touchedView, event ->
-            val root = floatView ?: return@setOnTouchListener false
-            val lp = windowParams ?: return@setOnTouchListener false
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    cancelAutoCollapse()
-                    val layoutPending = repositionListener != null || repositionFallback != null || root.isLayoutRequested
-                    cancelReposition()
-                    root.removeCallbacks(dragFrame)
-                    dragFramePending = false
-                    // A tap/drag must always win over a pending collapse animation.
-                    // Otherwise the old animation end callback can hide the panel
-                    // again after the user has already touched it.
-                    root.animate().cancel()
-                    root.alpha = 1f
-                    motionState.beginGesture(layoutPending)
-                    dragLayoutErrorReported = false
-                    gestureRegion = safeOverlayRegion()
-                    gestureWidth = root.width
-                    gestureHeight = root.height
-                    gestureStartedAt = SystemClock.uptimeMillis()
-                    maxEventDelayMs = (gestureStartedAt - event.eventTime).coerceAtLeast(0)
-                    initialX = lp.x
-                    initialY = lp.y
-                    touchX = event.rawX
-                    touchY = event.rawY
-                    moved = false
-                    true
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    if (!dragInProgress) return@setOnTouchListener true
-                    maxEventDelayMs = maxOf(maxEventDelayMs, SystemClock.uptimeMillis() - event.eventTime)
-                    val dx = event.rawX - touchX
-                    val dy = event.rawY - touchY
-                    if (!moved && (abs(dx) >= movementThreshold || abs(dy) >= movementThreshold)) {
-                        moved = true
-                    }
-                    if (moved) {
-                        val safeRegion = gestureRegion ?: return@setOnTouchListener true
-                        val x = (initialX + dx.toInt()).coerceIn(
-                            safeRegion.left - gestureWidth.coerceAtLeast(dp(48)) + dp(48),
-                            safeRegion.right - dp(48),
-                        )
-                        val y = (initialY + dy.toInt()).coerceIn(
-                            safeRegion.top,
-                            (safeRegion.bottom - gestureHeight).coerceAtLeast(safeRegion.top),
-                        )
-                        motionState.queuePosition(UiPoint(x, y))
-                        if (!dragFramePending) {
-                            dragFramePending = true
-                            root.postOnAnimation(dragFrame)
-                        }
-                    }
-                    true
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    root.removeCallbacks(dragFrame)
-                    dragFramePending = false
-                    applyPendingDragPosition()
-                    motionState.endGesture()
-                    if (moved) {
-                        finishDrag()
-                    } else if (onClick != null) {
-                        touchedView.performClick()
-                    } else {
-                        scheduleAutoCollapse()
-                    }
-                    if (motionState.takeDeferredReposition()) repositionAfterLayout()
-                    if (moved || maxEventDelayMs >= 100) {
-                        recordUiEvent("floating gesture completed; moved=$moved; " +
-                            "durationMs=${SystemClock.uptimeMillis() - gestureStartedAt}; maxInputDelayMs=$maxEventDelayMs")
-                    }
-                    true
-                }
-
-                MotionEvent.ACTION_CANCEL -> {
-                    root.removeCallbacks(dragFrame)
-                    dragFramePending = false
-                    applyPendingDragPosition()
-                    motionState.endGesture()
-                    if (moved) {
-                        finishDrag()
-                    }
-                    cancelAutoCollapse()
-                    if (motionState.takeDeferredReposition()) repositionAfterLayout()
-                    // A system gesture or a temporary window-layout change may cancel
-                    // touch delivery. Keep the panel expanded so the user's drag does
-                    // not look like it got stuck and disappeared.
-                    true
-                }
-
-                else -> false
-            }
-        }
-    }
-
-    private fun finishDrag() {
-        val root = floatView ?: return
-        val lp = windowParams ?: return
-        if (root.width == 0) return
-
-        val safeRegion = safeOverlayRegion()
-        val edgeSlop = dp(8)
-        val leftGap = lp.x - safeRegion.left
-        val rightGap = safeRegion.right - (lp.x + root.width)
-
-        when {
-            leftGap <= edgeSlop -> {
-                dockSide = DockSide.LEFT
-                isDockedToEdge = true
-                snapToEdge()
-                scheduleAutoCollapse()
-            }
-
-            rightGap <= edgeSlop -> {
-                dockSide = DockSide.RIGHT
-                isDockedToEdge = true
-                snapToEdge()
-                scheduleAutoCollapse()
-            }
-
-            else -> {
-                isDockedToEdge = false
-                cancelAutoCollapse()
-                if (isCollapsed) {
-                    // A collapsed handle dragged away from the edge becomes a
-                    // normal panel at the exact place where the user left it.
-                    setCollapsed(false)
-                } else {
-                    clampFreePosition()
-                }
-            }
-        }
-    }
-
-    private fun clampFreePosition() {
-        val root = floatView ?: return
-        val lp = windowParams ?: return
-        if (root.width == 0) return
-        val safeRegion = safeOverlayRegion()
-        val horizontalPadding = dp(8)
-        lp.x = lp.x.coerceIn(
-            safeRegion.left + horizontalPadding,
-            (safeRegion.right - root.width - horizontalPadding)
-                .coerceAtLeast(safeRegion.left + horizontalPadding),
-        )
-        lp.y = lp.y.coerceIn(
-            safeRegion.top,
-            (safeRegion.bottom - root.height).coerceAtLeast(safeRegion.top),
-        )
-        try {
-            windowManager.updateViewLayout(root, lp)
-        } catch (error: Exception) {
-            recordUiEvent("floating free-position clamp failed", error)
-        }
-    }
-
-    private fun snapToEdge() {
-        val root = floatView ?: return
-        val lp = windowParams ?: return
-        if (root.width == 0) return
-        val safeRegion = safeOverlayRegion()
-        lp.x = when {
-            isCollapsed && dockSide == DockSide.LEFT -> safeRegion.left - dp(8)
-            isCollapsed -> safeRegion.right - root.width + dp(8)
-            dockSide == DockSide.LEFT -> safeRegion.left + dp(8)
-            else -> safeRegion.right - root.width - dp(8)
-        }
-        lp.y = lp.y.coerceIn(
-            safeRegion.top,
-            (safeRegion.bottom - root.height).coerceAtLeast(safeRegion.top),
-        )
-        try {
-            windowManager.updateViewLayout(root, lp)
-        } catch (error: Exception) {
-            recordUiEvent("floating edge snap failed", error)
-        }
-    }
-
-    private fun scheduleAutoCollapse() {
-        handler.removeCallbacks(autoCollapseRunnable)
-        if (!dragInProgress && !isCollapsed && isDockedToEdge) {
-            handler.postDelayed(autoCollapseRunnable, 5000)
-        }
-    }
-
-    private fun cancelAutoCollapse() {
-        handler.removeCallbacks(autoCollapseRunnable)
-    }
-
-    private fun setCollapsed(collapsed: Boolean) {
-        if (isCollapsed == collapsed) return
-        val root = floatView ?: return
-        cancelAutoCollapse()
-        recordUiEvent(
-            "floating panel state changed; collapsed=$collapsed; docked=$isDockedToEdge; side=${dockSide.name}",
-        )
-        // Do not animate the layout transition. Window overlays can receive a
-        // touch while an animation is running; the old end callback could then
-        // apply stale coordinates and make the collapsed handle untappable.
-        root.animate().cancel()
-        root.alpha = 1f
-        isCollapsed = collapsed
-        expandedView?.visibility = if (collapsed) View.GONE else View.VISIBLE
-        collapsedView?.visibility = if (collapsed) View.VISIBLE else View.GONE
-        repositionAfterLayout()
-        if (!collapsed) scheduleAutoCollapse()
-    }
-
-    /** Recalculate the overlay position only after WRAP_CONTENT has been remeasured. */
-    private fun repositionAfterLayout() {
-        val root = floatView ?: return
-        cancelReposition()
-        val generation = motionState.invalidateLayout()
-        val listener = object : View.OnLayoutChangeListener {
-            override fun onLayoutChange(
-                view: View,
-                left: Int,
-                top: Int,
-                right: Int,
-                bottom: Int,
-                oldLeft: Int,
-                oldTop: Int,
-                oldRight: Int,
-                oldBottom: Int,
-            ) {
-                applyReposition(view, generation, measured = true)
-            }
-        }
-        repositionListener = listener
-        root.addOnLayoutChangeListener(listener)
-        // The listener and fallback belong to one request; either path removes both.
-        val fallback = Runnable { applyReposition(root, generation) }
-        repositionFallback = fallback
-        root.requestLayout()
-        root.postDelayed(fallback, 48)
-    }
-
-    private fun applyReposition(view: View, generation: Long, measured: Boolean = false) {
-        if (floatView !== view || !motionState.canApplyLayout(generation)) return
-        // A fallback must not use the old collapsed width while a measure is still pending.
-        // Keep the layout listener alive; the actual layout pass owns the final position.
-        if (!measured && view.isLayoutRequested) return
-        cancelReposition()
-        if (view.width <= 0 || view.height <= 0) return
-        if (isDockedToEdge) snapToEdge() else clampFreePosition()
-    }
-
-    private fun cancelReposition() {
-        motionState.invalidateLayout()
-        floatView?.let { root ->
-            repositionListener?.let(root::removeOnLayoutChangeListener)
-            repositionFallback?.let(root::removeCallbacks)
-        }
-        repositionListener = null
-        repositionFallback = null
-    }
-
-    private fun applyPendingDragPosition() {
-        val point = motionState.takePosition() ?: return
-        val root = floatView ?: return
-        val lp = windowParams ?: return
-        if (point.x == lp.x && point.y == lp.y) return
-        lp.x = point.x
-        lp.y = point.y
-        try {
-            windowManager.updateViewLayout(root, lp)
-        } catch (error: RuntimeException) {
-            if (!dragLayoutErrorReported) {
-                dragLayoutErrorReported = true
-                recordUiEvent("floating window drag layout update failed", error)
-            }
-        }
-    }
 
     private fun recordUiEvent(event: String, error: Throwable? = null) {
         if (uiLogWorker.isShutdown) return
@@ -577,7 +266,7 @@ class FloatingButtonService : Service() {
 
     private fun updateStatusPanel() {
         // Keep the hit area and window size stable until this gesture finishes.
-        if (dragInProgress) return
+        if (overlayMotionController.dragInProgress) return
         val serviceAvailable = SoulBotService.instance != null
         val running = SoulBotService.running
         val rawStatus = SoulBotService.statusText
@@ -623,10 +312,7 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
         recordUiEvent("floating service destroying")
         handler.removeCallbacks(refreshRunnable)
-        handler.removeCallbacks(autoCollapseRunnable)
-        cancelReposition()
-        floatView?.removeCallbacks(dragFrame)
-        dragFramePending = false
+        overlayMotionController.onDestroy()
         floatView?.let {
             try {
                 windowManager.removeView(it)
@@ -643,7 +329,6 @@ class FloatingButtonService : Service() {
         actionTv = null
         statusDot = null
         collapsedActionIcon = null
-        motionState.endGesture()
         uiLogWorker.shutdown()
         super.onDestroy()
     }
@@ -651,16 +336,11 @@ class FloatingButtonService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         cachedOverlayRegion = null
-        cancelReposition()
-        if (dragInProgress) motionState.deferReposition()
         recordUiEvent(
             "device configuration changed; orientation=${newConfig.orientation}; screen=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}",
         )
-        floatView?.post {
-            if (!dragInProgress) {
-                repositionAfterLayout()
-            }
-        }
+
+        overlayMotionController.onConfigurationChanged()
     }
 
 
