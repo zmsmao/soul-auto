@@ -223,6 +223,28 @@ class SoulBotService : AccessibilityService() {
         })
     }
 
+    private val compatibilitySnapshotCollector: SoulCompatibilitySnapshotCollector by lazy(LazyThreadSafetyMode.NONE) {
+        SoulCompatibilitySnapshotCollector(object : SoulCompatibilitySnapshotHost {
+            override val context: android.content.Context get() = applicationContext
+            override var lastDiagnosticsSignature: String
+                get() = this@SoulBotService.lastDiagnosticsSignature
+                set(value) { this@SoulBotService.lastDiagnosticsSignature = value }
+            override var lastDiagnosticVisited: Int
+                get() = this@SoulBotService.lastDiagnosticVisited
+                set(value) { this@SoulBotService.lastDiagnosticVisited = value }
+            override var lastDiagnosticTruncated: Boolean
+                get() = this@SoulBotService.lastDiagnosticTruncated
+                set(value) { this@SoulBotService.lastDiagnosticTruncated = value }
+            override fun isSamplerClosed(): Boolean = diagnosticsSampler.isClosed()
+            override fun isCurrentThreadInterrupted(): Boolean = Thread.currentThread().isInterrupted
+            override fun root(): AccessibilityNodeInfo? = this@SoulBotService.root()
+            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
+            override fun screenWidth(): Int = this@SoulBotService.screenWidth()
+            override fun screenHeight(): Int = this@SoulBotService.screenHeight()
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+        })
+    }
+
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -751,111 +773,7 @@ class SoulBotService : AccessibilityService() {
 
     private fun currentScreen(): SoulScreen = screenDetector.currentScreen()
 
-    private fun captureCompatibilitySnapshot() {
-        if (diagnosticsSampler.isClosed() || Thread.currentThread().isInterrupted) return
-        lastDiagnosticVisited = 0
-        lastDiagnosticTruncated = false
-        val now = System.currentTimeMillis()
-        val currentRoot = root() ?: return
-        if (currentRoot.packageName?.toString() != SOUL_PACKAGE) {
-            @Suppress("DEPRECATION")
-            currentRoot.recycle()
-            return
-        }
-
-        val rootBounds = rect(currentRoot).toUiRegion()
-        val effectiveBounds = AdaptiveUiPolicy.effectiveWindow(
-            screenWidth(),
-            screenHeight(),
-            rootBounds,
-        )
-        // Collect ids/capabilities in one bounded traversal of this root. The former
-        // helpers repeatedly refreshed rootInActiveWindow and traversed the tree on main.
-        val ids = mutableSetOf<String>()
-        var localChannel = false
-        var matchLabel = false
-        var matchProfile = false
-        var visibleNodeCount = 0
-        val scan = countVisibleNodes(currentRoot) { node ->
-            if (!runCatching { node.isVisibleToUser }.getOrDefault(false)) return@countVisibleNodes
-            val bounds = rect(node).toUiRegion()
-            if (!bounds.isValid || bounds.intersect(effectiveBounds) == null) return@countVisibleNodes
-            visibleNodeCount++
-            val id = node.viewIdResourceName.orEmpty()
-            if (id.isNotBlank()) ids += id
-            val title = textOf(node)
-            if (id == ID_SQUARE_CHANNEL_TAB && title.isNotBlank() && title != "关注" && title != "推荐") localChannel = true
-            if (title == "灵魂匹配" || title == "开始匹配") matchLabel = true
-            if (id == ID_GENERIC_TITLE && (title.startsWith("Ta的引力签") || title.startsWith("Ta的星座"))) matchProfile = true
-        }
-        lastDiagnosticVisited = scan.visited
-        lastDiagnosticTruncated = scan.truncated
-        if (diagnosticsSampler.isClosed() || Thread.currentThread().isInterrupted) return
-        val hasInput = ID_INPUT_BOX in ids
-        val capabilities = buildSet {
-            if (ID_PLANET_TAB in ids || ID_SQUARE_TAB in ids || ID_MSG_TAB in ids) add(SoulUiCapability.BOTTOM_NAV)
-            if (ID_CONV_LIST in ids || ID_CONV_NAME in ids) add(SoulUiCapability.CHAT_LIST)
-            if (hasInput) add(SoulUiCapability.CHAT_INPUT)
-            if (ID_SEND_BUTTON in ids) add(SoulUiCapability.SEND_BUTTON)
-            if (ID_SQUARE_PAGER in ids) add(SoulUiCapability.SQUARE)
-            if (localChannel) add(SoulUiCapability.LOCAL_CHANNEL)
-            if (ID_SOUL_MATCH_PERCENT in ids || (!hasInput && matchLabel)) add(SoulUiCapability.SOUL_MATCH)
-            if (ID_VOICE_BUBBLE in ids) add(SoulUiCapability.VOICE_MESSAGE)
-            if (ID_QIYU_CHAT in ids) add(SoulUiCapability.QIYU)
-            if (ID_CHAT_SECRET in ids) add(SoulUiCapability.PROFILE_DM)
-        }
-        val page = when {
-            ID_QIYU_CHAT in ids -> "奇遇铃"
-            ID_NO_SEND_CLOSE in ids -> "暂不聊天弹窗"
-            ID_GIFT_CLOSE in ids -> "礼物限制弹窗"
-            hasInput && (ID_SOUL_MATCH_PERCENT in ids || matchProfile) -> "灵魂匹配聊天"
-            hasInput -> "普通聊天"
-            ID_CHAT_SECRET in ids -> "用户主页"
-            ID_GREETING_TIPS in ids -> "新招呼列表"
-            ID_SQUARE_PAGER in ids -> "广场"
-            ID_CONV_NAME in ids -> "聊天列表"
-            matchLabel -> "星球"
-            else -> "未识别页面"
-        }
-        val signature = listOf(
-            page,
-            rootBounds,
-            effectiveBounds,
-            capabilities.sortedBy(SoulUiCapability::ordinal).joinToString { it.key },
-            visibleNodeCount / 10,
-        ).joinToString("|")
-        if (signature == lastDiagnosticsSignature) return
-        lastDiagnosticsSignature = signature
-        DeviceCompatibilityStore.record(
-            applicationContext,
-            SoulUiDiagnosticSnapshot(
-                capturedAt = now,
-                page = page,
-                rootBounds = rootBounds,
-                effectiveBounds = effectiveBounds,
-                visibleNodeCount = visibleNodeCount,
-                capabilities = capabilities,
-            ),
-        )
-    }
-
-    private fun countVisibleNodes(
-        rootNode: AccessibilityNodeInfo,
-        inspect: (AccessibilityNodeInfo) -> Unit,
-    ): DiagnosticTreeScan = DiagnosticTreeSampler.scan(
-        root = rootNode,
-        maxNodes = 320,
-        timeBudgetMs = 100L,
-        clock = { android.os.SystemClock.elapsedRealtime() },
-        cancelled = { diagnosticsSampler.isClosed() || Thread.currentThread().isInterrupted },
-        childCount = { runCatching { it.childCount }.getOrDefault(0) },
-        childAt = { node, index -> runCatching { node.getChild(index) }.getOrNull() },
-        visit = inspect,
-        release = { node ->
-            @Suppress("DEPRECATION")
-            runCatching { node.recycle() }
-        },
-    )
+    private fun captureCompatibilitySnapshot() = compatibilitySnapshotCollector.capture()
 
     private fun isOnChat(): Boolean {
         val screen = currentScreen()
