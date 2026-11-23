@@ -1,5 +1,7 @@
 package com.soulbot.app.model
 
+import com.soulbot.app.data.ModelEndpointPrefs
+
 import com.soulbot.app.diagnostics.RuntimeLog
 
 import android.content.Context
