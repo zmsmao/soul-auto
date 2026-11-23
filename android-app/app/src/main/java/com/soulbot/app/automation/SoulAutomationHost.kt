@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /** Operations the scheduler may request from the Android page agent. */
 internal interface SoulAutomationHost {
+    val isRunning: Boolean
     fun setNextStep(action: String, delayMs: Long = 0L)
     fun sleep(ms: Long)
     fun currentScreen(): SoulScreen

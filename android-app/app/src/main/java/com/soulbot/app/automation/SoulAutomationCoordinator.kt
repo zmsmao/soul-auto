@@ -70,19 +70,19 @@ internal class SoulAutomationCoordinator(
                 }
                 if (sent) lastDm = System.currentTimeMillis()
             }
-            if (!sent && SoulBotService.running) {
+            if (!sent && host.isRunning) {
                 if (host.hasUnreadRedDot()) {
                     host.gotoChatList()
                     return
                 }
                 if (!host.isOnSquare()) host.gotoSquare()
                 RuntimeLog.record(context, "square round ended; sent=false; cooldown=false")
-                host.setNextStep("继续寻找可私聊用户", SoulBotService.SQUARE_RETRY_DELAY_MS)
-                host.sleep(SoulBotService.SQUARE_RETRY_DELAY_MS)
+                host.setNextStep("继续寻找可私聊用户", SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
+                host.sleep(SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
             }
         }
 
-        mainLoop@ while (SoulBotService.running) {
+        mainLoop@ while (host.isRunning) {
             try {
                 val screen = host.currentScreen()
                 if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
@@ -91,7 +91,7 @@ internal class SoulAutomationCoordinator(
                     stuckCount = 0
                     RuntimeLog.record(
                         context,
-                        "screen=${screen.name} pager=${host.findVisibleById(SoulBotService.ID_SQUARE_PAGER) != null} avatar=${host.findVisibleById(SoulBotService.ID_SQUARE_AVATAR) != null} name=${host.findVisibleById(SoulBotService.ID_CONV_NAME) != null} input=${host.findVisibleById(SoulBotService.ID_INPUT_BOX) != null}"
+                        "screen=${screen.name} pager=${host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_PAGER) != null} avatar=${host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_AVATAR) != null} name=${host.findVisibleById(SoulAccessibilityIds.ID_CONV_NAME) != null} input=${host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX) != null}"
                     )
                 }
                 if (stuckCount > 8 && !host.hasPendingQiyu()) {
