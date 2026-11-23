@@ -1,10 +1,7 @@
 package com.soulbot.app
 
 import android.accessibilityservice.AccessibilityService
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.graphics.Rect
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.os.Handler
@@ -85,7 +82,7 @@ class SoulBotService : AccessibilityService() {
         val viewportKey: String,
     )
 
-    private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this) }
+    private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
 
@@ -300,61 +297,12 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun waitForInputText(expected: String, timeoutMs: Long = 1000): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (textOf(findById(ID_INPUT_BOX)) == expected) return true
-            sleep(100)
-        }
-        return textOf(findById(ID_INPUT_BOX)) == expected
-    }
+    private fun waitForInputText(expected: String, timeoutMs: Long = 1000): Boolean =
+        pageUi.waitForInputText(expected, timeoutMs)
 
-    private fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
-        runCatching { node.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
-        val args = Bundle()
-        args.putCharSequence(
-            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text
-        )
-        runCatching { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args) }
-        if (waitForInputText(text)) {
-            return true
-        }
+    private fun setText(node: AccessibilityNodeInfo, text: String): Boolean =
+        pageUi.setText(node, text)
 
-        // ACTION_SET_TEXT is unreliable in some Soul releases. Use the public
-        // accessibility paste action as a fallback and restore the user's clipboard.
-        val input = findById(ID_INPUT_BOX) ?: return false
-        tapNode(input)
-        runCatching { input.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
-        val currentText = textOf(input)
-        val selection = Bundle().apply {
-            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
-            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, currentText.length)
-        }
-        runCatching { input.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection) }
-
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-        val oldClip = runCatching { clipboard.primaryClip }.getOrNull()
-        return try {
-            clipboard.setPrimaryClip(ClipData.newPlainText("SoulBot reply", text))
-            sleep(100)
-            runCatching {
-                input.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-            }.getOrDefault(false) && waitForInputText(text)
-        } catch (e: Exception) {
-            RuntimeLog.record(applicationContext, "message text injection failed", e)
-            false
-        } finally {
-            try {
-                if (oldClip != null) {
-                    clipboard.setPrimaryClip(oldClip)
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    clipboard.clearPrimaryClip()
-                } else {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
-                }
-            } catch (_: Exception) {}
-        }
-    }
 
     private fun contains(outer: Rect, inner: Rect): Boolean = pageUi.contains(outer, inner)
 

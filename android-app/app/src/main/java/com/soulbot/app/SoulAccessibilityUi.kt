@@ -2,13 +2,21 @@ package com.soulbot.app
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Build
+import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.math.roundToInt
 
 /** Low-level Soul accessibility tree and gesture operations. No chat/business policy lives here. */
-internal class SoulAccessibilityUi(private val service: AccessibilityService) {
+internal class SoulAccessibilityUi(
+    private val service: AccessibilityService,
+    private val pause: (Long) -> Unit,
+) {
     fun root(): AccessibilityNodeInfo? =
         runCatching { service.rootInActiveWindow }.getOrNull()
     fun isSoulForeground(): Boolean = runCatching {
@@ -143,6 +151,63 @@ internal class SoulAccessibilityUi(private val service: AccessibilityService) {
     fun pressBack() {
         service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
     }
+    fun waitForInputText(expected: String, timeoutMs: Long = 1000): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (textOf(findById(ID_INPUT_BOX)) == expected) return true
+            pause(100)
+        }
+        return textOf(findById(ID_INPUT_BOX)) == expected
+    }
+
+    fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
+        runCatching { node.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
+        val args = Bundle()
+        args.putCharSequence(
+            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text
+        )
+        runCatching { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args) }
+        if (waitForInputText(text)) {
+            return true
+        }
+
+        // ACTION_SET_TEXT is unreliable in some Soul releases. Use the public
+        // accessibility paste action as a fallback and restore the user's clipboard.
+        val input = findById(ID_INPUT_BOX) ?: return false
+        tapNode(input)
+        runCatching { input.performAction(AccessibilityNodeInfo.ACTION_FOCUS) }
+        val currentText = textOf(input)
+        val selection = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, currentText.length)
+        }
+        runCatching { input.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection) }
+
+        val clipboard = service.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val oldClip = runCatching { clipboard.primaryClip }.getOrNull()
+        return try {
+            clipboard.setPrimaryClip(ClipData.newPlainText("SoulBot reply", text))
+            pause(100)
+            runCatching {
+                input.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            }.getOrDefault(false) && waitForInputText(text)
+        } catch (e: Exception) {
+            RuntimeLog.record(service.applicationContext, "message text injection failed", e)
+            false
+        } finally {
+            try {
+                if (oldClip != null) {
+                    clipboard.setPrimaryClip(oldClip)
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    clipboard.clearPrimaryClip()
+                } else {
+                    clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+
     fun contains(outer: Rect, inner: Rect): Boolean =
         outer.left <= inner.left && outer.top <= inner.top &&
             outer.right >= inner.right && outer.bottom >= inner.bottom
