@@ -149,6 +149,19 @@ class SoulBotService : AccessibilityService() {
         })
     }
 
+    private val conversationListScanner: SoulConversationListScanner by lazy(LazyThreadSafetyMode.NONE) {
+        SoulConversationListScanner(object : SoulConversationListHost {
+            override val context: android.content.Context get() = applicationContext
+            override fun isOnList(): Boolean = this@SoulBotService.isOnList()
+            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
+            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
+                this@SoulBotService.isVisibleOnScreen(node)
+            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
+            override fun contains(outer: Rect, inner: Rect): Boolean = this@SoulBotService.contains(outer, inner)
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+        })
+    }
+
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -587,11 +600,7 @@ class SoulBotService : AccessibilityService() {
 
     private fun swipeVertically(containerId: String, startRatio: Float, endRatio: Float, duration: Long = 300) = pageUi.swipeVertically(containerId, startRatio, endRatio, duration)
 
-    private fun conversationListSnapshot(): String =
-        findByIds(ID_CONV_NAME)
-            .map { node -> rect(node).top to textOf(node) }
-            .sortedBy { it.first }
-            .joinToString("|") { (top, name) -> "$top:$name" }
+    private fun conversationListSnapshot(): String = conversationListScanner.snapshot()
 
     private fun scrollConversationToTop() = navigation.scrollConversationToTop()
 
@@ -1002,97 +1011,10 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 扫未读（仅会话列表） =====
 
-    private fun scanUnread(): List<UnreadConversationCandidate> {
-        if (!isOnList()) return emptyList()
-        val items = findByIds(ID_CONV_ITEM)
-            .filter(::isVisibleOnScreen)
-            .sortedBy { rect(it).top }
-        val names = findByIds(ID_CONV_NAME).filter(::isVisibleOnScreen)
-        val times = findByIds(ID_CONV_TIME).filter(::isVisibleOnScreen)
-        // Soul keeps recycled/hidden unread badges in the accessibility tree. Using
-        // them made an already-read row reopen forever and wait for content that
-        // could never be "unread" again.
-        val badges = findByIds(ID_UNREAD_BADGE).filter(::isVisibleOnScreen)
-        val result = mutableListOf<UnreadConversationCandidate>()
-        for ((displayOrder, item) in items.withIndex()) {
-            val ib = rect(item)
-            val hasBadge = badges.any { contains(ib, rect(it)) }
-            if (!hasBadge) continue
-            var name = ""
-            for (n in names) { if (contains(ib, rect(n))) { name = textOf(n); break } }
-            var time = ""
-            for (tm in times) { if (contains(ib, rect(tm))) { time = textOf(tm); break } }
-            if (name.isNotBlank()) {
-                result += UnreadConversationCandidate(
-                    name = name,
-                    timeText = time,
-                    displayOrder = displayOrder,
-                    previewText = conversationRowPreview(item, name, time),
-                )
-            }
-        }
-        val ordered = UnreadConversationPolicy.oldestFirst(result)
-        RuntimeLog.record(
-            applicationContext,
-            "unread scan completed; visibleRows=${items.size}; visibleBadges=${badges.size}; candidates=${ordered.size}; selectedContact=${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(applicationContext, it.name) } ?: "none"}",
-        )
-        return ordered
-    }
+    private fun scanUnread(): List<UnreadConversationCandidate> = conversationListScanner.scanUnread()
 
-    private fun conversationRowPreview(
-        row: AccessibilityNodeInfo,
-        contactName: String,
-        timeText: String,
-    ): String {
-        val candidates = mutableListOf<String>()
-        var visited = 0
-
-        fun collect(node: AccessibilityNodeInfo, depth: Int) {
-            if (depth > 5 || visited >= 80) return
-            visited++
-            val values = listOf(
-                node.text?.toString().orEmpty(),
-                node.contentDescription?.toString().orEmpty(),
-            )
-            for (value in values) {
-                val clean = value.trim().replace(Regex("\\s+"), " ")
-                if (clean.length !in 2..160) continue
-                if (clean == contactName || clean == timeText) continue
-                if (contactName.isNotBlank() && clean.contains(contactName)) continue
-                if (timeText.isNotBlank() && clean.contains(timeText)) continue
-                if (Regex("^\\d+$").matches(clean)) continue
-                if (clean.contains("未读") || clean.contains("条消息")) continue
-                candidates += clean
-            }
-            for (index in 0 until minOf(node.childCount, 24)) {
-                val child = node.getChild(index) ?: continue
-                collect(child, depth + 1)
-                if (visited >= 80) break
-            }
-        }
-
-        collect(row, 0)
-        val distinct = candidates.distinct()
-        return distinct.maxByOrNull(UnreadConversationPolicy::priorityScore)
-            ?.takeIf { UnreadConversationPolicy.priorityScore(it) > 0 }
-            ?: distinct.firstOrNull()
-            ?: ""
-    }
-
-    private fun findConversation(name: String): AccessibilityNodeInfo? {
-        if (!isOnList()) return null
-        val items = findByIds(ID_CONV_ITEM).filter(::isVisibleOnScreen)
-        val names = findByIds(ID_CONV_NAME).filter(::isVisibleOnScreen)
-        for (item in items) {
-            val ib = rect(item)
-            for (n in names) {
-                if (contains(ib, rect(n)) && textOf(n) == name) return item
-            }
-        }
-        return null
-    }
-
-    // ===== LLM =====
+    private fun findConversation(name: String): AccessibilityNodeInfo? =
+        conversationListScanner.findConversation(name)
 
     private fun normalizeReply(text: String): String =
         text.trim().replace(Regex("""[\s，。！？!?、~～]+"""), "")
