@@ -127,6 +127,54 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
+    private val qiyuWorkflow: SoulQiyuWorkflow by lazy(LazyThreadSafetyMode.NONE) {
+        SoulQiyuWorkflow(object : SoulQiyuHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun findVisibleById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findVisibleById(id)
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun isSoulForeground(): Boolean = this@SoulBotService.isSoulForeground()
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun hasConfirmedConversationName(name: String): Boolean =
+                this@SoulBotService.hasConfirmedConversationName(name)
+            override fun displayedConversationName(): String = this@SoulBotService.displayedConversationName()
+            override fun skipNoSend() = this@SoulBotService.skipNoSend()
+            override fun skipGift() = this@SoulBotService.skipGift()
+            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
+            override fun convertIncomingVoiceMessages(): Boolean = this@SoulBotService.convertIncomingVoiceMessages()
+            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
+            override fun hasConversationHistory(contactName: String, scene: ReplyScene): Boolean =
+                conversationMemoryDb?.hasHistory(memoryThreadId(contactName), scene) == true
+            override fun learnFromManualReplies(contactName: String, thread: List<Pair<String, String>>, scene: ReplyScene) =
+                this@SoulBotService.learnFromManualReplies(contactName, thread, scene)
+            override fun unseenIncomingEvents(contactName: String, thread: List<Pair<String, String>>, tracker: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent> =
+                this@SoulBotService.unseenIncomingEvents(contactName, thread, tracker, pendingCount)
+            override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
+            override fun currentIncomingMessageKeys(contactName: String): List<String> =
+                this@SoulBotService.currentIncomingMessageKeys(contactName)
+            override fun visibleTitleTexts(): List<String> = this@SoulBotService.visibleTitleTexts()
+            override fun readQiyuSignature(): String = this@SoulBotService.readQiyuSignature()
+            override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                this@SoulBotService.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
+            override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
+                this@SoulBotService.generateValidatedOpening(action, context)
+            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> = this@SoulBotService.pendingIncomingVoiceBubbles()
+            override fun splitReply(text: String): List<String> = this@SoulBotService.splitReply(text)
+            override fun outgoingOccurrenceCount(text: String): Int = this@SoulBotService.outgoingOccurrenceCount(text)
+            override fun send(text: String, expectedContact: String?, inputTimeoutMs: Long?, onInputWritten: (String) -> Unit, onSendClick: () -> Unit, idempotencyKey: String?, sceneOverride: ReplyScene?, expectedEventAnchor: String?): Boolean =
+                this@SoulBotService.send(text, expectedContact, inputTimeoutMs, onInputWritten, onSendClick, idempotencyKey, sceneOverride, expectedEventAnchor)
+            override fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String, opening: OpeningContext?, scene: ReplyScene) =
+                this@SoulBotService.recordAutomatedInteraction(contactName, incomingMessages, reply, opening, scene)
+            override fun recordHistory(contactName: String, context: String, reply: String) {
+                historyDb?.record(contactName, context, reply)
+            }
+            override fun gotoChatList(): Boolean = this@SoulBotService.gotoChatList()
+        })
+    }
+
     private val random = Random.Default
     private var worker: Thread? = null
     private var historyDb: HistoryDatabase? = null
@@ -134,28 +182,6 @@ class SoulBotService : AccessibilityService() {
     private var replyReplayDb: ReplyReplayDatabase? = null
     private var conversationMemoryDb: ConversationMemoryDatabase? = null
     @Volatile private var activeGenerationCancellation: ModelCallCancellation? = null
-    private val qiyuSeen = ConversationSeenTracker()
-    private data class PendingQiyu(
-        val signature: String,
-        val reason: String,
-        var contactName: String = "",
-        var failures: Int = 0,
-        var retryAt: Long = 0L,
-        var prepared: QiyuPreparedReply? = null,
-    )
-    private data class QiyuPreparedReply(
-        val text: String,
-        val thread: List<Pair<String, String>>,
-        val pending: List<String>,
-        val opening: OpeningContext?,
-        val outgoingBefore: Int,
-        val eventAnchor: String,
-        val pendingEventKeys: List<String>,
-        var attempts: Int = 0,
-        var clickedSend: Boolean = false,
-        var writtenText: String? = null,
-    )
-    private var pendingQiyu: PendingQiyu? = null
     @Volatile private var activeReplyName: String? = null
     private val restartHandler = Handler(Looper.getMainLooper())
     private var lastDiagnosticsSignature = ""
@@ -1801,9 +1827,13 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun hasPendingQiyu(): Boolean = pendingQiyu != null
+    private fun hasPendingQiyu(): Boolean = qiyuWorkflow.hasPending()
 
-    private fun clearPendingQiyu() { pendingQiyu = null }
+    private fun clearPendingQiyu() = qiyuWorkflow.clearPending()
+
+    private fun handleQiyu(): Boolean = qiyuWorkflow.handle()
+
+    private fun resumePendingQiyu(): Boolean = qiyuWorkflow.resume()
 
     private fun readQiyuSignature(): String {
         return SoulMatchContent.gravityTags(visibleTitleTexts())
@@ -1987,245 +2017,6 @@ class SoulBotService : AccessibilityService() {
                 gotoSoulPlanet()
             }
         }
-    }
-
-    private fun handleQiyu(): Boolean {
-        if (currentScreen() != SoulScreen.QIYU_POPUP) return false
-        val chatBtn = findVisibleById(ID_QIYU_CHAT) ?: return false
-        val signature = textOf(findVisibleById(ID_QIYU_SIGNATURE))
-        val reason = textOf(findVisibleById(ID_QIYU_REASON))
-        val session = pendingQiyu?.takeIf {
-            it.contactName.isBlank() && it.signature == signature && it.reason == reason
-        } ?: PendingQiyu(signature, reason)
-        val remaining = session.retryAt - System.currentTimeMillis()
-        if (remaining > 0L) { sleep(minOf(500L, remaining)); return false }
-        pendingQiyu = session
-        setNextStep("打开奇遇铃私聊")
-        if (!tapNode(chatBtn)) {
-            return deferQiyu(session, "open_click_failed", "奇遇铃私聊按钮尚未生效")
-        }
-        sleep(500)
-        return resumePendingQiyu()
-    }
-
-    private fun deferQiyu(session: PendingQiyu, reason: String, status: String): Boolean {
-        if (pendingQiyu !== session) return false
-        session.failures++
-        val delay = QiyuConversationPolicy.retryDelayMs(session.failures)
-        session.retryAt = System.currentTimeMillis() + delay
-        RuntimeLog.record(applicationContext,
-            "qiyu pending; reason=$reason; failures=${session.failures}; retryMs=$delay; " +
-                "contactId=${DiagnosticIdentity.contactId(applicationContext, session.contactName)}; prepared=${session.prepared != null}")
-        setNextStep("$status；保留当前会话，稍后复核", delay)
-        return false
-    }
-
-    /** A missing title is a loading/compatibility issue, not permission to abandon the encounter. */
-    private fun resumePendingQiyu(): Boolean {
-        val session = pendingQiyu ?: return false
-        val remaining = session.retryAt - System.currentTimeMillis()
-        if (remaining > 0L) {
-            sleep(minOf(500L, remaining))
-            return false
-        }
-        val deadline = System.currentTimeMillis() + QiyuConversationPolicy.LOAD_TIMEOUT_MS
-        while (running && isSoulForeground()) {
-            val screen = currentScreen()
-            if (screen == SoulScreen.GIFT || screen == SoulScreen.NO_SEND) {
-                pendingQiyu = null
-                RuntimeLog.record(applicationContext, "qiyu cancelled; reason=chat_not_allowed; screen=${screen.name}")
-                if (screen == SoulScreen.GIFT) skipGift() else skipNoSend()
-                return false
-            }
-            val name = if (isOnChat()) displayedConversationName().trim() else ""
-            if (name.isNotBlank()) {
-                if (session.contactName.isNotBlank() && !hasConfirmedConversationName(session.contactName)) {
-                    pendingQiyu = null
-                    RuntimeLog.record(applicationContext, "qiyu cancelled; reason=contact_changed")
-                    return false
-                }
-                session.contactName = name
-                break
-            }
-            val wait = deadline - System.currentTimeMillis()
-            if (wait <= 0L) return deferQiyu(session, "contact_not_loaded", "奇遇铃联系人仍未读取到，未发送")
-            setNextStep("等待奇遇铃聊天标题加载，确认联系人后再发送", wait)
-            sleep(minOf(500L, wait))
-        }
-        if (!running || !isOnChat() || !hasConfirmedConversationName(session.contactName)) return false
-        val contactName = session.contactName
-
-        session.prepared?.let { prepared ->
-            return sendPreparedQiyu(session, prepared)
-        }
-        if (!convertIncomingVoiceMessages()) {
-            return deferQiyu(session, "voice_unresolved", "奇遇铃语音尚未完成转写，未发送")
-        }
-        // Wait for outgoing history too: an empty first snapshot does not prove this is a new chat.
-        var thread = readThread()
-        var stableSince = System.currentTimeMillis()
-        val loadDeadline = stableSince + QiyuConversationPolicy.LOAD_TIMEOUT_MS
-        while (running && isOnChat() && hasConfirmedConversationName(contactName) &&
-            System.currentTimeMillis() < loadDeadline && System.currentTimeMillis() - stableSince < MESSAGE_SETTLE_MS) {
-            setNextStep("确认奇遇铃聊天内容已加载", 500)
-            sleep(500)
-            val latest = readThread()
-            if (latest != thread) stableSince = System.currentTimeMillis()
-            thread = latest
-        }
-        if (!running || !isOnChat() || !hasConfirmedConversationName(contactName)) {
-            return deferQiyu(session, "chat_changed_during_load", "奇遇铃聊天页面变化，未发送")
-        }
-        if (pendingIncomingVoiceBubbles().isNotEmpty()) {
-            return deferQiyu(session, "voice_arrived", "奇遇铃收到新语音，等待转写")
-        }
-        if (QiyuConversationPolicy.shouldWaitForHistory(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.QIYU) == true)) {
-            return deferQiyu(session, "stored_history_not_visible", "奇遇铃已有本地记录，但页面内容尚未读到")
-        }
-        val route = OpeningConversationRoute.action(thread, conversationMemoryDb?.hasHistory(memoryThreadId(contactName), ReplyScene.QIYU) == true)
-        learnFromManualReplies(contactName, thread, ReplyScene.QIYU)
-        val pendingCount = OpeningConversationRoute.pendingIncoming(thread).size
-        val pendingEvents = unseenIncomingEvents(contactName, thread, qiyuSeen, pendingCount)
-        val pending = pendingEvents.map { it.text }
-        if (route == OpeningConversationAction.SKIP ||
-            (route == OpeningConversationAction.REPLY && pending.isEmpty())
-        ) {
-            pendingQiyu = null
-            RuntimeLog.record(applicationContext,
-                "qiyu skipped; reason=already_answered; contactId=${DiagnosticIdentity.contactId(applicationContext, contactName)}; messages=${thread.size}")
-            setNextStep("奇遇铃已有会话且没有新内容，不重复发送开场")
-            gotoChatList()
-            return false
-        }
-        val openingContext = OpeningContext(
-            ReplyScene.QIYU,
-            contactName,
-            listOf(session.signature, readQiyuSignature()).filter(String::isNotBlank).joinToString("\n"),
-            SoulMatchContent.zodiac(visibleTitleTexts()),
-            session.reason,
-        )
-        val replying = route == OpeningConversationAction.REPLY
-        val eventAnchor = currentIncomingMessageKeys(contactName).joinToString(",")
-        val finalReply = if (replying) {
-            generateValidatedChatReply(contactName, thread, pending, ReplyScene.QIYU)
-        } else generateValidatedOpening("优先生成奇遇铃开场", openingContext)
-        if (finalReply == null) {
-            if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != thread ||
-                currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
-            ) {
-                return deferQiyu(session, "incoming_changed_during_generation", "奇遇铃收到新消息，旧生成已取消，稍后按最新上下文重新准备")
-            }
-            return deferQiyu(session, "generation_failed", "奇遇铃回复生成失败，未发送")
-        }
-        if (!running || !isOnChat() || !hasConfirmedConversationName(contactName) ||
-            pendingIncomingVoiceBubbles().isNotEmpty() ||
-            readThread() != thread ||
-            currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
-        ) {
-            return deferQiyu(session, "incoming_changed", "奇遇铃会话有变化，将按最新内容重新准备")
-        }
-        val sendText = splitReply(finalReply).single()
-        val prepared = QiyuPreparedReply(
-            sendText, thread, pending, openingContext.takeUnless { replying },
-            outgoingOccurrenceCount(sendText), eventAnchor, pendingEvents.map { it.key },
-        )
-        session.prepared = prepared
-        return sendPreparedQiyu(session, prepared)
-    }
-
-    private fun sendPreparedQiyu(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
-        val contactName = session.contactName
-        if (!running || !isOnChat() || !hasConfirmedConversationName(contactName)) return false
-        val input = findVisibleById(ID_INPUT_BOX)
-            ?: return deferQiyu(session, "input_not_loaded", "奇遇铃输入框尚未读到，保留原草稿")
-        val inputText = if (input.isShowingHintText) "" else textOf(input)
-        val recovery = QiyuConversationPolicy.sendRecovery(
-            outgoingOccurrenceCount(prepared.text) > prepared.outgoingBefore,
-            prepared.clickedSend,
-            inputText == prepared.text,
-            prepared.attempts,
-        )
-        if (recovery == QiyuSendRecovery.CONFIRMED) return finishQiyuSend(session, prepared)
-        if (pendingIncomingVoiceBubbles().isNotEmpty() || readThread() != prepared.thread ||
-            currentIncomingMessageKeys(contactName).joinToString(",") != prepared.eventAnchor
-        ) {
-            val refresh = QiyuConversationPolicy.draftRefresh(inputText, prepared.writtenText, prepared.clickedSend)
-            val cleared = refresh == QiyuDraftRefresh.CLEAR_OWNED_UNSENT && clearOwnedQiyuDraft(session, prepared)
-            if (!QiyuConversationPolicy.mayDiscardDraft(refresh, cleared)) {
-                val reason = when (refresh) {
-                    QiyuDraftRefresh.WAIT_CONFIRMATION -> "incoming_changed_send_unconfirmed"
-                    QiyuDraftRefresh.KEEP_OTHER_INPUT -> "incoming_changed_input_edited"
-                    else -> "owned_draft_clear_failed"
-                }
-                return deferQiyu(session, reason, "奇遇铃收到新内容，旧草稿尚不能安全撤回；保留原稿等待确认")
-            }
-            session.prepared = null
-            return deferQiyu(session, "incoming_changed_before_send", "奇遇铃收到新内容，已撤回未发送草稿并重新准备")
-        }
-        if (recovery == QiyuSendRecovery.WAIT_CONFIRMATION) {
-            return deferQiyu(session, "send_unconfirmed", "奇遇铃发送尚未确认，不重复点击，请检查当前输入框")
-        }
-        if (inputText.isNotEmpty() && inputText != prepared.text) {
-            return deferQiyu(session, "input_edited", "输入框已有其他内容，不覆盖你的草稿")
-        }
-        prepared.attempts++
-        setNextStep("立即发送奇遇铃私聊回复")
-        val qiyuOpeningKey = prepared.opening?.let {
-            ConversationIdentity.sendKey(
-                memoryThreadId(contactName),
-                ReplyScene.QIYU.name,
-                listOf(ConversationIdentity.digest(
-                    session.signature + "\u0000" + session.reason + "\u0000" + it.content,
-                )),
-                prepared.text,
-            )
-        }
-        val sent = send(
-            prepared.text,
-            contactName,
-            QiyuConversationPolicy.LOAD_TIMEOUT_MS,
-            onInputWritten = { prepared.writtenText = it },
-            onSendClick = { prepared.clickedSend = true },
-            idempotencyKey = qiyuOpeningKey,
-            sceneOverride = ReplyScene.QIYU,
-            expectedEventAnchor = prepared.eventAnchor,
-        )
-        if (sent) return finishQiyuSend(session, prepared)
-        return deferQiyu(session, "send_failed", "奇遇铃消息未确认发出，将检查同一条草稿")
-    }
-
-    /** Never uses paste or replaces a user's edited draft when withdrawing an obsolete reply. */
-    private fun clearOwnedQiyuDraft(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
-        if (!running || prepared.clickedSend || !isOnChat() || !hasConfirmedConversationName(session.contactName)) return false
-        val input = findVisibleById(ID_INPUT_BOX) ?: return false
-        val text = if (input.isShowingHintText) "" else textOf(input)
-        if (QiyuConversationPolicy.draftRefresh(text, prepared.writtenText, prepared.clickedSend) !=
-            QiyuDraftRefresh.CLEAR_OWNED_UNSENT) return false
-        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "") }
-        val accepted = runCatching { input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args) }.getOrDefault(false)
-        if (!accepted) return false
-        val deadline = System.currentTimeMillis() + 1000L
-        while (running && System.currentTimeMillis() < deadline) {
-            if (!isOnChat() || !hasConfirmedConversationName(session.contactName)) return false
-            val current = findVisibleById(ID_INPUT_BOX) ?: return false
-            if (current.isShowingHintText || textOf(current).isEmpty()) return true
-            sleep(100)
-        }
-        return false
-    }
-
-    private fun finishQiyuSend(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
-        pendingQiyu = null
-        qiyuSeen.markSeen(memoryThreadId(session.contactName), prepared.pendingEventKeys)
-        recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening, scene = ReplyScene.QIYU)
-        historyDb?.record(session.contactName,
-            prepared.opening?.let { "奇遇铃资料：${it.content}" } ?: prepared.pending.joinToString("\n"), prepared.text)
-        RuntimeLog.record(applicationContext,
-            "qiyu send confirmed; contactId=${DiagnosticIdentity.contactId(applicationContext, session.contactName)}; attempts=${prepared.attempts}")
-        setNextStep("奇遇铃回复已确认发送，返回会话列表", 1200)
-        sleep(1200)
-        gotoChatList()
-        return true
     }
 
     // ===== 回复会话（仅会话列表起点） =====
