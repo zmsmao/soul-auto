@@ -3624,44 +3624,43 @@ class SoulBotService : AccessibilityService() {
                         }
                     }
                     Screen.LIST -> {
-                        if (hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
-                            setNextStep("处理新招呼")
-                            openGreetingList()
-                        } else if (hasUnreadRedDot()) {
-                            val unread = scanUnread()
-                            if (unread.isNotEmpty()) {
-                                unreadTopSearchComplete = false
-                                val oldestUnread = unread.first()
-                                val name = oldestUnread.name
-                                val timeStr = oldestUnread.timeText
-                                val delay = replyDelay(timeStr)
-                                if (delay > 0) {
-                                    setNextStep("回复 $name", delay)
-                                    if (!waitUnlessQiyu(delay)) continue@mainLoop
-                                }
-                                setNextStep(
-                                    if (unread.size > 1) {
-                                        "共 ${unread.size} 条未读，先回复最早的 $name"
-                                    } else {
-                                        "回复 $name"
-                                    },
-                                )
-                                replyTo(name, seen)
-                            } else if (!unreadTopSearchComplete) {
-                                setNextStep("回到会话顶部")
-                                scrollConversationToTop()
-                                unreadTopSearchComplete = true
-                                setNextStep("重新检查未读消息", 800)
-                                sleep(800)
-                            } else {
-                                // The tab red dot can remain stale after all rows are read.
-                                // Keep the acknowledgement while the same dot remains visible,
-                                // otherwise an empty list would pull us back from the work page.
-                                unreadTopSearchComplete = true
-                                handleIdleWork()
-                            }
-                        } else {
+                        // Private unread messages outrank greetings and all idle outbound work.
+                        // The unread list itself is ordered by high-intent preview, then message age.
+                        val unread = if (hasUnreadRedDot()) scanUnread() else emptyList()
+                        if (unread.isNotEmpty()) {
                             unreadTopSearchComplete = false
+                            val nextUnread = unread.first()
+                            val name = nextUnread.name
+                            val timeStr = nextUnread.timeText
+                            val delay = replyDelay(timeStr)
+                            if (delay > 0) {
+                                setNextStep("回复 $name", delay)
+                                if (!waitUnlessQiyu(delay)) continue@mainLoop
+                            }
+                            setNextStep(
+                                if (unread.size > 1) {
+                                    "共 ${unread.size} 条未读，优先回复 $name"
+                                } else {
+                                    "回复 $name"
+                                },
+                            )
+                            replyTo(name, seen)
+                        } else if (hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
+                            // Only handle greetings after the private inbox has no unread row.
+                            setNextStep("私聊未读已处理，开始处理新招呼")
+                            openGreetingList()
+                        } else if (hasUnreadRedDot() && !unreadTopSearchComplete) {
+                            // The tab red dot can remain stale after all rows are read.
+                            // Scan from the top once before accepting that the inbox is empty.
+                            setNextStep("回到会话顶部")
+                            scrollConversationToTop()
+                            unreadTopSearchComplete = true
+                            setNextStep("重新检查未读消息", 800)
+                            sleep(800)
+                        } else {
+                            if (!hasUnreadRedDot()) unreadTopSearchComplete = false
+                            // With no private unread rows (or a stale, fully scanned dot),
+                            // normal greeting and idle work can proceed.
                             handleIdleWork()
                         }
                     }
