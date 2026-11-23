@@ -14,7 +14,6 @@ import com.soulbot.app.workflow.privatechat.*
 import com.soulbot.app.workflow.qiyu.*
 import com.soulbot.app.workflow.square.*
 
-import com.soulbot.app.*
 
 import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo

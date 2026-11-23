@@ -1,18 +1,12 @@
 package com.soulbot.app.app
 import com.soulbot.app.*
 import com.soulbot.app.accessibility.*
-import com.soulbot.app.app.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
-import com.soulbot.app.workflow.greeting.*
-import com.soulbot.app.workflow.match.*
-import com.soulbot.app.workflow.privatechat.*
-import com.soulbot.app.workflow.qiyu.*
-import com.soulbot.app.workflow.square.*
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
@@ -22,6 +16,16 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.random.Random
+import com.soulbot.app.workflow.greeting.SoulGreetingHost
+import com.soulbot.app.workflow.greeting.SoulGreetingWorkflow
+import com.soulbot.app.workflow.match.SoulMatchHost
+import com.soulbot.app.workflow.match.SoulMatchWorkflow
+import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
+import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
+import com.soulbot.app.workflow.qiyu.SoulQiyuHost
+import com.soulbot.app.workflow.qiyu.SoulQiyuWorkflow
+import com.soulbot.app.workflow.square.SoulSquareHost
+import com.soulbot.app.workflow.square.SoulSquareWorkflow
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
 import com.soulbot.app.workflow.greeting.SoulGreetingHost

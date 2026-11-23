@@ -16,7 +16,6 @@ import com.soulbot.app.workflow.square.*
 
 import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.*
 
 /** Android and conversation capabilities used by the greeting workflow. */
 internal interface SoulGreetingHost {
