@@ -1,5 +1,7 @@
 package com.soulbot.app.accessibility
 
+import com.soulbot.app.conversation.ConversationIdentity
+import com.soulbot.app.conversation.SoulAccessibilityIdentity
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 

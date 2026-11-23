@@ -1,5 +1,8 @@
 package com.soulbot.app.accessibility
 
+import com.soulbot.app.data.AutomationMode
+import com.soulbot.app.data.IdleSurface
+import com.soulbot.app.diagnostics.RuntimeLog
 import android.content.Context
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
