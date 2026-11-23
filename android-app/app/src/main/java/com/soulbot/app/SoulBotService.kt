@@ -1,10 +1,8 @@
 package com.soulbot.app
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
@@ -14,7 +12,6 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.random.Random
-import kotlin.math.roundToInt
 
 class SoulBotService : AccessibilityService() {
 
@@ -79,20 +76,6 @@ class SoulBotService : AccessibilityService() {
         const val SOUL_MATCH_TIMEOUT_MS = 180_000L
     }
 
-    private enum class Screen {
-        CHAT,
-        SOUL_MATCH_CHAT,
-        SOUL_PLANET,
-        LIST,
-        SQUARE,
-        PROFILE,
-        GIFT,
-        NO_SEND,
-        GREETING_LIST,
-        QIYU_POPUP,
-        OUTSIDE,
-        OTHER,
-    }
 
     private class StoppedException : RuntimeException()
 
@@ -101,6 +84,14 @@ class SoulBotService : AccessibilityService() {
         val avatar: AccessibilityNodeInfo,
         val viewportKey: String,
     )
+
+    private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this) }
+
+    private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
+
+    private val messageReader: SoulMessageReader by lazy(LazyThreadSafetyMode.NONE) { SoulMessageReader(pageUi, ::isOnChat, ::isExpectedConversation, ::memoryThreadId, ::normalizeReply, ::voiceTranscriptFrom) }
+
+    private val navigation: SoulNavigationController by lazy(LazyThreadSafetyMode.NONE) { SoulNavigationController(applicationContext, pageUi, ::isSoulForeground, ::currentScreen, ::isSoulPlanetSurface, { action -> setNextStep(action) }, ::sleep, ::conversationListSnapshot) }
 
     private val random = Random.Default
     private var worker: Thread? = null
@@ -220,55 +211,21 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 基础辅助 =====
 
-    private fun root(): AccessibilityNodeInfo? =
-        runCatching { rootInActiveWindow }.getOrNull()
+    private fun root(): AccessibilityNodeInfo? = pageUi.root()
 
-    private fun isSoulForeground(): Boolean = runCatching {
-        root()?.packageName?.toString() == SOUL_PACKAGE
-    }.getOrDefault(false)
+    private fun isSoulForeground(): Boolean = pageUi.isSoulForeground()
 
-    private fun screenWidth(): Int = resources.displayMetrics.widthPixels
+    private fun screenWidth(): Int = pageUi.screenWidth()
 
-    private fun screenHeight(): Int = resources.displayMetrics.heightPixels
+    private fun screenHeight(): Int = pageUi.screenHeight()
 
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int = pageUi.dp(value)
 
-    private fun activeWindowRegion(): UiRegion {
-        val rootBounds = root()?.let(::rect)?.toUiRegion()
-        return AdaptiveUiPolicy.effectiveWindow(screenWidth(), screenHeight(), rootBounds)
-    }
+    private fun activeWindowRegion(): UiRegion = pageUi.activeWindowRegion()
 
-    private fun visibleContainerRegion(id: String): UiRegion? =
-        findByIds(id)
-            .asSequence()
-            .filter(::isVisibleOnScreen)
-            .map { rect(it).toUiRegion() }
-            .filter(UiRegion::isValid)
-            .maxByOrNull { it.width.toLong() * it.height }
-            ?.intersect(activeWindowRegion())
+    private fun visibleContainerRegion(id: String): UiRegion? = pageUi.visibleContainerRegion(id)
 
-    private fun swipeVertically(
-        containerId: String,
-        startRatio: Float,
-        endRatio: Float,
-        duration: Long = 300,
-    ) {
-        val area = visibleContainerRegion(containerId) ?: activeWindowRegion()
-        val line = AdaptiveUiPolicy.verticalGesture(
-            area = area,
-            startRatio = startRatio,
-            endRatio = endRatio,
-            edgeInset = dp(8),
-        )
-        swipe(
-            line.start.x.toFloat(),
-            line.start.y.toFloat(),
-            line.end.x.toFloat(),
-            line.end.y.toFloat(),
-            duration,
-        )
-    }
+    private fun swipeVertically(containerId: String, startRatio: Float, endRatio: Float, duration: Long = 300) = pageUi.swipeVertically(containerId, startRatio, endRatio, duration)
 
     private fun conversationListSnapshot(): String =
         findByIds(ID_CONV_NAME)
@@ -276,148 +233,31 @@ class SoulBotService : AccessibilityService() {
             .sortedBy { it.first }
             .joinToString("|") { (top, name) -> "$top:$name" }
 
-    private fun scrollConversationToTop() {
-        if (!isOnList()) return
-        setNextStep("回到会话顶部")
+    private fun scrollConversationToTop() = navigation.scrollConversationToTop()
 
-        // RecyclerView exposes this action on supported Soul versions and can jump
-        // directly to the first row without depending on device height.
-        findById(ID_CONV_LIST)?.let { list ->
-            val args = Bundle().apply {
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_ROW_INT, 0)
-            }
-            runCatching {
-                list.performAction(
-                    AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_TO_POSITION.id,
-                    args,
-                )
-            }
-            sleep(500)
-        }
+    private fun findById(id: String): AccessibilityNodeInfo? = pageUi.findById(id)
 
-        // Verify that the list is really at the beginning. Keep scrolling backward
-        // until the visible conversations stop changing, rather than assuming a
-        // fixed number of gestures is enough.
-        repeat(MAX_SCROLLS_TO_TOP) {
-            if (!isOnList()) return
-            val before = conversationListSnapshot()
-            val list = findById(ID_CONV_LIST)
-            val accepted = runCatching {
-                list?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
-            }.getOrDefault(false)
-            if (!accepted) {
-                // Fallback for Soul versions whose list does not publish scroll actions.
-                swipeVertically(ID_CONV_LIST, 0.30f, 0.86f, 450)
-            }
-            sleep(500)
-            val after = conversationListSnapshot()
-            if (before.isNotEmpty() && after == before) return
-        }
-    }
+    private fun findByIds(id: String): List<AccessibilityNodeInfo> = pageUi.findByIds(id)
 
-    private fun findById(id: String): AccessibilityNodeInfo? = runCatching {
-        root()?.findAccessibilityNodeInfosByViewId(id)?.firstOrNull()
-    }.getOrNull()
+    private fun findExactText(text: String): List<AccessibilityNodeInfo> = pageUi.findExactText(text)
 
-    private fun findByIds(id: String): List<AccessibilityNodeInfo> = runCatching {
-        root()?.findAccessibilityNodeInfosByViewId(id) ?: emptyList()
-    }.getOrDefault(emptyList())
+    private fun findVisibleById(id: String): AccessibilityNodeInfo? = pageUi.findVisibleById(id)
 
-    private fun findExactText(text: String): List<AccessibilityNodeInfo> = runCatching {
-        root()?.findAccessibilityNodeInfosByText(text)
-            ?.filter { textOf(it) == text && isVisibleOnScreen(it) }
-            ?: emptyList()
-    }.getOrDefault(emptyList())
+    private fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean = pageUi.isVisibleOnScreen(node)
 
-    private fun findVisibleById(id: String): AccessibilityNodeInfo? {
-        val r = root() ?: return null
-        return runCatching {
-            r.findAccessibilityNodeInfosByViewId(id).firstOrNull(::isVisibleOnScreen)
-        }.getOrNull()
-    }
+    private fun rect(node: AccessibilityNodeInfo): Rect = pageUi.rect(node)
 
-    private fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean {
-        if (!runCatching { node.isVisibleToUser }.getOrDefault(false)) return false
-        val bounds = rect(node).toUiRegion()
-        return bounds.isValid && bounds.intersect(activeWindowRegion()) != null
-    }
+    private fun textOf(node: AccessibilityNodeInfo?): String = pageUi.textOf(node)
 
-    private fun rect(node: AccessibilityNodeInfo): Rect {
-        val r = Rect()
-        runCatching { node.getBoundsInScreen(r) }
-        return r
-    }
+    private fun tap(x: Float, y: Float): Boolean = pageUi.tap(x, y)
 
-    private fun textOf(node: AccessibilityNodeInfo?): String =
-        runCatching { node?.text?.toString()?.trim() ?: "" }.getOrDefault("")
+    private fun tapNode(node: AccessibilityNodeInfo): Boolean = pageUi.tapNode(node)
 
-    private fun tap(x: Float, y: Float): Boolean {
-        val point = AdaptiveUiPolicy.clampPoint(
-            UiPoint(x.roundToInt(), y.roundToInt()),
-            activeWindowRegion(),
-            dp(2),
-        )
-        val path = Path().apply { moveTo(point.x.toFloat(), point.y.toFloat()) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
-            .build()
-        return dispatchGesture(gesture, null, null)
-    }
+    private fun longPressNode(node: AccessibilityNodeInfo): Boolean = pageUi.longPressNode(node)
 
-    private fun tapNode(node: AccessibilityNodeInfo): Boolean {
-        // Prefer semantic accessibility clicks. Some Soul child views are not clickable,
-        // so walk up a few parents before falling back to a coordinate gesture.
-        var clickable: AccessibilityNodeInfo? = node
-        repeat(4) {
-            val candidate = clickable ?: return@repeat
-            val clicked = runCatching {
-                candidate.isClickable && candidate.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            }.getOrDefault(false)
-            if (clicked) {
-                return true
-            }
-            clickable = runCatching { candidate.parent }.getOrNull()
-        }
-        val r = rect(node)
-        if (r.width() <= 0 || r.height() <= 0) return false
-        return tap(r.exactCenterX().toFloat(), r.exactCenterY().toFloat())
-    }
+    private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long = 300) = pageUi.swipe(x1, y1, x2, y2, duration)
 
-    private fun longPressNode(node: AccessibilityNodeInfo): Boolean {
-        val clicked = runCatching {
-            node.isLongClickable && node.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
-        }.getOrDefault(false)
-        if (clicked) {
-            return true
-        }
-        val bounds = rect(node)
-        if (bounds.width() <= 0 || bounds.height() <= 0) return false
-        val path = Path().apply {
-            moveTo(bounds.exactCenterX().toFloat(), bounds.exactCenterY().toFloat())
-        }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 1200))
-            .build()
-        return dispatchGesture(gesture, null, null)
-    }
-
-    private fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long = 300) {
-        val area = activeWindowRegion()
-        val start = AdaptiveUiPolicy.clampPoint(UiPoint(x1.roundToInt(), y1.roundToInt()), area, dp(2))
-        val end = AdaptiveUiPolicy.clampPoint(UiPoint(x2.roundToInt(), y2.roundToInt()), area, dp(2))
-        val path = Path().apply {
-            moveTo(start.x.toFloat(), start.y.toFloat())
-            lineTo(end.x.toFloat(), end.y.toFloat())
-        }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
-            .build()
-        dispatchGesture(gesture, null, null)
-    }
-
-    private fun pressBack() {
-        performGlobalAction(GLOBAL_ACTION_BACK)
-    }
+    private fun pressBack() = pageUi.pressBack()
 
     private fun setNextStep(action: String, delayMs: Long = 0L) {
         if (statusText != action) {
@@ -516,60 +356,19 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun contains(outer: Rect, inner: Rect): Boolean =
-        outer.left <= inner.left && outer.top <= inner.top &&
-            outer.right >= inner.right && outer.bottom >= inner.bottom
+    private fun contains(outer: Rect, inner: Rect): Boolean = pageUi.contains(outer, inner)
 
-    // ===== 界面识别 =====
+    private fun visibleTitleTexts(): List<String> = screenDetector.visibleTitleTexts()
 
-    private fun visibleTitleTexts(): List<String> =
-        findByIds(ID_GENERIC_TITLE)
-            .filter(::isVisibleOnScreen)
-            .map(::textOf)
-            .filter(String::isNotBlank)
+    private fun visibleTextsContaining(query: String): List<String> = screenDetector.visibleTextsContaining(query)
 
-    private fun visibleTextsContaining(query: String): List<String> = runCatching {
-        root()?.findAccessibilityNodeInfosByText(query)
-            ?.filter(::isVisibleOnScreen)
-            ?.map(::textOf)
-            ?.filter(String::isNotBlank)
-            ?: emptyList()
-    }.getOrDefault(emptyList())
+    private fun soulMatchProfileTexts(): List<String> = screenDetector.soulMatchProfileTexts()
 
-    private fun soulMatchProfileTexts(): List<String> = buildList {
-        // The conversation name and metadata use different ids in different Soul builds.
-        displayedConversationName().takeIf(String::isNotBlank)?.let(::add)
-        addAll(visibleTitleTexts())
-        addAll(visibleTextsContaining("Ta的引力签"))
-        addAll(visibleTextsContaining("Ta的星座"))
-    }.distinct()
+    private fun isSoulMatchChatSurface(): Boolean = screenDetector.isSoulMatchChatSurface()
 
-    private fun isSoulMatchChatSurface(): Boolean =
-        findVisibleById(ID_INPUT_BOX) != null &&
-            (findVisibleById(ID_SOUL_MATCH_PERCENT) != null ||
-                visibleTitleTexts().any {
-                    it.startsWith("Ta的引力签") || it.startsWith("Ta的星座")
-                })
+    private fun isSoulPlanetSurface(): Boolean = screenDetector.isSoulPlanetSurface()
 
-    private fun isSoulPlanetSurface(): Boolean =
-        findVisibleById(ID_INPUT_BOX) == null &&
-            (findExactText("灵魂匹配").isNotEmpty() ||
-                findExactText("开始匹配").isNotEmpty())
-
-    private fun currentScreen(): Screen = when {
-        !isSoulForeground() -> Screen.OUTSIDE
-        findVisibleById(ID_QIYU_CHAT) != null -> Screen.QIYU_POPUP
-        findVisibleById(ID_NO_SEND_CLOSE) != null -> Screen.NO_SEND
-        findVisibleById(ID_GIFT_CLOSE) != null -> Screen.GIFT
-        isSoulMatchChatSurface() -> Screen.SOUL_MATCH_CHAT
-        findVisibleById(ID_INPUT_BOX) != null -> Screen.CHAT
-        findVisibleById(ID_CHAT_SECRET) != null -> Screen.PROFILE
-        findVisibleById(ID_GREETING_TIPS) != null -> Screen.GREETING_LIST
-        findVisibleById(ID_SQUARE_PAGER) != null -> Screen.SQUARE
-        findVisibleById(ID_CONV_NAME) != null -> Screen.LIST
-        isSoulPlanetSurface() -> Screen.SOUL_PLANET
-        else -> Screen.OTHER
-    }
+    private fun currentScreen(): SoulScreen = screenDetector.currentScreen()
 
     private fun captureCompatibilitySnapshot() {
         if (diagnosticsSampler.isClosed() || Thread.currentThread().isInterrupted) return
@@ -679,127 +478,27 @@ class SoulBotService : AccessibilityService() {
 
     private fun isOnChat(): Boolean {
         val screen = currentScreen()
-        return screen == Screen.CHAT || screen == Screen.SOUL_MATCH_CHAT
+        return screen == SoulScreen.CHAT || screen == SoulScreen.SOUL_MATCH_CHAT
     }
-    private fun isOnList() = currentScreen() == Screen.LIST
-    private fun isOnSquare() = currentScreen() == Screen.SQUARE
-    private fun isOnProfile() = currentScreen() == Screen.PROFILE
-    private fun isOnGift() = currentScreen() == Screen.GIFT
-    private fun isOnNoSend() = currentScreen() == Screen.NO_SEND
+    private fun isOnList() = currentScreen() == SoulScreen.LIST
+    private fun isOnSquare() = currentScreen() == SoulScreen.SQUARE
+    private fun isOnProfile() = currentScreen() == SoulScreen.PROFILE
+    private fun isOnGift() = currentScreen() == SoulScreen.GIFT
+    private fun isOnNoSend() = currentScreen() == SoulScreen.NO_SEND
 
-    private fun selectedSquareChannel(): String =
-        findByIds(ID_SQUARE_CHANNEL_TAB)
-            .firstOrNull {
-                runCatching { it.isSelected }.getOrDefault(false) && isVisibleOnScreen(it)
-            }
-            ?.let(::textOf)
-            .orEmpty()
+    private fun selectedSquareChannel(): String = navigation.selectedSquareChannel()
 
-    private fun ensureLocalSquareChannel(): String? {
-        if (!isOnSquare()) return null
-        val localTab = findByIds(ID_SQUARE_CHANNEL_TAB)
-            .filter(::isVisibleOnScreen)
-            .firstOrNull {
-                val title = textOf(it)
-                title.isNotEmpty() && title != "关注" && title != "推荐"
-            } ?: return null
-        val localTitle = textOf(localTab)
-        if (runCatching { localTab.isSelected }.getOrDefault(false)) return localTitle
+    private fun ensureLocalSquareChannel(): String? = navigation.ensureLocalSquareChannel()
 
-        setNextStep("切换到同城·$localTitle")
-        tapNode(localTab)
-        repeat(10) {
-            sleep(250)
-            if (selectedSquareChannel() == localTitle) return localTitle
-        }
-        RuntimeLog.record(applicationContext, "square channel switch failed")
-        return null
-    }
+    private fun returnToList(): Boolean = navigation.returnToList()
 
-    // ===== 导航（都带验证） =====
+    private fun gotoSquare(): Boolean = navigation.gotoSquare()
 
-    private fun returnToList(): Boolean {
-        setNextStep("返回会话列表")
-        // 从任意界面返回聊天列表：二级界面按 back，广场点聊天 tab
-        for (i in 0 until 4) {
-            if (!isSoulForeground()) return false
-            if (currentScreen() == Screen.QIYU_POPUP) return false
-            if (isOnList()) return true
-            if (isOnSquare()) return gotoChatList()
-            pressBack(); sleep(1000)
-        }
-        return isOnList()
-    }
+    private fun gotoChatList(): Boolean = navigation.gotoChatList()
 
-    private fun gotoSquare(): Boolean {
-        if (!isSoulForeground()) return false
-        if (currentScreen() == Screen.QIYU_POPUP) return false
-        setNextStep("打开同城广场")
-        for (i in 0 until 3) {
-            val tab = findById(ID_SQUARE_TAB)
-            if (tab != null) {
-                tapNode(tab)
-                for (w in 0 until 8) {
-                    if (isOnSquare()) return ensureLocalSquareChannel() != null
-                    sleep(800)
-                }
-                return isOnSquare() && ensureLocalSquareChannel() != null
-            }
-            if (!isSoulForeground()) return false
-            if (currentScreen() == Screen.QIYU_POPUP) return false
-            pressBack(); sleep(1000)
-        }
-        return isOnSquare() && ensureLocalSquareChannel() != null
-    }
+    private fun gotoSoulPlanet(): Boolean = navigation.gotoSoulPlanet()
 
-    private fun gotoChatList(): Boolean {
-        if (!isSoulForeground()) return false
-        if (currentScreen() == Screen.QIYU_POPUP) return false
-        setNextStep("返回会话列表")
-        for (i in 0 until 3) {
-            val tab = findById(ID_MSG_TAB)
-            if (tab != null) {
-                tapNode(tab)
-                for (w in 0 until 8) {
-                    if (isOnList()) return true
-                    sleep(800)
-                }
-                return isOnList()
-            }
-            if (!isSoulForeground()) return false
-            if (currentScreen() == Screen.QIYU_POPUP) return false
-            pressBack(); sleep(1000)
-        }
-        return isOnList()
-    }
-
-    private fun gotoSoulPlanet(): Boolean {
-        if (!isSoulForeground()) return false
-        if (isSoulPlanetSurface()) return true
-        setNextStep("打开星球里的灵魂匹配")
-        for (i in 0 until 3) {
-            val tab = findVisibleById(ID_PLANET_TAB)
-                ?: findExactText("星球").maxByOrNull { rect(it).top }
-            if (tab != null) {
-                tapNode(tab)
-                repeat(12) {
-                    if (isSoulPlanetSurface()) return true
-                    sleep(500)
-                }
-                return isSoulPlanetSurface()
-            }
-            if (!isSoulForeground()) return false
-            pressBack()
-            sleep(1000)
-        }
-        return isSoulPlanetSurface()
-    }
-
-    private fun gotoModeIdleSurface(mode: AutomationMode): Boolean =
-        when (mode.idleSurface) {
-            IdleSurface.SOUL_PLANET -> gotoSoulPlanet()
-            IdleSurface.LOCAL_SQUARE -> gotoSquare()
-        }
+    private fun gotoModeIdleSurface(mode: AutomationMode): Boolean = navigation.gotoModeIdleSurface(mode)
 
     private fun startSoulMatch(): Boolean {
         if (!isSoulPlanetSurface()) return false
@@ -817,8 +516,8 @@ class SoulBotService : AccessibilityService() {
         val deadline = System.currentTimeMillis() + SOUL_MATCH_TIMEOUT_MS
         while (running && isSoulForeground() && System.currentTimeMillis() < deadline) {
             when (currentScreen()) {
-                Screen.SOUL_MATCH_CHAT -> return true
-                Screen.QIYU_POPUP -> {
+                SoulScreen.SOUL_MATCH_CHAT -> return true
+                SoulScreen.QIYU_POPUP -> {
                     handleQiyu()
                     return false
                 }
@@ -845,17 +544,7 @@ class SoulBotService : AccessibilityService() {
         return false
     }
 
-    private fun backToSquare(): Boolean {
-        for (i in 0 until 4) {
-            if (!isSoulForeground()) return false
-            if (currentScreen() == Screen.QIYU_POPUP) return false
-            if (isOnSquare()) return ensureLocalSquareChannel() != null
-            pressBack(); sleep(1000)
-        }
-        return isOnSquare() && ensureLocalSquareChannel() != null
-    }
-
-    // ===== 延时 =====
+    private fun backToSquare(): Boolean = navigation.backToSquare()
 
     private fun thinkDelay(): Long {
         val min = Prefs.getThinkMin(applicationContext).coerceAtLeast(0)
@@ -866,7 +555,7 @@ class SoulBotService : AccessibilityService() {
     private fun waitUnlessQiyu(delayMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + delayMs
         while (running && System.currentTimeMillis() < deadline) {
-            if (currentScreen() == Screen.QIYU_POPUP) {
+            if (currentScreen() == SoulScreen.QIYU_POPUP) {
                 handleQiyu()
                 return false
             }
@@ -933,7 +622,7 @@ class SoulBotService : AccessibilityService() {
         val pieces = splitReply(text)
         val sendScene = sceneOverride ?: when {
             pendingQiyu != null -> ReplyScene.QIYU
-            currentScreen() == Screen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
+            currentScreen() == SoulScreen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
             else -> ReplyScene.CHAT
         }
         val sendThreadId = expectedContact?.let(::memoryThreadId).orEmpty()
@@ -1112,33 +801,7 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 读聊天消息（仅聊天界面） =====
 
-    private fun messageRole(
-        item: AccessibilityNodeInfo,
-        avatars: List<AccessibilityNodeInfo>,
-        readReceipts: List<AccessibilityNodeInfo>,
-    ): String {
-        val bounds = rect(item)
-        val avatarBounds = avatars.firstOrNull { contains(bounds, rect(it)) }
-            ?.let(::rect)
-            ?.toUiRegion()
-        val hasReadReceipt = readReceipts.any { contains(bounds, rect(it)) }
-        val contentBounds = findByIds(ID_CONTENT_TEXT)
-            .firstOrNull { contains(bounds, rect(it)) }
-            ?.let(::rect)
-            ?.toUiRegion()
-        val chatArea = activeWindowRegion()
-        return when (
-            AdaptiveUiPolicy.messageSide(
-                chatArea = chatArea,
-                avatarBounds = avatarBounds,
-                contentBounds = contentBounds,
-                hasReadReceipt = hasReadReceipt,
-            )
-        ) {
-            MessageSide.OUTGOING -> "out"
-            MessageSide.INCOMING -> "in"
-        }
-    }
+    private fun messageRole(item: AccessibilityNodeInfo, avatars: List<AccessibilityNodeInfo>, readReceipts: List<AccessibilityNodeInfo>): String = messageReader.messageRole(item, avatars, readReceipts)
 
     private fun descendantsById(
         node: AccessibilityNodeInfo,
@@ -1329,68 +992,9 @@ class SoulBotService : AccessibilityService() {
         return complete
     }
 
-    private fun readThread(): List<Pair<String, String>> {
-        if (!isOnChat()) return emptyList()
-        val items = findByIds(ID_CHAT_ITEM).sortedBy { rect(it).top }
-        val avatars = findByIds(ID_CHAT_AVATAR)
-        val texts = findByIds(ID_CONTENT_TEXT)
-        val readReceipts = findByIds(ID_MESSAGE_READ)
-        val result = mutableListOf<Pair<String, String>>()
-        for (item in items) {
-            val ib = rect(item)
-            if (ib.width() <= 0 || ib.height() <= 0) continue
-            var text = ""
-            for (t in texts) {
-                if (contains(ib, rect(t))) { text = textOf(t); break }
-            }
-            if (text.isEmpty()) text = voiceTranscriptFrom(item)
-            if (text.isEmpty()) text = nonTextMessageFrom(item)
-            if (text.isEmpty()) continue
-            val role = messageRole(item, avatars, readReceipts)
-            result.add(role to text)
-        }
-        return result
-    }
+    private fun readThread(): List<Pair<String, String>> = messageReader.readThread()
 
-    private fun currentIncomingMessageKeys(contactName: String): List<String> {
-        if (!isOnChat() || !isExpectedConversation(contactName)) return emptyList()
-        val threadId = memoryThreadId(contactName)
-        val items = findByIds(ID_CHAT_ITEM).sortedBy { rect(it).top }
-        val avatars = findByIds(ID_CHAT_AVATAR)
-        val texts = findByIds(ID_CONTENT_TEXT)
-        val readReceipts = findByIds(ID_MESSAGE_READ)
-        val occurrences = mutableMapOf<String, Int>()
-        val keys = mutableListOf<String>()
-        var previousAnchor = ""
-        for (item in items) {
-            val bounds = rect(item)
-            if (bounds.width() <= 0 || bounds.height() <= 0) continue
-            var content = ""
-            for (textNode in texts) {
-                if (contains(bounds, rect(textNode))) { content = textOf(textNode); break }
-            }
-            if (content.isEmpty()) content = voiceTranscriptFrom(item)
-            if (content.isEmpty()) content = nonTextMessageFrom(item)
-            if (content.isEmpty()) continue
-            val role = messageRole(item, avatars, readReceipts)
-            val normalized = normalizeReply(content)
-            val occurrenceKey = role + ":" + normalized
-            val ordinal = occurrences[occurrenceKey] ?: 0
-            occurrences[occurrenceKey] = ordinal + 1
-            if (role == "in") {
-                keys += ConversationIdentity.messageKey(
-                    threadId = threadId,
-                    nativeMessageId = SoulAccessibilityIdentity.messageId(item),
-                    role = role,
-                    content = content,
-                    previousAnchor = previousAnchor,
-                    duplicateOrdinal = ordinal,
-                )
-            }
-            previousAnchor = occurrenceKey
-        }
-        return keys.takeLast(8)
-    }
+    private fun currentIncomingMessageKeys(contactName: String): List<String> = messageReader.currentIncomingMessageKeys(contactName)
 
     private fun unseenIncomingEvents(
         contactName: String,
@@ -1426,41 +1030,7 @@ class SoulBotService : AccessibilityService() {
         return null
     }
 
-    private fun nonTextMessageFrom(item: AccessibilityNodeInfo): String {
-        fun descendantsById(id: String): List<AccessibilityNodeInfo> = runCatching {
-            item.findAccessibilityNodeInfosByViewId(id) ?: emptyList()
-        }.getOrDefault(emptyList())
-
-        if (descendantsById(ID_EXPRESSION).isNotEmpty()) return "[表情]"
-
-        val sharedPostText = descendantsById(ID_SHARED_POST_TEXT)
-            .asSequence()
-            .map(::textOf)
-            .firstOrNull(String::isNotBlank)
-        if (sharedPostText != null) return "[分享动态] $sharedPostText"
-
-        // Some Soul versions expose picture/sticker messages only through the
-        // descendant's accessibility description rather than a text node.
-        val stack = ArrayDeque<AccessibilityNodeInfo>()
-        stack.add(item)
-        var visited = 0
-        while (stack.isNotEmpty() && visited < 80) {
-            val node = stack.removeLast()
-            visited++
-            val description = runCatching {
-                node.contentDescription?.toString()?.trim().orEmpty()
-            }.getOrDefault("")
-            when {
-                description.contains("表情") -> return "[表情]"
-                description.contains("图片") || description.contains("照片") -> return "[图片]"
-            }
-            val childCount = runCatching { node.childCount }.getOrDefault(0)
-            for (index in 0 until childCount) {
-                runCatching { node.getChild(index) }.getOrNull()?.let(stack::add)
-            }
-        }
-        return ""
-    }
+    private fun nonTextMessageFrom(item: AccessibilityNodeInfo): String = messageReader.nonTextMessageFrom(item)
 
     private fun incomingSignature(thread: List<Pair<String, String>>): String =
         thread.filter { it.first == "in" }.joinToString("\u0001") { it.second }
@@ -2255,7 +1825,7 @@ class SoulBotService : AccessibilityService() {
         greetDb: GreetDatabase,
         seen: ConversationSeenTracker,
     ): Boolean {
-        if (currentScreen() != Screen.SOUL_MATCH_CHAT) return false
+        if (currentScreen() != SoulScreen.SOUL_MATCH_CHAT) return false
 
         var titleTexts = soulMatchProfileTexts()
         var gravityTags = SoulMatchContent.gravityTags(titleTexts)
@@ -2431,7 +2001,7 @@ class SoulBotService : AccessibilityService() {
     }
 
     private fun handleQiyu(): Boolean {
-        if (currentScreen() != Screen.QIYU_POPUP) return false
+        if (currentScreen() != SoulScreen.QIYU_POPUP) return false
         val chatBtn = findVisibleById(ID_QIYU_CHAT) ?: return false
         val signature = textOf(findVisibleById(ID_QIYU_SIGNATURE))
         val reason = textOf(findVisibleById(ID_QIYU_REASON))
@@ -2472,10 +2042,10 @@ class SoulBotService : AccessibilityService() {
         val deadline = System.currentTimeMillis() + QiyuConversationPolicy.LOAD_TIMEOUT_MS
         while (running && isSoulForeground()) {
             val screen = currentScreen()
-            if (screen == Screen.GIFT || screen == Screen.NO_SEND) {
+            if (screen == SoulScreen.GIFT || screen == SoulScreen.NO_SEND) {
                 pendingQiyu = null
                 RuntimeLog.record(applicationContext, "qiyu cancelled; reason=chat_not_allowed; screen=${screen.name}")
-                if (screen == Screen.GIFT) skipGift() else skipNoSend()
+                if (screen == SoulScreen.GIFT) skipGift() else skipNoSend()
                 return false
             }
             val name = if (isOnChat()) displayedConversationName().trim() else ""
@@ -2698,7 +2268,7 @@ class SoulBotService : AccessibilityService() {
                 error,
             )
             setNextStep("$name 的会话发生变化，返回列表重试", 1200)
-            if (running && currentScreen() != Screen.QIYU_POPUP) {
+            if (running && currentScreen() != SoulScreen.QIYU_POPUP) {
                 runCatching { gotoChatList() }
             }
             false
@@ -2754,7 +2324,7 @@ class SoulBotService : AccessibilityService() {
                 return@repeat
             }
             sleep(1500)
-            if (currentScreen() == Screen.QIYU_POPUP) return false
+            if (currentScreen() == SoulScreen.QIYU_POPUP) return false
             if (isOnChat() && isExpectedConversation(name)) {
                 RuntimeLog.record(
                     applicationContext,
@@ -2906,18 +2476,18 @@ class SoulBotService : AccessibilityService() {
     private fun openGreetingList(): Boolean {
         setNextStep("打开新招呼列表")
         for (i in 0 until 2) {
-            if (currentScreen() == Screen.GREETING_LIST) return true
+            if (currentScreen() == SoulScreen.GREETING_LIST) return true
             findById(ID_GREETING_TITLE)?.let { tapNode(it) }
             sleep(1500)
         }
-        return currentScreen() == Screen.GREETING_LIST
+        return currentScreen() == SoulScreen.GREETING_LIST
     }
 
     private fun scanGreetingUsers(
         handledKeys: Set<String>,
         greetDb: GreetDatabase,
     ): List<String> {
-        if (currentScreen() != Screen.GREETING_LIST) return emptyList()
+        if (currentScreen() != SoulScreen.GREETING_LIST) return emptyList()
         val visibleNames = findByIds(ID_CONV_NAME)
             .filter(::isVisibleOnScreen)
             .map(::textOf)
@@ -2936,7 +2506,7 @@ class SoulBotService : AccessibilityService() {
         handledKeys: MutableSet<String>,
         greetDb: GreetDatabase,
     ): Boolean {
-        if (currentScreen() != Screen.GREETING_LIST) return false
+        if (currentScreen() != SoulScreen.GREETING_LIST) return false
         val greetingKey = GreetingSessionPolicy.userKey(name)
         if (greetingKey.isBlank() || !handledKeys.add(greetingKey)) return false
         val nameNode = findByIds(ID_CONV_NAME)
@@ -2946,7 +2516,7 @@ class SoulBotService : AccessibilityService() {
         tapNode(nameNode)
         sleep(1500)
         if (!isOnChat()) {
-            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(1200) }
             return false
         }
@@ -2980,7 +2550,7 @@ class SoulBotService : AccessibilityService() {
                 "greeting ignored; reason=system_only; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}",
             )
             setNextStep("$name 只有系统招呼，没有真实消息，已忽略", 1200)
-            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(1200) }
             return false
         }
@@ -2988,7 +2558,7 @@ class SoulBotService : AccessibilityService() {
         val newEvents = unseenIncomingEvents(name, thread, seen, pendingCount)
         val new = newEvents.map { it.text }
         if (incoming.isNotEmpty() && new.isEmpty()) {
-            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(1200) }
             return false
         }
@@ -3003,7 +2573,7 @@ class SoulBotService : AccessibilityService() {
             seen.markSeenEvents(memoryThreadId(name), newEvents)
             greetDb.recordGreet(systemGreetingName, replyContext)
             setNextStep("$name 连续简短回应，本轮自然停顿")
-            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(800) }
             return false
         }
@@ -3015,11 +2585,11 @@ class SoulBotService : AccessibilityService() {
                 return replyToCurrentConversation(name, seen)
             }
             setNextStep("招呼回复生成失败，返回列表避免卡住", 1200)
-            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
             else { pressBack(); sleep(1200) }
             return false
         }
-        if (currentScreen() == Screen.QIYU_POPUP) {
+        if (currentScreen() == SoulScreen.QIYU_POPUP) {
             handleQiyu()
             return false
         }
@@ -3043,7 +2613,7 @@ class SoulBotService : AccessibilityService() {
             setNextStep("给 $name 的消息未发出，本轮不再重复进入", 1500)
             sleep(1500)
         }
-        if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+        if (currentScreen() == SoulScreen.QIYU_POPUP) handleQiyu()
         else { pressBack(); sleep(1200) }
         return sent
     }
@@ -3171,7 +2741,7 @@ class SoulBotService : AccessibilityService() {
         var viewportCount = 0
         var lastScrolledFrom = ""
         while (viewportCount < SQUARE_MAX_VIEWPORTS) {
-            if (currentScreen() == Screen.QIYU_POPUP || hasUnreadRedDot()) return false
+            if (currentScreen() == SoulScreen.QIYU_POPUP || hasUnreadRedDot()) return false
             if (selectedSquareChannel() != channel) {
                 RuntimeLog.record(applicationContext, "square browse stopped; reason=channel_changed")
                 return false
@@ -3204,7 +2774,7 @@ class SoulBotService : AccessibilityService() {
                 val prepareDelay = if (signature == lastScrolledFrom) 3000L else SQUARE_SCROLL_PREPARE_MS
                 setNextStep("本屏动态已检查，${prepareDelay / 1000} 秒后下滑", prepareDelay)
                 sleep(prepareDelay)
-                if (currentScreen() == Screen.QIYU_POPUP || hasUnreadRedDot()) return false
+                if (currentScreen() == SoulScreen.QIYU_POPUP || hasUnreadRedDot()) return false
                 if (!isOnSquare() || selectedSquareChannel() != channel) return false
 
                 lastScrolledFrom = signature
@@ -3524,7 +3094,7 @@ class SoulBotService : AccessibilityService() {
             var sent = false
             if (gotoSquare()) {
                 sent = browseSquareOnce(seenDm, attemptedDmProfiles, greetDb)
-                if (currentScreen() == Screen.QIYU_POPUP) {
+                if (currentScreen() == SoulScreen.QIYU_POPUP) {
                     handleQiyu()
                     return
                 }
@@ -3566,7 +3136,7 @@ class SoulBotService : AccessibilityService() {
                 }
 
                 // 奇遇铃高于匹配、广场和普通聊天，在两个工作模式中都立即处理。
-                if (screen == Screen.QIYU_POPUP) {
+                if (screen == SoulScreen.QIYU_POPUP) {
                     handleQiyu()
                     continue
                 }
@@ -3574,18 +3144,18 @@ class SoulBotService : AccessibilityService() {
                 // A transient title/read/send failure must not fall through to the
                 // ordinary CHAT -> idle navigation and silently abandon an encounter.
                 if (pendingQiyu != null) {
-                    if (screen == Screen.CHAT || screen == Screen.SOUL_MATCH_CHAT || screen == Screen.OTHER) {
+                    if (screen == SoulScreen.CHAT || screen == SoulScreen.SOUL_MATCH_CHAT || screen == SoulScreen.OTHER) {
                         resumePendingQiyu()
                         continue
                     }
-                    if (screen != Screen.OUTSIDE) {
+                    if (screen != SoulScreen.OUTSIDE) {
                         RuntimeLog.record(applicationContext, "qiyu cancelled; reason=left_chat; screen=${screen.name}")
                         pendingQiyu = null
                     }
                 }
 
-                if (screen != Screen.LIST &&
-                    screen != Screen.GREETING_LIST &&
+                if (screen != SoulScreen.LIST &&
+                    screen != SoulScreen.GREETING_LIST &&
                     hasUnreadRedDot() &&
                     !unreadTopSearchComplete
                 ) {
@@ -3596,23 +3166,23 @@ class SoulBotService : AccessibilityService() {
 
                 // 两个模式都先处理招呼和未读聊天；空闲时才执行各自的主动找人方式。
                 when (screen) {
-                    Screen.NO_SEND -> {
+                    SoulScreen.NO_SEND -> {
                         skipNoSend()
                         gotoModeIdleSurface(automationMode)
                     }
-                    Screen.GIFT -> {
+                    SoulScreen.GIFT -> {
                         skipGift()
                         gotoModeIdleSurface(automationMode)
                     }
-                    Screen.QIYU_POPUP -> handleQiyu()
-                    Screen.SOUL_MATCH_CHAT -> {
+                    SoulScreen.QIYU_POPUP -> handleQiyu()
+                    SoulScreen.SOUL_MATCH_CHAT -> {
                         if (automationMode.handlesSoulMatch) {
                             handleSoulMatchChat(handledSoulMatches, greetDb, seen)
                         } else {
                             gotoSquare()
                         }
                     }
-                    Screen.SOUL_PLANET -> {
+                    SoulScreen.SOUL_PLANET -> {
                         if (automationMode.handlesSoulMatch) {
                             handlePlanetChatIdle(
                                 handledSoulMatches,
@@ -3623,7 +3193,7 @@ class SoulBotService : AccessibilityService() {
                             gotoSquare()
                         }
                     }
-                    Screen.LIST -> {
+                    SoulScreen.LIST -> {
                         // Private unread messages outrank greetings and all idle outbound work.
                         // The unread list itself is ordered by high-intent preview, then message age.
                         val unread = if (hasUnreadRedDot()) scanUnread() else emptyList()
@@ -3664,7 +3234,7 @@ class SoulBotService : AccessibilityService() {
                             handleIdleWork()
                         }
                     }
-                    Screen.GREETING_LIST -> {
+                    SoulScreen.GREETING_LIST -> {
                         val users = scanGreetingUsers(handledGreetingUsers, greetDb)
                         if (users.isNotEmpty()) {
                             setNextStep("回复招呼 " + users[0])
@@ -3680,17 +3250,17 @@ class SoulBotService : AccessibilityService() {
                             sleep(1200)
                         }
                     }
-                    Screen.OUTSIDE -> {
+                    SoulScreen.OUTSIDE -> {
                         setNextStep("检查 Soul 是否已打开", 1500)
                         sleep(1500)
                     }
-                    Screen.SQUARE -> {
+                    SoulScreen.SQUARE -> {
                         if (automationMode.handlesSquareDm) handleIdleWork() else gotoSoulPlanet()
                     }
-                    Screen.PROFILE -> {
+                    SoulScreen.PROFILE -> {
                         gotoModeIdleSurface(automationMode)
                     }
-                    Screen.CHAT -> gotoModeIdleSurface(automationMode)
+                    SoulScreen.CHAT -> gotoModeIdleSurface(automationMode)
                     else -> gotoModeIdleSurface(automationMode)
                 }
             } catch (e: StoppedException) {
