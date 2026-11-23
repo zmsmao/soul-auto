@@ -43,7 +43,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
         val greetingKey = GreetingSessionPolicy.userKey(name)
         if (greetingKey.isBlank() || !handledKeys.add(greetingKey)) return false
         val nameNode = host.findByIds(ID_CONV_NAME)
-            .filter(::isVisibleOnScreen)
+            .filter(host::isVisibleOnScreen)
             .firstOrNull { host.textOf(it) == name } ?: return false
         host.setNextStep("打开 $name 的招呼")
         host.tapNode(nameNode)
