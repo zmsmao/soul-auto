@@ -1,11 +1,10 @@
 package com.soulbot.app.diagnostics
 
+import com.soulbot.app.accessibility.SoulAccessibilityIds
+
 import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.soulbot.app.*
-import com.soulbot.app.app.SoulBotService
-import com.soulbot.app.policy.*
 import com.soulbot.app.accessibility.AdaptiveUiPolicy
 import com.soulbot.app.accessibility.UiRegion
 
@@ -32,7 +31,7 @@ internal class SoulCompatibilitySnapshotCollector(private val host: SoulCompatib
         host.lastDiagnosticTruncated = false
         val now = System.currentTimeMillis()
         val currentRoot = host.root() ?: return
-        if (currentRoot.packageName?.toString() != SoulBotService.SOUL_PACKAGE) {
+        if (currentRoot.packageName?.toString() != SoulAccessibilityIds.SOUL_PACKAGE) {
             @Suppress("DEPRECATION")
             currentRoot.recycle()
             return
@@ -59,36 +58,36 @@ internal class SoulCompatibilitySnapshotCollector(private val host: SoulCompatib
             val id = node.viewIdResourceName.orEmpty()
             if (id.isNotBlank()) ids += id
             val title = host.textOf(node)
-            if (id == SoulBotService.ID_SQUARE_CHANNEL_TAB && title.isNotBlank() && title != "关注" && title != "推荐") localChannel = true
+            if (id == SoulAccessibilityIds.ID_SQUARE_CHANNEL_TAB && title.isNotBlank() && title != "关注" && title != "推荐") localChannel = true
             if (title == "灵魂匹配" || title == "开始匹配") matchLabel = true
-            if (id == SoulBotService.ID_GENERIC_TITLE && (title.startsWith("Ta的引力签") || title.startsWith("Ta的星座"))) matchProfile = true
+            if (id == SoulAccessibilityIds.ID_GENERIC_TITLE && (title.startsWith("Ta的引力签") || title.startsWith("Ta的星座"))) matchProfile = true
         }
         host.lastDiagnosticVisited = scan.visited
         host.lastDiagnosticTruncated = scan.truncated
         if (host.isSamplerClosed() || host.isCurrentThreadInterrupted()) return
-        val hasInput = SoulBotService.ID_INPUT_BOX in ids
+        val hasInput = SoulAccessibilityIds.ID_INPUT_BOX in ids
         val capabilities = buildSet {
-            if (SoulBotService.ID_PLANET_TAB in ids || SoulBotService.ID_SQUARE_TAB in ids || SoulBotService.ID_MSG_TAB in ids) add(SoulUiCapability.BOTTOM_NAV)
-            if (SoulBotService.ID_CONV_LIST in ids || SoulBotService.ID_CONV_NAME in ids) add(SoulUiCapability.CHAT_LIST)
+            if (SoulAccessibilityIds.ID_PLANET_TAB in ids || SoulAccessibilityIds.ID_SQUARE_TAB in ids || SoulAccessibilityIds.ID_MSG_TAB in ids) add(SoulUiCapability.BOTTOM_NAV)
+            if (SoulAccessibilityIds.ID_CONV_LIST in ids || SoulAccessibilityIds.ID_CONV_NAME in ids) add(SoulUiCapability.CHAT_LIST)
             if (hasInput) add(SoulUiCapability.CHAT_INPUT)
-            if (SoulBotService.ID_SEND_BUTTON in ids) add(SoulUiCapability.SEND_BUTTON)
-            if (SoulBotService.ID_SQUARE_PAGER in ids) add(SoulUiCapability.SQUARE)
+            if (SoulAccessibilityIds.ID_SEND_BUTTON in ids) add(SoulUiCapability.SEND_BUTTON)
+            if (SoulAccessibilityIds.ID_SQUARE_PAGER in ids) add(SoulUiCapability.SQUARE)
             if (localChannel) add(SoulUiCapability.LOCAL_CHANNEL)
-            if (SoulBotService.ID_SOUL_MATCH_PERCENT in ids || (!hasInput && matchLabel)) add(SoulUiCapability.SOUL_MATCH)
-            if (SoulBotService.ID_VOICE_BUBBLE in ids) add(SoulUiCapability.VOICE_MESSAGE)
-            if (SoulBotService.ID_QIYU_CHAT in ids) add(SoulUiCapability.QIYU)
-            if (SoulBotService.ID_CHAT_SECRET in ids) add(SoulUiCapability.PROFILE_DM)
+            if (SoulAccessibilityIds.ID_SOUL_MATCH_PERCENT in ids || (!hasInput && matchLabel)) add(SoulUiCapability.SOUL_MATCH)
+            if (SoulAccessibilityIds.ID_VOICE_BUBBLE in ids) add(SoulUiCapability.VOICE_MESSAGE)
+            if (SoulAccessibilityIds.ID_QIYU_CHAT in ids) add(SoulUiCapability.QIYU)
+            if (SoulAccessibilityIds.ID_CHAT_SECRET in ids) add(SoulUiCapability.PROFILE_DM)
         }
         val page = when {
-            SoulBotService.ID_QIYU_CHAT in ids -> "奇遇铃"
-            SoulBotService.ID_NO_SEND_CLOSE in ids -> "暂不聊天弹窗"
-            SoulBotService.ID_GIFT_CLOSE in ids -> "礼物限制弹窗"
-            hasInput && (SoulBotService.ID_SOUL_MATCH_PERCENT in ids || matchProfile) -> "灵魂匹配聊天"
+            SoulAccessibilityIds.ID_QIYU_CHAT in ids -> "奇遇铃"
+            SoulAccessibilityIds.ID_NO_SEND_CLOSE in ids -> "暂不聊天弹窗"
+            SoulAccessibilityIds.ID_GIFT_CLOSE in ids -> "礼物限制弹窗"
+            hasInput && (SoulAccessibilityIds.ID_SOUL_MATCH_PERCENT in ids || matchProfile) -> "灵魂匹配聊天"
             hasInput -> "普通聊天"
-            SoulBotService.ID_CHAT_SECRET in ids -> "用户主页"
-            SoulBotService.ID_GREETING_TIPS in ids -> "新招呼列表"
-            SoulBotService.ID_SQUARE_PAGER in ids -> "广场"
-            SoulBotService.ID_CONV_NAME in ids -> "聊天列表"
+            SoulAccessibilityIds.ID_CHAT_SECRET in ids -> "用户主页"
+            SoulAccessibilityIds.ID_GREETING_TIPS in ids -> "新招呼列表"
+            SoulAccessibilityIds.ID_SQUARE_PAGER in ids -> "广场"
+            SoulAccessibilityIds.ID_CONV_NAME in ids -> "聊天列表"
             matchLabel -> "星球"
             else -> "未识别页面"
         }
