@@ -91,6 +91,35 @@ class SoulBotService : AccessibilityService() {
     }
 
 
+    private val messageSender: SoulMessageSender by lazy(LazyThreadSafetyMode.NONE) {
+        SoulMessageSender(object : SoulMessageSenderHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override val memoryDatabase: ConversationMemoryDatabase? get() = conversationMemoryDb
+            override val random: Random get() = this@SoulBotService.random
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun splitReply(text: String): List<String> = this@SoulBotService.splitReply(text)
+            override fun hasPendingQiyu(): Boolean = this@SoulBotService.hasPendingQiyu()
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun memoryThreadId(contactName: String): String = this@SoulBotService.memoryThreadId(contactName)
+            override fun currentIncomingMessageKeys(contactName: String): List<String> =
+                this@SoulBotService.currentIncomingMessageKeys(contactName)
+            override fun normalizeReply(text: String): String = this@SoulBotService.normalizeReply(text)
+            override fun outgoingMessageCount(): Int = this@SoulBotService.outgoingMessageCount()
+            override fun hasConfirmedConversationName(name: String): Boolean =
+                this@SoulBotService.hasConfirmedConversationName(name)
+            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
+            override fun findById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findById(id)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun setText(node: AccessibilityNodeInfo, text: String): Boolean = this@SoulBotService.setText(node, text)
+            override fun outgoingOccurrenceCount(text: String): Int = this@SoulBotService.outgoingOccurrenceCount(text)
+            override fun visibleMessageOccurrenceCount(text: String): Int = this@SoulBotService.visibleMessageOccurrenceCount(text)
+            override fun findVisibleById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findVisibleById(id)
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+        })
+    }
+
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -823,190 +852,16 @@ class SoulBotService : AccessibilityService() {
         idempotencyKey: String? = null,
         sceneOverride: ReplyScene? = null,
         expectedEventAnchor: String? = null,
-    ): Boolean {
-        if (!isOnChat()) {
-            RuntimeLog.record(applicationContext, "message send rejected; reason=not_on_chat")
-            return false
-        }
-        val pieces = splitReply(text)
-        val sendScene = sceneOverride ?: when {
-            hasPendingQiyu() -> ReplyScene.QIYU
-            currentScreen() == SoulScreen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
-            else -> ReplyScene.CHAT
-        }
-        val sendThreadId = expectedContact?.let(::memoryThreadId).orEmpty()
-        val incomingEventKeys = expectedContact?.let(::currentIncomingMessageKeys).orEmpty()
-        val incomingEventAnchor = incomingEventKeys.joinToString(",")
-        if (expectedEventAnchor != null && incomingEventAnchor != expectedEventAnchor) {
-            RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_input")
-            return false
-        }
-        val generatedSendKey = expectedContact?.let {
-            ConversationIdentity.replySendKey(sendThreadId, sendScene.name, incomingEventKeys, text)
-        }
-        val durableSendKey = (idempotencyKey ?: generatedSendKey)?.takeIf { conversationMemoryDb != null }
-        fun expectedEventIsCurrent(): Boolean {
-            if (expectedContact == null || expectedEventAnchor == null) return true
-            return currentIncomingMessageKeys(expectedContact).joinToString(",") == expectedEventAnchor
-        }
-        val reservation = durableSendKey?.let { key ->
-            conversationMemoryDb?.reserveSendAttempt(
-                sendKey = key,
-                threadId = sendThreadId,
-                scene = sendScene,
-                bodyHash = ConversationIdentity.digest(normalizeReply(text)),
-                eventAnchor = incomingEventKeys.joinToString(","),
-                outgoingBaseline = outgoingMessageCount(),
-            )
-        }
-        if (durableSendKey != null && reservation != null) {
-            when (reservation.disposition) {
-                SendAttemptDisposition.ALREADY_CONFIRMED -> {
-                    if (!expectedEventIsCurrent()) return false
-                    RuntimeLog.record(applicationContext, "message send suppressed; reason=already_confirmed")
-                    return true
-                }
-                SendAttemptDisposition.UNCERTAIN -> {
-                    if (outgoingMessageCount() > reservation.outgoingBaseline) {
-                        conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
-                        return expectedEventIsCurrent()
-                    }
-                    if (!expectedEventIsCurrent()) return false
-                    conversationMemoryDb?.markSendAttemptUncertain(durableSendKey)
-                    RuntimeLog.record(applicationContext, "message send suppressed; reason=previous_click_unconfirmed")
-                    return false
-                }
-                SendAttemptDisposition.READY -> Unit
-            }
-        }
-        val attemptId = System.nanoTime().toString(36)
-        val startedAt = android.os.SystemClock.elapsedRealtime()
-        RuntimeLog.record(
-            applicationContext,
-            "message send started; attemptId=$attemptId; parts=${pieces.size}; chars=${text.length}",
-        )
-        for ((i, piece) in pieces.withIndex()) {
-            var inputReady = false
-            val inputDeadline = inputTimeoutMs?.let { System.currentTimeMillis() + it }
-            while (running && isOnChat() && !inputReady) {
-                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
-                if (inputDeadline != null && System.currentTimeMillis() >= inputDeadline) {
-                    RuntimeLog.record(applicationContext, "message input timed out; attemptId=$attemptId; part=${i + 1}")
-                    return false
-                }
-                setNextStep("输入第 ${i + 1} 段回复")
-                val input = findById(ID_INPUT_BOX)
-                if (input == null) {
-                    RuntimeLog.record(
-                        applicationContext,
-                        "message input missing; attemptId=$attemptId; part=${i + 1}",
-                    )
-                    setNextStep("等待输入框后重试", SQUARE_RETRY_DELAY_MS)
-                    sleep(SQUARE_RETRY_DELAY_MS)
-                    continue
-                }
-                tapNode(input)
-                sleep(300)
-                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
-                if (!setText(input, piece)) {
-                    RuntimeLog.record(
-                        applicationContext,
-                        "message input injection failed; attemptId=$attemptId; part=${i + 1}",
-                    )
-                    setNextStep("输入失败，重新输入第 ${i + 1} 段", SQUARE_RETRY_DELAY_MS)
-                    sleep(SQUARE_RETRY_DELAY_MS)
-                    continue
-                }
-                onInputWritten(piece)
-                inputReady = true
-            }
-            if (!inputReady) return false
-            if (!expectedEventIsCurrent()) {
-                RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_after_input")
-                return false
-            }
-
-            sleep(500)
-            val beforeOutgoingCount = outgoingOccurrenceCount(piece)
-            val beforeVisibleCount = visibleMessageOccurrenceCount(piece)
-            val sendButton = findVisibleById(ID_SEND_BUTTON) ?: run {
-                RuntimeLog.record(
-                    applicationContext,
-                    "message send button missing; attemptId=$attemptId; part=${i + 1}",
-                )
-                setNextStep("未找到发送按钮，重新检查", 5000)
-                sleep(5000)
-                return false
-            }
-
-            var sent = false
-            var durableClickPerformed = false
-            for (sendAttempt in 0 until (if (durableSendKey == null) 2 else 1)) {
-                if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
-                setNextStep(
-                    if (sendAttempt == 0) "发送第 ${i + 1} 段回复"
-                    else "上次点击未生效，再发送一次",
-                )
-                val currentButton = findVisibleById(ID_SEND_BUTTON) ?: break
-                if (!expectedEventIsCurrent()) {
-                    RuntimeLog.record(applicationContext, "message send rejected; reason=stale_event_before_click")
-                    return false
-                }
-                if (durableSendKey != null) conversationMemoryDb?.markSendAttemptClicked(durableSendKey)
-                val clickAccepted = tapNode(if (sendAttempt == 0) sendButton else currentButton)
-                if (!clickAccepted) {
-                    if (durableSendKey != null) conversationMemoryDb?.markSendAttemptPrepared(durableSendKey)
-                    break
-                }
-                onSendClick()
-                if (durableSendKey != null) durableClickPerformed = true
-
-                val confirmDeadline = System.currentTimeMillis() + 10_000L
-                while (running && isOnChat() && System.currentTimeMillis() < confirmDeadline) {
-                    if (expectedContact != null && !hasConfirmedConversationName(expectedContact)) return false
-                    if (outgoingOccurrenceCount(piece) > beforeOutgoingCount ||
-                        (expectedContact == null && visibleMessageOccurrenceCount(piece) > beforeVisibleCount)
-                    ) {
-                        sent = true
-                        break
-                    }
-                    val remaining = confirmDeadline - System.currentTimeMillis()
-                    setNextStep("确认第 ${i + 1} 段已出现在聊天中", remaining)
-                    sleep(500)
-                }
-
-                if (sent) {
-                    if (durableSendKey != null) conversationMemoryDb?.markSendAttemptConfirmed(durableSendKey)
-                    break
-                }
-                // Only click again when the original text is still in the input box.
-                // If it has disappeared, the result is ambiguous and another click could duplicate it.
-                if (normalizeReply(textOf(findVisibleById(ID_INPUT_BOX))) != normalizeReply(piece)) break
-            }
-            if (!sent) {
-                if (durableSendKey != null && durableClickPerformed) {
-                    conversationMemoryDb?.markSendAttemptUncertain(durableSendKey)
-                }
-                RuntimeLog.record(
-                    applicationContext,
-                    "message send unconfirmed; attemptId=$attemptId; part=${i + 1}; durationMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
-                )
-                setNextStep("消息未确认发出，停止重复点击", 1500)
-                sleep(1500)
-                return false
-            }
-            if (i < pieces.size - 1) {
-                val nextPartDelay = random.nextLong(2000, 5000)
-                setNextStep("发送第 " + (i + 2) + " 段回复", nextPartDelay)
-                sleep(nextPartDelay)
-            }
-        }
-        RuntimeLog.record(
-            applicationContext,
-            "message send confirmed; attemptId=$attemptId; parts=${pieces.size}; durationMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
-        )
-        return true
-    }
+    ): Boolean = messageSender.send(
+        text = text,
+        expectedContact = expectedContact,
+        inputTimeoutMs = inputTimeoutMs,
+        onInputWritten = onInputWritten,
+        onSendClick = onSendClick,
+        idempotencyKey = idempotencyKey,
+        sceneOverride = sceneOverride,
+        expectedEventAnchor = expectedEventAnchor,
+    )
 
     // ===== 读聊天消息（仅聊天界面） =====
 
