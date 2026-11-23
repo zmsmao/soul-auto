@@ -35,8 +35,8 @@
         <activity android:name=".app.ReplayEditorActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".app.ChatSamplesActivity" android:exported="false" />
         <activity android:name=".app.DataBackupActivity" android:exported="false" />
-        <activity android:name=".diagnostics.DeviceDiagnosticsActivity" android:exported="false" />
-        <activity android:name=".diagnostics.RuntimeLogActivity" android:exported="false" />
+        <activity android:name=".app.DeviceDiagnosticsActivity" android:exported="false" />
+        <activity android:name=".app.RuntimeLogActivity" android:exported="false" />
 
         <activity
             android:name=".app.HistoryActivity"
