@@ -1,18 +1,15 @@
 package com.soulbot.app.diagnostics
-import com.soulbot.app.*
-import com.soulbot.app.accessibility.*
-import com.soulbot.app.app.*
-import com.soulbot.app.automation.*
-import com.soulbot.app.conversation.*
-import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
-import com.soulbot.app.model.*
-import com.soulbot.app.policy.*
-import com.soulbot.app.workflow.greeting.*
-import com.soulbot.app.workflow.match.*
-import com.soulbot.app.workflow.privatechat.*
-import com.soulbot.app.workflow.qiyu.*
-import com.soulbot.app.workflow.square.*
+
+import com.soulbot.app.conversation.ReplyNaturalness
+import com.soulbot.app.data.Prefs
+import com.soulbot.app.data.ReplyReplayDatabase
+import com.soulbot.app.model.ModelCallCancellation
+import com.soulbot.app.model.ModelClient
+import com.soulbot.app.model.ModelEndpoint
+import com.soulbot.app.model.ModelEndpointRules
+import com.soulbot.app.model.ReplyReplayCase
+import com.soulbot.app.model.ReplyReplayLogic
+import com.soulbot.app.model.ReplyReplayPrompt
 
 import android.content.Context
 import java.util.concurrent.CancellationException
