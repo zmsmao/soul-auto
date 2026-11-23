@@ -632,7 +632,7 @@ class SoulBotService : AccessibilityService() {
         }
         val pieces = splitReply(text)
         val sendScene = sceneOverride ?: when {
-            pendingQiyu != null -> ReplyScene.QIYU
+            hasPendingQiyu() -> ReplyScene.QIYU
             currentScreen() == SoulScreen.SOUL_MATCH_CHAT -> ReplyScene.SOUL_MATCH
             else -> ReplyScene.CHAT
         }
