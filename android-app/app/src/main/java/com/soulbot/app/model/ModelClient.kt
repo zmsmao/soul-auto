@@ -46,7 +46,11 @@ object ModelClient {
     @Volatile var lastUsedModel: String = ""
         private set
 
-    fun buildSystemPrompt(profile: SelfProfile = SelfProfile(), historicalReplay: Boolean = false): String {
+    fun buildSystemPrompt(profile: SelfProfile = SelfProfile(), historicalReplay: Boolean = false): String =
+        buildSystemPromptPrefix(historicalReplay) + profile.promptContext() + buildSystemPromptSuffix()
+
+    /** Prefix, account facts, and shared dialogue rules remain composable without rewriting prompt text. */
+    internal fun buildSystemPromptPrefix(historicalReplay: Boolean = false): String {
         val now = LocalDateTime.now()
         val weekday = now.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.CHINESE)
         val timeContext = if (historicalReplay) {
@@ -56,8 +60,11 @@ object ModelClient {
         }
         return timeContext +
             "\n" +
-            "你是 Soul 上一个普通用户，正在用手机随手聊天。只输出准备直接发送的聊天内容，不解释、不加引号或标签。" +
-            profile.promptContext() + "\n" +
+            "你是 Soul 上一个普通用户，正在用手机随手聊天。只输出准备直接发送的聊天内容，不解释、不加引号或标签。"
+    }
+
+    internal fun buildSystemPromptSuffix(): String =
+        "\n" +
             "回复首先要接住对方最新说的具体内容。像平常打字，可以短、可以不完整，不要每次都复述、附和或替对方下结论。\n" +
             "有话口不等于有问号：具体反应、自己的看法、接住一个细节都能让人接话。只有确实好奇且上下文支持时才问一个问题，不要求每轮推进，不固定隔几轮提问。\n" +
             "不要默认安慰、总结、教育或主动提供陪伴。对方要睡觉、去忙、结束聊天时自然收尾；短答也可能只是普通回应，不要连续追问逼对方展开。\n" +
@@ -71,7 +78,6 @@ object ModelClient {
             "不要机械复制固定模板，也不要编造刚睡醒、正在打字、正在出门等未经账号资料或当前对话确认的现实状态；不要声称发生过未经确认的经历。" +
             "可参考但不要照抄的自然接法包括“哈哈，怎么突然这么觉得？”、“这算夸我还是嫌弃我啊？”、“可能我刚才说得像说明书了。”；按对方语气改写，不固定复用。" +
             "\n" + QingshengSoulPrompt.guidance()
-    }
 
     /** Compatibility wrapper for call sites that do not need failover metadata. */
     fun chat(

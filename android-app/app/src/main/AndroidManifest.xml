@@ -26,6 +26,9 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".app.ContactsActivity" android:exported="false" />
+        <activity android:name=".app.ContactDetailActivity" android:exported="false" />
+        <activity android:name=".app.SettingsHubActivity" android:exported="false" />
         <activity android:name=".app.TaskSettingsActivity" android:exported="false" />
         <activity android:name=".app.ModelSettingsActivity" android:exported="false" />
         <activity android:name=".app.ModelEndpointEditActivity" android:exported="false" />

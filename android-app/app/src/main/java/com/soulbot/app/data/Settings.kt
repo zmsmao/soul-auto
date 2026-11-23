@@ -128,7 +128,7 @@ object Prefs {
     fun getSelfProfile(ctx: Context): SelfProfile {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return SelfProfile(
-            gender = prefs.getString(KEY_SELF_GENDER, "男") ?: "男",
+            gender = prefs.getString(KEY_SELF_GENDER, "") ?: "",
             // Do not assume an age for new installs; existing saved values remain unchanged.
             age = prefs.getString(KEY_SELF_AGE, "") ?: "",
             region = prefs.getString(KEY_SELF_REGION, "") ?: "",

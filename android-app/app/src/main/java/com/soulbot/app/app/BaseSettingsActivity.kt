@@ -31,6 +31,14 @@ abstract class BaseSettingsActivity : AppCompatActivity() {
         applyToolbarInsets()
     }
 
+    protected fun setupPrimaryNavigation(selectedItemId: Int) {
+        PrimaryNavigation.attach(
+            this,
+            findViewById(com.soulbot.app.R.id.bottomNavigation),
+            selectedItemId,
+        )
+    }
+
     protected fun showMessage(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
         Snackbar.make(findViewById(android.R.id.content), message, duration).show()
     }

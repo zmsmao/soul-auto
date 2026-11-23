@@ -1,19 +1,4 @@
 package com.soulbot.app.app
-import com.soulbot.app.*
-import com.soulbot.app.accessibility.*
-import com.soulbot.app.app.*
-import com.soulbot.app.automation.*
-import com.soulbot.app.conversation.*
-import com.soulbot.app.data.*
-import com.soulbot.app.diagnostics.*
-import com.soulbot.app.logging.RuntimeLog
-import com.soulbot.app.model.*
-import com.soulbot.app.policy.*
-import com.soulbot.app.workflow.greeting.*
-import com.soulbot.app.workflow.match.*
-import com.soulbot.app.workflow.privatechat.*
-import com.soulbot.app.workflow.qiyu.*
-import com.soulbot.app.workflow.square.*
 
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -23,16 +8,27 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import com.soulbot.app.R
+import com.soulbot.app.data.ConversationMemoryDatabase
+import com.soulbot.app.data.ModelEndpointPrefs
+import com.soulbot.app.data.ModelEndpointRules
+import com.soulbot.app.data.Prefs
+import com.soulbot.app.diagnostics.DeviceCompatibilityStore
+import com.soulbot.app.diagnostics.DeviceProfileSnapshot
+import com.soulbot.app.diagnostics.SoulUiCapability
+import com.soulbot.app.logging.RuntimeLog
 
 class MainActivity : AppCompatActivity() {
     private lateinit var tvRuntimeTitle: TextView
     private lateinit var tvRuntimeDetail: TextView
-    private lateinit var statusDot: android.view.View
+    private lateinit var statusDot: View
     private lateinit var btnPrimary: MaterialButton
     private lateinit var btnAccessibility: MaterialButton
     private lateinit var btnOverlay: MaterialButton
@@ -43,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDataSummary: TextView
     private lateinit var tvDeviceSummary: TextView
     private lateinit var memoryDb: ConversationMemoryDatabase
+
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
         override fun run() {
@@ -56,9 +53,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         applyToolbarInsets()
         memoryDb = ConversationMemoryDatabase(applicationContext)
-        HistoryDatabase(applicationContext).use { history ->
-            memoryDb.seedLegacyHistory(history.getAll())
-        }
 
         tvRuntimeTitle = findViewById(R.id.tvRuntimeTitle)
         tvRuntimeDetail = findViewById(R.id.tvRuntimeDetail)
@@ -73,25 +67,17 @@ class MainActivity : AppCompatActivity() {
         tvDataSummary = findViewById(R.id.tvDataSummary)
         tvDeviceSummary = findViewById(R.id.tvDeviceSummary)
 
-        findViewById<android.view.View>(R.id.rowTaskSettings).setOnClickListener {
-            open(TaskSettingsActivity::class.java)
+        PrimaryNavigation.attach(
+            this,
+            findViewById<BottomNavigationView>(R.id.bottomNavigation),
+            R.id.nav_home,
+        )
+        findViewById<View>(R.id.rowContacts).setOnClickListener {
+            startActivity(Intent(this, ContactsActivity::class.java))
         }
-        findViewById<android.view.View>(R.id.rowModelSettings).setOnClickListener {
-            open(ModelSettingsActivity::class.java)
+        findViewById<MaterialButton>(R.id.btnOpenSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsHubActivity::class.java))
         }
-        findViewById<android.view.View>(R.id.rowProfileSettings).setOnClickListener {
-            open(ProfileSettingsActivity::class.java)
-        }
-        findViewById<android.view.View>(R.id.rowReplyLearning).setOnClickListener {
-            open(ReplyLearningActivity::class.java)
-        }
-        findViewById<android.view.View>(R.id.rowDataBackup).setOnClickListener {
-            open(DataBackupActivity::class.java)
-        }
-        findViewById<android.view.View>(R.id.rowDeviceDiagnostics).setOnClickListener {
-            open(DeviceDiagnosticsActivity::class.java)
-        }
-
         btnAccessibility.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
@@ -108,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                 startService(intent)
             }
             RuntimeLog.record(applicationContext, "floating control launch requested from dashboard")
-            Snackbar.make(btnPrimary, "悬浮控制已启动", Snackbar.LENGTH_SHORT).show()
+            Snackbar.make(btnPrimary, "悬浮控制已打开", Snackbar.LENGTH_SHORT).show()
             refreshDashboard()
         }
     }
@@ -125,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        refreshHandler.removeCallbacks(refreshRunnable)
         memoryDb.close()
         super.onDestroy()
     }
@@ -140,49 +127,60 @@ class MainActivity : AppCompatActivity() {
             FloatingStatusFormatter.title(running, serviceAvailable, rawStatus)
         }
         tvRuntimeDetail.text = if (!serviceAvailable && accessibilityEnabled) {
-            "无障碍设置已开启；若长时间未连接，请重新开启一次"
+            "无障碍服务已开启；若长时间未连接，请重新开启一次"
         } else if (!running && serviceAvailable &&
             rawStatus !in setOf("未配置 API Key", "模型配置不完整")
         ) {
-            "自动任务未运行，请在悬浮控制中点击启动"
+            "自动任务尚未运行，可通过悬浮控制启动"
         } else {
             FloatingStatusFormatter.detail(
                 running, serviceAvailable, rawStatus, SoulBotService.statusDeadline,
                 System.currentTimeMillis(),
             )
         }
+
         val stateColor = when {
             running -> R.color.state_success
             !serviceAvailable -> R.color.state_warning
             else -> R.color.brand_primary
         }
-        statusDot.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, stateColor))
+        statusDot.backgroundTintList =
+            ColorStateList.valueOf(ContextCompat.getColor(this, stateColor))
 
         val overlayEnabled = isOverlayEnabled()
-        btnAccessibility.text = if (accessibilityEnabled) "无障碍设置已开启" else "开启无障碍"
+        btnAccessibility.text = if (accessibilityEnabled) "无障碍已开启" else "开启无障碍"
         btnOverlay.text = if (overlayEnabled) "悬浮窗已授权" else "授权悬浮窗"
-        btnPrimary.text = if (overlayEnabled) "启动悬浮控制" else "先授权悬浮窗"
+        btnPrimary.text = if (overlayEnabled) "打开悬浮控制" else "先授权悬浮窗"
 
         val mode = Prefs.getAutomationMode(this)
-        tvTaskSummary.text = "${mode.displayName} · 回复等待 ${Prefs.getThinkMin(this)}–${Prefs.getThinkMax(this)} 秒"
-        val modelEndpoints = ModelEndpointPrefs.getEndpoints(this)
-        val enabledModels = modelEndpoints.filter(ModelEndpointRules::isRunnable)
+        tvTaskSummary.text =
+            "任务模式：${mode.displayName} · 回复等待 ${Prefs.getThinkMin(this)}–${Prefs.getThinkMax(this)} 秒"
+
+        val endpoints = ModelEndpointPrefs.getEndpoints(this)
+        val enabledModels = endpoints.filter(ModelEndpointRules::isRunnable)
         tvModelSummary.text = if (enabledModels.isEmpty()) {
-            "尚无可用通道"
+            "模型服务：尚无可用通道"
         } else {
-            "已启用 ${enabledModels.size} 个 · 主用 ${enabledModels.first().displayName}"
+            "模型服务：${enabledModels.size} 个可用 · 主用 ${enabledModels.first().displayName}"
         }
 
         val profile = Prefs.getSelfProfile(this)
-        val completed = listOf(
-            profile.gender, profile.age, profile.region,
-            profile.zodiac, profile.occupation, profile.details,
+        val configuredFacts = listOf(
+            profile.gender, profile.age, profile.region, profile.zodiac,
+            profile.occupation, profile.details, profile.height,
         ).count(String::isNotBlank)
-        tvProfileSummary.text = "已填写 $completed/6 项 · ${profile.region.ifBlank { "地区未填写" }}"
+        tvProfileSummary.text = if (configuredFacts == 0) {
+            "个人资料：未填写（选填，不影响运行）"
+        } else {
+            "个人资料：已填写 $configuredFacts 项"
+        }
+
         val styleState = if (Prefs.getStyleLearningEnabled(this)) "风格学习开启" else "风格学习关闭"
-        val memoryState = if (Prefs.getContactMemoryEnabled(this)) "记忆引用开启" else "记忆引用关闭"
-        tvReplySummary.text = "$styleState · $memoryState"
-        tvDataSummary.text = "${memoryDb.contactCount()} 位联系人 · ${memoryDb.messageCount()} 条消息"
+        val memoryState = if (Prefs.getContactMemoryEnabled(this)) "联系人记忆开启" else "联系人记忆关闭"
+        tvReplySummary.text = "学习与记忆：$styleState · $memoryState"
+        tvDataSummary.text =
+            "${memoryDb.contactCount()} 位联系人 · ${memoryDb.messageCount()} 条消息"
+
         val device = DeviceProfileSnapshot.capture(this)
         val compatibility = DeviceCompatibilityStore.read(this)
         tvDeviceSummary.text = getString(
@@ -194,8 +192,6 @@ class MainActivity : AppCompatActivity() {
             SoulUiCapability.entries.size,
         )
     }
-
-    private fun <T> open(activity: Class<T>) = startActivity(Intent(this, activity))
 
     private fun openOverlaySettings() {
         startActivity(

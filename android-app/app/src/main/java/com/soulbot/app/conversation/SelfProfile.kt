@@ -12,7 +12,7 @@ enum class ProfileVisibility(val label: String) {
 }
 
 data class SelfProfile(
-    val gender: String = "男",
+    val gender: String = "",
     val age: String = "",
     val region: String = "",
     val zodiac: String = "",

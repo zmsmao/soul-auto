@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 class ChatLearningDatabase(context: Context) :
-    SQLiteOpenHelper(context, "chat_learning.db", null, 3) {
+    SQLiteOpenHelper(context, "chat_learning.db", null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -23,7 +23,7 @@ class ChatLearningDatabase(context: Context) :
         db.execSQL(
             "CREATE TABLE contact_memories (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "contact TEXT NOT NULL, " +
+                "thread_id TEXT NOT NULL, " +
                 "content TEXT NOT NULL, " +
                 "memory_key TEXT NOT NULL UNIQUE, " +
                 "time INTEGER NOT NULL)",
@@ -31,15 +31,15 @@ class ChatLearningDatabase(context: Context) :
         db.execSQL(
             "CREATE TABLE automated_replies (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "contact TEXT NOT NULL, " +
+                "thread_id TEXT NOT NULL, " +
                 "reply TEXT NOT NULL, " +
                 "reply_key TEXT NOT NULL UNIQUE, " +
                 "time INTEGER NOT NULL)",
         )
         createFeedbackTables(db)
         createOpeningPatternTable(db)
-        db.execSQL("CREATE INDEX idx_contact_memory ON contact_memories(contact, time DESC)")
-        db.execSQL("CREATE INDEX idx_auto_contact ON automated_replies(contact, time DESC)")
+        db.execSQL("CREATE INDEX idx_contact_memory ON contact_memories(thread_id, time DESC)")
+        db.execSQL("CREATE INDEX idx_auto_contact ON automated_replies(thread_id, time DESC)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -50,6 +50,32 @@ class ChatLearningDatabase(context: Context) :
             // Keep every legacy sample, but include its default scene in the unique key.
             db.execSQL("UPDATE style_samples SET sample_key = 'CHAT' || char(0) || sample_key")
             createOpeningPatternTable(db)
+        }
+        if (oldVersion < 4) {
+            // Contact-scoped feedback now uses a stable conversation id, not a nickname.
+            // Old feedback is intentionally discarded; old databases are not migrated.
+            db.execSQL("DROP TABLE IF EXISTS reply_feedback")
+            createFeedbackTables(db)
+        }
+        if (oldVersion < 5) {
+            // Contact memory and automated-reply deduplication are keyed by thread_id.
+            // Nickname-keyed rows are deliberately discarded rather than guessed/migrated.
+            db.execSQL("DROP TABLE IF EXISTS contact_memories")
+            db.execSQL("DROP TABLE IF EXISTS automated_replies")
+            db.execSQL(
+                "CREATE TABLE contact_memories (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "thread_id TEXT NOT NULL, content TEXT NOT NULL, " +
+                    "memory_key TEXT NOT NULL UNIQUE, time INTEGER NOT NULL)",
+            )
+            db.execSQL(
+                "CREATE TABLE automated_replies (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "thread_id TEXT NOT NULL, reply TEXT NOT NULL, " +
+                    "reply_key TEXT NOT NULL UNIQUE, time INTEGER NOT NULL)",
+            )
+            db.execSQL("CREATE INDEX idx_contact_memory ON contact_memories(thread_id, time DESC)")
+            db.execSQL("CREATE INDEX idx_auto_contact ON automated_replies(thread_id, time DESC)")
         }
     }
 
@@ -151,12 +177,12 @@ class ChatLearningDatabase(context: Context) :
         writableDatabase.delete("style_samples", null, null)
     }
 
-    fun recordContactMemory(contact: String, content: String) {
-        val cleanContact = contact.trim().take(100)
+    fun recordContactMemory(contactId: String, content: String) {
+        val cleanContact = contactId.trim().take(140)
         val cleanContent = content.trim().take(500)
         if (cleanContact.isEmpty() || cleanContent.isEmpty()) return
         val values = ContentValues().apply {
-            put("contact", cleanContact)
+            put("thread_id", cleanContact)
             put("content", cleanContent)
             put("memory_key", comparableText(cleanContact) + "\u0000" + comparableText(cleanContent))
             put("time", System.currentTimeMillis())
@@ -170,11 +196,11 @@ class ChatLearningDatabase(context: Context) :
         prune("contact_memories", 1000)
     }
 
-    fun contactMemories(contact: String, limit: Int = 5): List<String> {
+    fun contactMemories(contactId: String, limit: Int = 5): List<String> {
         val result = mutableListOf<String>()
         readableDatabase.rawQuery(
-            "SELECT content FROM contact_memories WHERE contact=? ORDER BY time DESC LIMIT ?",
-            arrayOf(contact, limit.coerceIn(1, 20).toString()),
+            "SELECT content FROM contact_memories WHERE thread_id=? ORDER BY time DESC LIMIT ?",
+            arrayOf(contactId.trim().take(140), limit.coerceIn(1, 20).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) result += cursor.getString(0).orEmpty()
         }
@@ -199,18 +225,21 @@ class ChatLearningDatabase(context: Context) :
         liked: Boolean,
         note: String = "",
         scene: ReplyScene = ReplyScene.CHAT,
+        contactId: String = "",
     ): Boolean {
         val cleanContact = contact.trim().take(100)
+        val cleanContactId = contactId.trim().take(140)
         val cleanIncoming = incoming.trim().take(1000)
         val cleanReply = reply.trim().take(1000)
         if (cleanContact.isEmpty() || cleanIncoming.isEmpty() || cleanReply.isEmpty()) return false
-        val legacyKey = listOf(cleanContact, cleanIncoming, cleanReply, liked).joinToString("\u0000")
-        // Preserve v2 CHAT keys so importing existing feedback cannot duplicate it.
+        val legacyKey = listOf(cleanContactId, cleanContact, cleanIncoming, cleanReply, liked)
+            .joinToString("\u0000")
         val key = if (scene == ReplyScene.CHAT) legacyKey else scene.name + "\u0000" + legacyKey
         val feedbackKey = stableKey(key)
         val cleanNote = note.trim().take(300)
         val values = ContentValues().apply {
             put("contact", cleanContact)
+            put("contact_id", cleanContactId)
             put("incoming", cleanIncoming)
             put("reply", cleanReply)
             put("liked", if (liked) 1 else 0)
@@ -262,11 +291,13 @@ class ChatLearningDatabase(context: Context) :
         }
     }
 
-    fun dislikedReplies(contact: String, limit: Int = 20): List<String> {
+    fun dislikedReplies(contactId: String, limit: Int = 20): List<String> {
+        val identity = contactId.trim().take(140)
+        if (identity.isBlank()) return emptyList()
         val result = mutableListOf<String>()
         readableDatabase.rawQuery(
-            "SELECT reply FROM reply_feedback WHERE contact=? AND liked=0 ORDER BY time DESC LIMIT ?",
-            arrayOf(contact.trim().take(100), limit.coerceIn(1, 50).toString()),
+            "SELECT reply FROM reply_feedback WHERE contact_id=? AND liked=0 ORDER BY time DESC LIMIT ?",
+            arrayOf(identity, limit.coerceIn(1, 50).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) result += cursor.getString(0).orEmpty()
         }
@@ -364,14 +395,14 @@ class ChatLearningDatabase(context: Context) :
         return ReplyFeedbackSummary(positive, negative, accepted, rejected)
     }
 
-    fun recordAutomatedReply(contact: String, reply: String) {
+    fun recordAutomatedReply(contactId: String, reply: String) {
         for (part in automatedReplyParts(reply)) {
             val normalized = comparableText(part)
             if (normalized.isEmpty()) continue
             val values = ContentValues().apply {
-                put("contact", contact.trim().take(100))
+                put("thread_id", contactId.trim().take(140))
                 put("reply", part.take(500))
-                put("reply_key", comparableText(contact) + "\u0000" + normalized)
+                put("reply_key", comparableText(contactId) + "\u0000" + normalized)
                 put("time", System.currentTimeMillis())
             }
             writableDatabase.insertWithOnConflict(
@@ -384,8 +415,8 @@ class ChatLearningDatabase(context: Context) :
         prune("automated_replies", 2000)
     }
 
-    fun isAutomatedReply(contact: String, reply: String): Boolean {
-        val key = comparableText(contact) + "\u0000" + comparableText(reply)
+    fun isAutomatedReply(contactId: String, reply: String): Boolean {
+        val key = comparableText(contactId) + "\u0000" + comparableText(reply)
         if (key.endsWith("\u0000")) return false
         readableDatabase.rawQuery(
             "SELECT 1 FROM automated_replies WHERE reply_key=? LIMIT 1",
@@ -393,15 +424,6 @@ class ChatLearningDatabase(context: Context) :
         ).use { return it.moveToFirst() }
     }
 
-    fun seedAutomatedReplies(items: List<HistoryItem>) {
-        writableDatabase.beginTransaction()
-        try {
-            for (item in items.take(1000)) recordAutomatedReply(item.name, item.myMsg)
-            writableDatabase.setTransactionSuccessful()
-        } finally {
-            writableDatabase.endTransaction()
-        }
-    }
 
     private fun allStyleSamples(limit: Int, scene: ReplyScene? = null): List<ChatStyleSample> {
         val result = mutableListOf<ChatStyleSample>()
@@ -455,7 +477,7 @@ class ChatLearningDatabase(context: Context) :
         db.execSQL(
             "CREATE TABLE IF NOT EXISTS reply_feedback (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "contact TEXT NOT NULL, incoming TEXT NOT NULL, reply TEXT NOT NULL, " +
+                "contact TEXT NOT NULL, contact_id TEXT NOT NULL DEFAULT '', incoming TEXT NOT NULL, reply TEXT NOT NULL, " +
                 "liked INTEGER NOT NULL, note TEXT NOT NULL, feedback_key TEXT NOT NULL UNIQUE, " +
                 (if (includeScene) "scene TEXT NOT NULL DEFAULT 'CHAT', " else "") +
                 "time INTEGER NOT NULL)",
@@ -467,6 +489,7 @@ class ChatLearningDatabase(context: Context) :
                 "time INTEGER NOT NULL)",
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_feedback_contact ON reply_feedback(contact, time DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_feedback_contact_id ON reply_feedback(contact_id, time DESC)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_quality_time ON reply_quality_events(time DESC)")
     }
 

@@ -2,6 +2,7 @@ package com.soulbot.app.app
 
 import com.soulbot.app.accessibility.*
 import com.soulbot.app.conversation.*
+import com.soulbot.app.conversation.context.ContextFragment
 import com.soulbot.app.conversation.runtime.*
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
@@ -126,6 +127,16 @@ internal class SoulServiceComponentFactory(private val service: SoulBotService) 
                 styleQuery: String,
                 excludeContextKey: String,
             ): String = service.personalizationContext(
+                contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
+            )
+            override fun contextFragments(
+                contactName: String,
+                latestMessage: String,
+                scene: ReplyScene,
+                includeMemory: Boolean,
+                styleQuery: String,
+                excludeContextKey: String,
+            ): List<ContextFragment> = service.contextFragments(
                 contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
             )
             override fun memoryThreadId(contactName: String): String = service.memoryThreadId(contactName)

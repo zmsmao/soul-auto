@@ -34,6 +34,7 @@ class ReplyLearningActivity : BaseSettingsActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_reply_learning)
         setupToolbar("回复与学习")
+        setupPrimaryNavigation(R.id.nav_learning)
         learningDb = ChatLearningDatabase(applicationContext)
         tvStats = findViewById(R.id.tvLearningStats)
         tvStyleProfile = findViewById(R.id.tvStyleProfile)
@@ -86,7 +87,7 @@ class ReplyLearningActivity : BaseSettingsActivity() {
         val feedback = learningDb.feedbackSummary()
         tvStats.text =
             "风格学习 $style · ${learningDb.styleSampleCount()} 条样本\n" +
-                "记忆引用 $memory · ${learningDb.contactMemoryCount()} 条旧版摘要\n" +
+                "联系人记忆 $memory · ${learningDb.contactMemoryCount()} 条记忆片段\n" +
                 "反馈：像我 ${feedback.positive} · 不像我 ${feedback.negative} · " +
                 "质量拒绝 ${feedback.qualityRejected}"
         tvStyleProfile.text = if (profile.sampleCount == 0) {
@@ -145,8 +146,14 @@ class ReplyLearningActivity : BaseSettingsActivity() {
     }
 
     private fun submitFeedback(draft: FeedbackDraft, liked: Boolean, note: String = "") {
+        val contactId = runCatching {
+            ConversationMemoryDatabase(applicationContext).use { memory ->
+                memory.uniqueThreadIdForName(draft.contact).orEmpty()
+            }
+        }.getOrDefault("")
         val saved = learningDb.recordReplyFeedback(
-            draft.contact, draft.incoming, draft.reply, liked, note = note, scene = draft.scene,
+            draft.contact, draft.incoming, draft.reply, liked,
+            note = note, scene = draft.scene, contactId = contactId,
         )
         if (!saved) {
             showMessage("这条反馈已提交，无需重复操作", Snackbar.LENGTH_LONG)

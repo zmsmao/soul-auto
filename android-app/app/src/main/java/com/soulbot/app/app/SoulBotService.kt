@@ -563,6 +563,17 @@ class SoulBotService : AccessibilityService() {
         contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
     )
 
+    internal fun contextFragments(
+        contactName: String,
+        latestMessage: String,
+        scene: ReplyScene = ReplyScene.CHAT,
+        includeMemory: Boolean = true,
+        styleQuery: String = latestMessage,
+        excludeContextKey: String = "",
+    ): List<ContextFragment> = conversationContextManager.contextFragments(
+        contactName, latestMessage, scene, includeMemory, styleQuery, excludeContextKey,
+    )
+
     internal fun learnFromManualReplies(
         contactName: String,
         thread: List<Pair<String, String>>,
@@ -739,14 +750,10 @@ class SoulBotService : AccessibilityService() {
 
     private fun initializeSessionDatabases() {
         historyDb = HistoryDatabase(applicationContext)
-        conversationMemoryDb = ConversationMemoryDatabase(applicationContext).also { memory ->
-            memory.seedLegacyHistory(historyDb?.getAll().orEmpty())
-        }
-        learningDb = ChatLearningDatabase(applicationContext).also { db ->
-            // Existing interaction history contains only replies sent by the bot.
-            // Seed it once so older bot messages are not learned as human style.
-            db.seedAutomatedReplies(historyDb?.getAll().orEmpty())
-        }
+        // Conversation and learning databases start with the new identity/context schema.
+        // Legacy history is intentionally not imported; existing installs should reinstall.
+        conversationMemoryDb = ConversationMemoryDatabase(applicationContext)
+        learningDb = ChatLearningDatabase(applicationContext)
         replyReplayDb = ReplyReplayDatabase(applicationContext)
     }
 

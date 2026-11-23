@@ -21,6 +21,16 @@ data class ConversationMemoryImportResult(
     val invalid: Int,
 )
 
+data class ConversationContactSummary(
+    val threadId: String,
+    val displayName: String,
+    val messageCount: Int,
+    val lastActivityAt: Long,
+    val lastMessage: String,
+    val lastRole: String,
+    val lastScene: String,
+)
+
 class ConversationMemoryDatabase(context: Context) :
     SQLiteOpenHelper(context, "conversation_memory.db", null, 3) {
 
@@ -399,10 +409,114 @@ class ConversationMemoryDatabase(context: Context) :
         return recentEntriesByContact(clean, limit.coerceIn(1, 500))
     }
 
+    fun contacts(search: String = "", limit: Int = 300): List<ConversationContactSummary> {
+        val result = mutableListOf<ConversationContactSummary>()
+        readableDatabase.rawQuery(
+            "SELECT m.thread_id, " +
+                "COALESCE((SELECT x.contact FROM conversation_messages x WHERE x.thread_id=m.thread_id " +
+                    "ORDER BY x.observed_at DESC, x.id DESC LIMIT 1), ''), " +
+                "COUNT(*), MAX(m.observed_at), " +
+                "COALESCE((SELECT x.content FROM conversation_messages x WHERE x.thread_id=m.thread_id " +
+                    "ORDER BY x.observed_at DESC, x.id DESC LIMIT 1), ''), " +
+                "COALESCE((SELECT x.role FROM conversation_messages x WHERE x.thread_id=m.thread_id " +
+                    "ORDER BY x.observed_at DESC, x.id DESC LIMIT 1), ''), " +
+                "COALESCE((SELECT x.scene FROM conversation_messages x WHERE x.thread_id=m.thread_id " +
+                    "ORDER BY x.observed_at DESC, x.id DESC LIMIT 1), 'CHAT') " +
+                "FROM conversation_messages m WHERE m.thread_id<>? AND m.thread_id<>'' " +
+                "GROUP BY m.thread_id ORDER BY MAX(m.observed_at) DESC LIMIT ?",
+            arrayOf(LEGACY_UNKNOWN, limit.coerceIn(1, 500).toString()),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val item = ConversationContactSummary(
+                    threadId = cursor.getString(0),
+                    displayName = cursor.getString(1).orEmpty().ifBlank { "未命名联系人" },
+                    messageCount = cursor.getInt(2),
+                    lastActivityAt = cursor.getLong(3),
+                    lastMessage = cursor.getString(4).orEmpty(),
+                    lastRole = cursor.getString(5).orEmpty(),
+                    lastScene = cursor.getString(6).orEmpty(),
+                )
+                if (search.isBlank() || item.displayName.contains(search.trim(), ignoreCase = true)) {
+                    result += item
+                }
+            }
+        }
+        return result
+    }
+
+    fun contactEntries(threadId: String, limit: Int = 200): List<ConversationMemoryEntry> {
+        val scope = cleanThreadId(threadId) ?: return emptyList()
+        val result = mutableListOf<ConversationMemoryEntry>()
+        readableDatabase.rawQuery(
+            "SELECT event_key, contact, role, content, observed_at, source, thread_id, scene " +
+                "FROM conversation_messages WHERE thread_id=? " +
+                "ORDER BY observed_at DESC, id DESC LIMIT ?",
+            arrayOf(scope, limit.coerceIn(1, 500).toString()),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val entry = ConversationMemoryEntry(
+                    eventKey = cursor.getString(0),
+                    contact = cursor.getString(1),
+                    role = cursor.getString(2),
+                    content = cursor.getString(3),
+                    observedAt = cursor.getLong(4),
+                    source = cursor.getString(5),
+                    threadId = cursor.getString(6),
+                    scene = cursor.getString(7),
+                )
+                if (entry.role != "out" || !ReplyNaturalness.isInternalDraft(entry.content)) {
+                    result += entry
+                }
+            }
+        }
+        return result.asReversed()
+    }
+
+    fun conversationStates(threadId: String): List<ConversationState> {
+        val scope = cleanThreadId(threadId) ?: return emptyList()
+        val result = mutableListOf<ConversationState>()
+        readableDatabase.rawQuery(
+            "SELECT scene, current_topic, topic_turn_count, last_question, last_banter, " +
+                "low_information_count, last_progress_at, last_incoming_fingerprint, updated_at " +
+                "FROM conversation_state WHERE thread_id=? ORDER BY updated_at DESC",
+            arrayOf(scope),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += ConversationState(
+                    threadId = scope,
+                    scene = cursor.getString(0),
+                    currentTopic = cursor.getString(1),
+                    topicTurnCount = cursor.getInt(2),
+                    lastQuestion = cursor.getString(3),
+                    lastBanter = cursor.getString(4),
+                    lowInformationCount = cursor.getInt(5),
+                    lastProgressAt = cursor.getLong(6),
+                    lastIncomingFingerprint = cursor.getString(7),
+                    updatedAt = cursor.getLong(8),
+                )
+            }
+        }
+        return result
+    }
+
+    /** Only resolves a name when it maps to exactly one stable conversation identity. */
+    fun uniqueThreadIdForName(name: String): String? {
+        val cleanName = name.trim().take(120)
+        if (cleanName.isBlank()) return null
+        val ids = mutableSetOf<String>()
+        readableDatabase.rawQuery(
+            "SELECT DISTINCT thread_id FROM conversation_messages WHERE contact=? AND thread_id<>?",
+            arrayOf(cleanName, LEGACY_UNKNOWN),
+        ).use { cursor ->
+            while (cursor.moveToNext()) ids += cursor.getString(0)
+        }
+        return ids.singleOrNull()
+    }
+
     fun contactCount(): Int {
         readableDatabase.rawQuery(
-            "SELECT COUNT(DISTINCT contact) FROM conversation_messages",
-            null,
+            "SELECT COUNT(DISTINCT thread_id) FROM conversation_messages WHERE thread_id<>?",
+            arrayOf(LEGACY_UNKNOWN),
         ).use { cursor -> return if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
     }
 

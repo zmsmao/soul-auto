@@ -57,5 +57,6 @@
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
+        <include layout="@layout/view_bottom_navigation" />
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
