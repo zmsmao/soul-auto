@@ -73,12 +73,6 @@ class SoulBotService : AccessibilityService() {
     }
 
 
-    private data class SquarePostCandidate(
-        val text: String,
-        val avatar: AccessibilityNodeInfo,
-        val viewportKey: String,
-    )
-
     private val pageUi: SoulAccessibilityUi by lazy(LazyThreadSafetyMode.NONE) { SoulAccessibilityUi(this, ::sleep) }
 
     private val screenDetector: SoulScreenDetector by lazy(LazyThreadSafetyMode.NONE) { SoulScreenDetector(pageUi, ::displayedConversationName) }
@@ -124,6 +118,58 @@ class SoulBotService : AccessibilityService() {
             override fun pressBack() = this@SoulBotService.pressBack()
             override fun gotoSoulPlanet(): Boolean = this@SoulBotService.gotoSoulPlanet()
         }
+    }
+
+    private val squareWorkflow: SoulSquareWorkflow by lazy(LazyThreadSafetyMode.NONE) {
+        SoulSquareWorkflow(object : SoulSquareHost {
+            override val context: android.content.Context get() = applicationContext
+            override val isRunning: Boolean get() = running
+            override fun setStatusText(text: String) { statusText = text }
+            override fun setNextStep(action: String, delayMs: Long) = this@SoulBotService.setNextStep(action, delayMs)
+            override fun sleep(ms: Long) = this@SoulBotService.sleep(ms)
+            override fun currentScreen(): SoulScreen = this@SoulBotService.currentScreen()
+            override fun hasUnreadRedDot(): Boolean = this@SoulBotService.hasUnreadRedDot()
+            override fun isOnSquare(): Boolean = this@SoulBotService.isOnSquare()
+            override fun selectedSquareChannel(): String = this@SoulBotService.selectedSquareChannel()
+            override fun ensureLocalSquareChannel(): String? = this@SoulBotService.ensureLocalSquareChannel()
+            override fun findById(id: String): AccessibilityNodeInfo? = this@SoulBotService.findById(id)
+            override fun findByIds(id: String): List<AccessibilityNodeInfo> = this@SoulBotService.findByIds(id)
+            override fun descendantsById(node: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo> =
+                this@SoulBotService.descendantsById(node, id)
+            override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.isVisibleOnScreen(node)
+            override fun rect(node: AccessibilityNodeInfo): Rect = this@SoulBotService.rect(node)
+            override fun textOf(node: AccessibilityNodeInfo?): String = this@SoulBotService.textOf(node)
+            override fun dp(value: Int): Int = this@SoulBotService.dp(value)
+            override fun tap(x: Float, y: Float): Boolean = this@SoulBotService.tap(x, y)
+            override fun tapNode(node: AccessibilityNodeInfo): Boolean = this@SoulBotService.tapNode(node)
+            override fun swipeVertically(containerId: String, startRatio: Float, endRatio: Float, duration: Long) =
+                this@SoulBotService.swipeVertically(containerId, startRatio, endRatio, duration)
+            override fun isOnProfile(): Boolean = this@SoulBotService.isOnProfile()
+            override fun isSoulForeground(): Boolean = this@SoulBotService.isSoulForeground()
+            override fun backToSquare(): Boolean = this@SoulBotService.backToSquare()
+            override fun isOnNoSend(): Boolean = this@SoulBotService.isOnNoSend()
+            override fun skipNoSend() = this@SoulBotService.skipNoSend()
+            override fun isOnGift(): Boolean = this@SoulBotService.isOnGift()
+            override fun skipGift() = this@SoulBotService.skipGift()
+            override fun isOnChat(): Boolean = this@SoulBotService.isOnChat()
+            override fun isExpectedConversation(name: String): Boolean = this@SoulBotService.isExpectedConversation(name)
+            override fun readThread(): List<Pair<String, String>> = this@SoulBotService.readThread()
+            override fun currentIncomingMessageKeys(name: String): List<String> = this@SoulBotService.currentIncomingMessageKeys(name)
+            override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> = this@SoulBotService.pendingIncomingVoiceBubbles()
+            override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
+                this@SoulBotService.generateValidatedOpening(action, context)
+            override fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
+                this@SoulBotService.replyToCurrentConversation(name, seen)
+            override fun returnToList(): Boolean = this@SoulBotService.returnToList()
+            override fun memoryThreadId(name: String): String = this@SoulBotService.memoryThreadId(name)
+            override fun send(text: String, expectedContact: String?, idempotencyKey: String?, sceneOverride: ReplyScene?, expectedEventAnchor: String?): Boolean =
+                this@SoulBotService.send(text, expectedContact = expectedContact, idempotencyKey = idempotencyKey, sceneOverride = sceneOverride, expectedEventAnchor = expectedEventAnchor)
+            override fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String, opening: OpeningContext?, scene: ReplyScene) =
+                this@SoulBotService.recordAutomatedInteraction(contactName, incomingMessages, reply, opening, scene)
+            override fun recordHistory(contactName: String, context: String, reply: String) {
+                historyDb?.record(contactName, context, reply)
+            }
+        })
     }
 
     private val qiyuWorkflow: SoulQiyuWorkflow by lazy(LazyThreadSafetyMode.NONE) {
@@ -2399,72 +2445,6 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 广场 =====
 
-    private fun readPosts(expectedChannel: String): List<SquarePostCandidate> {
-        if (!isOnSquare()) return emptyList()
-        if (selectedSquareChannel() != expectedChannel) return emptyList()
-        val cards = findByIds(ID_SQUARE_CARD)
-            .filter(::isVisibleOnScreen)
-            .sortedBy { rect(it).top }
-        val result = mutableListOf<SquarePostCandidate>()
-        for (card in cards) {
-            val cb = rect(card)
-            // ViewPager keeps neighbouring channels in the accessibility tree and
-            // their cards can share screen coordinates. Bind the text and avatar
-            // through this card's own subtree, never through global geometry.
-            val text = descendantsById(card, ID_SQUARE_TEXT)
-                .asSequence()
-                .filter(::isVisibleOnScreen)
-                .map(::textOf)
-                .firstOrNull(String::isNotBlank)
-                .orEmpty()
-            val avatar = descendantsById(card, ID_SQUARE_AVATAR)
-                .firstOrNull(::isVisibleOnScreen)
-            if (text.isNotBlank() && avatar != null) {
-                result += SquarePostCandidate(
-                    text = text,
-                    avatar = avatar,
-                    viewportKey = SquareBrowsePolicy.viewportKey(text, cb.top, dp(48)),
-                )
-            }
-        }
-        return result.distinctBy { it.viewportKey }
-    }
-
-    private fun squarePostSignature(posts: List<SquarePostCandidate>): String =
-        posts.joinToString("|") { it.viewportKey }
-
-    private fun waitForStableSquarePosts(expectedChannel: String): List<SquarePostCandidate> {
-        val deadline = System.currentTimeMillis() + SQUARE_POST_LOAD_TIMEOUT_MS
-        var latest = emptyList<SquarePostCandidate>()
-        var lastSignature = ""
-        var stableSince = System.currentTimeMillis()
-        while (running && isOnSquare() && selectedSquareChannel() == expectedChannel) {
-            val current = readPosts(expectedChannel)
-            val signature = squarePostSignature(current)
-            if (signature != lastSignature) {
-                lastSignature = signature
-                stableSince = System.currentTimeMillis()
-            }
-            latest = current
-            val stableFor = System.currentTimeMillis() - stableSince
-            if (latest.isNotEmpty() && stableFor >= SQUARE_POST_STABLE_MS) return latest
-
-            val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0L) return latest
-            val action = if (latest.isEmpty()) {
-                "等待同城动态加载"
-            } else {
-                "确认本屏 ${latest.size} 条动态已加载"
-            }
-            setNextStep(action, minOf(remaining, SQUARE_POST_STABLE_MS))
-            sleep(minOf(300L, remaining))
-        }
-        return latest
-    }
-
-    private fun getProfileName(): String =
-        if (isOnProfile()) textOf(findById(ID_PROFILE_NAME)) else ""
-
     private fun skipGift() {
         if (isOnGift()) {
             setNextStep("关闭礼物弹窗")
@@ -2481,260 +2461,11 @@ class SoulBotService : AccessibilityService() {
         }
     }
 
-    private fun openProfile(avatar: AccessibilityNodeInfo): Boolean {
-        val bounds = rect(avatar)
-        setNextStep("打开同城用户主页")
-        for (attempt in 0 until 2) {
-            if (attempt == 0) {
-                tapNode(avatar)
-            } else {
-                RuntimeLog.record(applicationContext, "square profile open retry; attempt=2")
-                tap(bounds.exactCenterX().toFloat(), bounds.exactCenterY().toFloat())
-            }
-            for (wait in 0 until 8) {
-                sleep(250)
-                if (isOnProfile()) return true
-                if (!isSoulForeground()) return false
-            }
-            if (!isOnSquare()) return false
-        }
-        RuntimeLog.record(applicationContext, "square profile open failed; attempts=2")
-        return false
-    }
-
     private fun browseSquareOnce(
         seenDm: MutableSet<String>,
         attemptedDmProfiles: MutableSet<String>,
         greetDb: GreetDatabase,
-    ): Boolean {
-        if (!isOnSquare()) return false
-        val channel = ensureLocalSquareChannel() ?: run {
-            statusText = "未找到同城频道"
-            RuntimeLog.record(applicationContext, "square browse aborted; reason=local_channel_missing")
-            return false
-        }
-        RuntimeLog.record(applicationContext, "square browse started; maxViewports=$SQUARE_MAX_VIEWPORTS")
-        setNextStep("浏览同城·$channel")
-        val handledInViewport = mutableSetOf<String>()
-        val transientFailures = mutableMapOf<String, Int>()
-        var viewportCount = 0
-        var lastScrolledFrom = ""
-        while (viewportCount < SQUARE_MAX_VIEWPORTS) {
-            if (currentScreen() == SoulScreen.QIYU_POPUP || hasUnreadRedDot()) return false
-            if (selectedSquareChannel() != channel) {
-                RuntimeLog.record(applicationContext, "square browse stopped; reason=channel_changed")
-                return false
-            }
-            val posts = waitForStableSquarePosts(channel)
-            RuntimeLog.record(
-                applicationContext,
-                "square viewport scanned; viewport=${viewportCount + 1}; posts=${posts.size}; handled=${handledInViewport.size}",
-            )
-            val candidate = posts.firstOrNull { post ->
-                post.viewportKey !in handledInViewport &&
-                    SquareBrowsePolicy.shouldRetryTransientFailure(
-                        transientFailures[post.viewportKey] ?: 0,
-                    )
-            }
-
-            if (candidate == null) {
-                // Re-read once after the list has settled. Only advance when every
-                // currently visible candidate is handled or has exhausted retries.
-                val confirmedPosts = waitForStableSquarePosts(channel)
-                val remaining = confirmedPosts.firstOrNull { post ->
-                    post.viewportKey !in handledInViewport &&
-                        SquareBrowsePolicy.shouldRetryTransientFailure(
-                            transientFailures[post.viewportKey] ?: 0,
-                        )
-                }
-                if (remaining != null) continue
-
-                val signature = squarePostSignature(confirmedPosts)
-                val prepareDelay = if (signature == lastScrolledFrom) 3000L else SQUARE_SCROLL_PREPARE_MS
-                setNextStep("本屏动态已检查，${prepareDelay / 1000} 秒后下滑", prepareDelay)
-                sleep(prepareDelay)
-                if (currentScreen() == SoulScreen.QIYU_POPUP || hasUnreadRedDot()) return false
-                if (!isOnSquare() || selectedSquareChannel() != channel) return false
-
-                lastScrolledFrom = signature
-                // Shorter and slower than the old half-screen fling. The overlap
-                // keeps cards near both edges visible on the next pass.
-                swipeVertically(ID_SQUARE_PAGER, 0.76f, 0.50f, 650)
-                setNextStep("等待下方动态加载", SQUARE_SCROLL_SETTLE_MS)
-                sleep(SQUARE_SCROLL_SETTLE_MS)
-                viewportCount++
-                handledInViewport.clear()
-                transientFailures.clear()
-                continue
-            }
-
-            val text = candidate.text
-            val avatar = candidate.avatar
-            val viewportKey = candidate.viewportKey
-            if (!isVisibleOnScreen(avatar)) {
-                transientFailures[viewportKey] = (transientFailures[viewportKey] ?: 0) + 1
-                continue
-            }
-
-            setNextStep("检查当前同城动态")
-            if (!openProfile(avatar)) {
-                val attempts = (transientFailures[viewportKey] ?: 0) + 1
-                transientFailures[viewportKey] = attempts
-                if (!backToSquare()) return false
-                if (SquareBrowsePolicy.shouldRetryTransientFailure(attempts)) {
-                    setNextStep("头像打开失败，重新扫描本屏", 1200)
-                    sleep(1200)
-                } else {
-                    handledInViewport += viewportKey
-                }
-                continue
-            }
-
-            val name = getProfileName()
-            if (name.isBlank()) {
-                val attempts = (transientFailures[viewportKey] ?: 0) + 1
-                transientFailures[viewportKey] = attempts
-                if (!backToSquare()) return false
-                if (!SquareBrowsePolicy.shouldRetryTransientFailure(attempts)) {
-                    handledInViewport += viewportKey
-                }
-                continue
-            }
-
-            val profileKey = SquareBrowsePolicy.profileKey(name)
-            if (profileKey.isBlank() || profileKey in attemptedDmProfiles) {
-                handledInViewport += viewportKey
-                if (!backToSquare()) return false
-                continue
-            }
-            // Reserve before opening private chat. The reservation survives the
-            // overlapping area of the next short swipe, even after a modal detour.
-            attemptedDmProfiles += profileKey
-
-            val postKey = "$name\u0000$text"
-            if (postKey in seenDm ||
-                !greetDb.shouldGreet(
-                    name,
-                    text,
-                    Prefs.getGreetIntervalHours(applicationContext),
-                )
-            ) {
-                seenDm += postKey
-                handledInViewport += viewportKey
-                if (!backToSquare()) return false
-                continue
-            }
-
-            val secret = findById(ID_CHAT_SECRET)
-            if (secret == null) {
-                handledInViewport += viewportKey
-                if (!backToSquare()) return false
-                continue
-            }
-            setNextStep("打开 $name 的私聊")
-            tapNode(secret)
-            sleep(2500)
-            when {
-                isOnNoSend() -> {
-                    seenDm += postKey
-                    handledInViewport += viewportKey
-                    skipNoSend()
-                    if (!backToSquare()) return false
-                }
-                isOnGift() -> {
-                    seenDm += postKey
-                    handledInViewport += viewportKey
-                    skipGift()
-                    if (!backToSquare()) return false
-                }
-                isOnChat() -> {
-                    val contactId = DiagnosticIdentity.contactId(applicationContext, name)
-                    RuntimeLog.record(applicationContext, "square private chat opened; contactId=$contactId")
-                    val openingContext = OpeningContext(ReplyScene.SQUARE, name, text)
-                    val initialIncoming = incomingSignature(readThread())
-                    val initialEventAnchor = currentIncomingMessageKeys(name).joinToString(",")
-                    val reply = generateValidatedOpening(
-                        "生成给 $name 的广场开场白",
-                        openingContext,
-                    )
-                    val canSend = running && isOnChat() && isExpectedConversation(name) &&
-                        pendingIncomingVoiceBubbles().isEmpty() &&
-                        incomingSignature(readThread()) == initialIncoming &&
-                        currentIncomingMessageKeys(name).joinToString(",") == initialEventAnchor
-                    if (!canSend && running && isOnChat() && isExpectedConversation(name)) {
-                        val currentThreadChanged = pendingIncomingVoiceBubbles().isNotEmpty() ||
-                            incomingSignature(readThread()) != initialIncoming ||
-                            currentIncomingMessageKeys(name).joinToString(",") != initialEventAnchor
-                        if (currentThreadChanged) {
-                            setNextStep("对方已发来新消息，取消广场开场并直接回复")
-                            val replied = replyToCurrentConversation(name, ConversationSeenTracker())
-                            if (replied) {
-                                seenDm += postKey
-                                greetDb.recordGreet(name, text)
-                            }
-                            backToSquare()
-                            return replied
-                        }
-                        if (hasUnreadRedDot()) {
-                            RuntimeLog.record(applicationContext, "square opening interrupted; reason=new_unread_inbox")
-                            setNextStep("发现新的私聊未读，停止广场主动任务并优先处理")
-                            returnToList()
-                            return false
-                        }
-                    }
-                    val squareSendKey = reply?.let {
-                        ConversationIdentity.sendKey(
-                            memoryThreadId(name),
-                            ReplyScene.SQUARE.name,
-                            listOf(ConversationIdentity.digest(postKey)),
-                            it,
-                        )
-                    }
-                    val sent = reply != null && canSend && send(
-                        reply,
-                        expectedContact = name,
-                        idempotencyKey = squareSendKey,
-                        sceneOverride = ReplyScene.SQUARE,
-                        expectedEventAnchor = initialEventAnchor,
-                    )
-                    if (!sent && reply != null && isOnChat() && isExpectedConversation(name) &&
-                        currentIncomingMessageKeys(name).joinToString(",") != initialEventAnchor
-                    ) {
-                        setNextStep("广场开场发送前收到新消息，改为回复最新内容")
-                        val replied = replyToCurrentConversation(name, ConversationSeenTracker())
-                        if (replied) {
-                            seenDm += postKey
-                            greetDb.recordGreet(name, text)
-                        }
-                        backToSquare()
-                        return replied
-                    }
-                    if (sent) {
-                        seenDm += postKey
-                        greetDb.recordGreet(name, text)
-                        recordAutomatedInteraction(name, listOf(text), reply, openingContext, scene = ReplyScene.SQUARE)
-                        historyDb?.record(name, text, reply)
-                    }
-                    RuntimeLog.record(
-                        applicationContext,
-                        "square private chat ended; contactId=$contactId; sent=$sent",
-                    )
-                    backToSquare()
-                    return sent
-                }
-                else -> {
-                    val attempts = (transientFailures[viewportKey] ?: 0) + 1
-                    transientFailures[viewportKey] = attempts
-                    if (!backToSquare()) return false
-                    if (!SquareBrowsePolicy.shouldRetryTransientFailure(attempts)) {
-                        handledInViewport += viewportKey
-                    }
-                }
-            }
-        }
-        RuntimeLog.record(applicationContext, "square browse ended; sent=false; scannedViewports=$viewportCount")
-        return false
-    }
+    ): Boolean = squareWorkflow.browseOnce(seenDm, attemptedDmProfiles, greetDb)
 
     // ===== 主循环 =====
 
