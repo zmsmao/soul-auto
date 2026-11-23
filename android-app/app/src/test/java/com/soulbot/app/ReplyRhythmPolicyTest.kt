@@ -39,6 +39,17 @@ class ReplyRhythmPolicyTest {
     }
 
     @Test
+    fun directAiQuestionsAndDoubaoJokesUseNaturalDeflectionInsteadOfLiteralAnswering() {
+        for (message in listOf("你是AI吗？", "你是不是机器人", "说话好豆包")) {
+            val guidance = ReplyRhythmPolicy.guidance(listOf("in" to message), listOf(message))
+            assertTrue(guidance.contains("轻松反问"))
+            assertTrue(guidance.contains("不输出模型名称"))
+            assertFalse(guidance.contains("先回答对方实际问的问题"))
+            assertFalse(guidance.contains("必须如实回答"))
+        }
+    }
+
+    @Test
     fun guidanceSuggestsVariationAfterConsecutiveStatementReplies() {
         val thread = listOf(
             "in" to "我周末喜欢看展",

@@ -1575,7 +1575,11 @@ class SoulBotService : AccessibilityService() {
         }
 
         collect(row, 0)
-        return candidates.distinct().firstOrNull().orEmpty().take(120)
+        val distinct = candidates.distinct()
+        return distinct.maxByOrNull(UnreadConversationPolicy::priorityScore)
+            ?.takeIf { UnreadConversationPolicy.priorityScore(it) > 0 }
+            ?: distinct.firstOrNull()
+            ?: ""
     }
 
     private fun findConversation(name: String): AccessibilityNodeInfo? {
