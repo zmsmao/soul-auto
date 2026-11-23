@@ -38,6 +38,24 @@ class ConversationStatePolicyTest {
         assertEquals(2, state.lowInformationCount)
     }
 
+    @Test fun topicHintSuggestsNewAnglesAfterSeveralMeaningfulTurns() {
+        val state = ConversationState(
+            threadId = "thread-1",
+            scene = "CHAT",
+            currentTopic = "周末去看展",
+            topicTurnCount = 3,
+            lastQuestion = "你喜欢看什么展？",
+            lastBanter = "",
+            lowInformationCount = 0,
+            lastProgressAt = 100L,
+            lastIncomingFingerprint = "fingerprint",
+            updatedAt = 200L,
+        )
+        val hint = ConversationStatePolicy.promptHint(state)
+        assertTrue(hint.contains("新切面"))
+        assertTrue(hint.contains("经历、偏好、感受或选择"))
+    }
+
     @Test fun stateIsIsolatedByScene() {
         val thread = listOf("in" to "我喜欢爬山")
         assertEquals("CHAT", ConversationStatePolicy.evolve("thread-1", ReplyScene.CHAT, thread).scene)

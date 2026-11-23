@@ -6,27 +6,33 @@ import org.junit.Test
 
 class SelfProfileTest {
     @Test
-    fun promptContext_includesOnlyConfiguredFactsAndNoFabricationRule() {
+    fun promptContextIncludesConfiguredFactsAndVisibilityRules() {
         val prompt = SelfProfile(
-            gender = "男",
             age = "26",
-            region = "四川绵阳",
+            region = "广州天河",
             zodiac = "双子座",
-            occupation = "",
+            occupation = "互联网研发",
             details = "喜欢徒步和做饭",
+            height = "172-175cm",
+            ageVisibility = ProfileVisibility.ASKED,
+            regionVisibility = ProfileVisibility.PUBLIC,
+            occupationVisibility = ProfileVisibility.ASKED,
+            detailsVisibility = ProfileVisibility.PUBLIC,
+            heightVisibility = ProfileVisibility.PRIVATE,
         ).promptContext()
 
-        assertTrue(prompt.contains("性别：男"))
         assertTrue(prompt.contains("年龄：26"))
-        assertTrue(prompt.contains("现居地区：四川绵阳"))
-        assertTrue(prompt.contains("星座：双子座"))
+        assertTrue(prompt.contains("现居地区：广州天河"))
+        assertTrue(prompt.contains("职业或工作状态：互联网研发"))
         assertTrue(prompt.contains("喜欢徒步和做饭"))
-        assertFalse(prompt.contains("职业或工作状态："))
-        assertTrue(prompt.contains("绝对不能编造"))
+        assertFalse(prompt.contains("身高：172-175cm"))
+        assertTrue(prompt.contains("仅在对方自然问到时简短回答"))
+        assertTrue(prompt.contains("寒暄式询问可以大方"))
+        assertTrue(prompt.contains("不能猜测、补造"))
     }
 
     @Test
-    fun emptyProfile_addsNoIdentityFacts() {
+    fun emptyProfileAddsNoIdentityFacts() {
         val prompt = SelfProfile(
             gender = "",
             age = "",
@@ -34,8 +40,21 @@ class SelfProfileTest {
             zodiac = "",
             occupation = "",
             details = "",
+            height = "",
+        ).promptContext()
+        assertTrue(prompt.isEmpty())
+    }
+
+    @Test
+    fun privateFieldsNeverEnterPromptContext() {
+        val prompt = SelfProfile(
+            age = "27",
+            region = "广州",
+            ageVisibility = ProfileVisibility.PRIVATE,
+            regionVisibility = ProfileVisibility.PUBLIC,
         ).promptContext()
 
-        assertTrue(prompt.isEmpty())
+        assertFalse(prompt.contains("27"))
+        assertTrue(prompt.contains("现居地区：广州"))
     }
 }

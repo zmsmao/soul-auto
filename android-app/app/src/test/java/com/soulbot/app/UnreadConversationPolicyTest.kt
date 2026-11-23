@@ -23,6 +23,29 @@ class UnreadConversationPolicyTest {
     }
 
     @Test
+    fun `high intent unread rows jump ahead of ordinary unread rows`() {
+        val rows = listOf(
+            UnreadConversationCandidate("普通旧消息", "昨天 08:30", 2, "今天吃饭了吗"),
+            UnreadConversationCandidate("联系方式", "刚刚", 0, "方便加个微信吗"),
+            UnreadConversationCandidate("情绪信号", "10分钟前", 1, "你怎么不理我"),
+        )
+
+        assertEquals(
+            listOf("情绪信号", "联系方式", "普通旧消息"),
+            UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
+        )
+    }
+
+    @Test
+    fun `priority score recognises contact meeting photo and emotional signals`() {
+        assertEquals(100, UnreadConversationPolicy.priorityScore("方便加个微信吗"))
+        assertEquals(100, UnreadConversationPolicy.priorityScore("哪天见面？"))
+        assertEquals(100, UnreadConversationPolicy.priorityScore("可以发张照片吗"))
+        assertEquals(100, UnreadConversationPolicy.priorityScore("你怎么不理我"))
+        assertEquals(0, UnreadConversationPolicy.priorityScore("我今天下班去吃饭"))
+    }
+
+    @Test
     fun `parses clock weekday and concrete date labels`() {
         assertEquals(90L, UnreadConversationPolicy.ageMinutes("10:30", now))
         assertEquals(4L * 24L * 60L + 12L * 60L, UnreadConversationPolicy.ageMinutes("周二", now))

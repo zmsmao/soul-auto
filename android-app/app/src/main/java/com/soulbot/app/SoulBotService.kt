@@ -1526,7 +1526,12 @@ class SoulBotService : AccessibilityService() {
             var time = ""
             for (tm in times) { if (contains(ib, rect(tm))) { time = textOf(tm); break } }
             if (name.isNotBlank()) {
-                result += UnreadConversationCandidate(name, time, displayOrder)
+                result += UnreadConversationCandidate(
+                    name = name,
+                    timeText = time,
+                    displayOrder = displayOrder,
+                    previewText = conversationRowPreview(item, name, time),
+                )
             }
         }
         val ordered = UnreadConversationPolicy.oldestFirst(result)
@@ -1535,6 +1540,42 @@ class SoulBotService : AccessibilityService() {
             "unread scan completed; visibleRows=${items.size}; visibleBadges=${badges.size}; candidates=${ordered.size}; selectedContact=${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(applicationContext, it.name) } ?: "none"}",
         )
         return ordered
+    }
+
+    private fun conversationRowPreview(
+        row: AccessibilityNodeInfo,
+        contactName: String,
+        timeText: String,
+    ): String {
+        val candidates = mutableListOf<String>()
+        var visited = 0
+
+        fun collect(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 5 || visited >= 80) return
+            visited++
+            val values = listOf(
+                node.text?.toString().orEmpty(),
+                node.contentDescription?.toString().orEmpty(),
+            )
+            for (value in values) {
+                val clean = value.trim().replace(Regex("\s+"), " ")
+                if (clean.length !in 2..160) continue
+                if (clean == contactName || clean == timeText) continue
+                if (contactName.isNotBlank() && clean.contains(contactName)) continue
+                if (timeText.isNotBlank() && clean.contains(timeText)) continue
+                if (Regex("^\d+$").matches(clean)) continue
+                if (clean.contains("未读") || clean.contains("条消息")) continue
+                candidates += clean
+            }
+            for (index in 0 until minOf(node.childCount, 24)) {
+                val child = node.getChild(index) ?: continue
+                collect(child, depth + 1)
+                if (visited >= 80) break
+            }
+        }
+
+        collect(row, 0)
+        return candidates.distinct().firstOrNull().orEmpty().take(120)
     }
 
     private fun findConversation(name: String): AccessibilityNodeInfo? {
@@ -1938,6 +1979,9 @@ class SoulBotService : AccessibilityService() {
         activeGenerationCancellation = cancellation
         val contactName = context.contactName
         val baselineEventKeys = currentIncomingMessageKeys(contactName).joinToString(",")
+        val unreadVisibleAtStart = hasUnreadRedDot()
+        val interruptOnNewUnread = context.scene == ReplyScene.SQUARE ||
+            context.scene == ReplyScene.SOUL_MATCH
         val watcher = Thread({
             try {
                 while (running && !cancellation.isCancelled() && !Thread.currentThread().isInterrupted) {
@@ -1951,6 +1995,11 @@ class SoulBotService : AccessibilityService() {
                         )
                     ) {
                         RuntimeLog.record(applicationContext, "opening generation cancelled; reason=context_changed")
+                        cancellation.cancel()
+                        break
+                    }
+                    if (interruptOnNewUnread && !unreadVisibleAtStart && hasUnreadRedDot()) {
+                        RuntimeLog.record(applicationContext, "opening generation cancelled; reason=new_unread_inbox")
                         cancellation.cancel()
                         break
                     }
@@ -2240,6 +2289,12 @@ class SoulBotService : AccessibilityService() {
         val newIncomingEvents = unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
         val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
+        if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
+            seen.markSeenEvents(memoryThreadId(contactName), newIncomingEvents)
+            setNextStep("匹配聊天连续收到简短回应，本轮自然停顿")
+            gotoSoulPlanet()
+            return false
+        }
         if (route == OpeningConversationAction.SKIP ||
             (route == OpeningConversationAction.REPLY && !replyingToMessage)
         ) {
@@ -2749,6 +2804,16 @@ class SoulBotService : AccessibilityService() {
                 gotoChatList()
                 return false
             }
+            if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
+                seen.markSeenEvents(memoryThreadId(name), newEvents)
+                RuntimeLog.record(
+                    applicationContext,
+                    "conversation reply paused; reason=repeated_low_information; contactId=${DiagnosticIdentity.contactId(applicationContext, name)}",
+                )
+                setNextStep("$name 连续简短回应，本轮自然停顿")
+                gotoChatList()
+                return false
+            }
             val eventAnchor = currentIncomingMessageKeys(name).joinToString(",")
 
             val reply = generateValidatedChatReply(name, thread, new)
@@ -2928,6 +2993,14 @@ class SoulBotService : AccessibilityService() {
             setNextStep("$name 的这条招呼已处理，返回列表", 800)
             pressBack()
             sleep(800)
+            return false
+        }
+        if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
+            seen.markSeenEvents(memoryThreadId(name), newEvents)
+            greetDb.recordGreet(systemGreetingName, replyContext)
+            setNextStep("$name 连续简短回应，本轮自然停顿")
+            if (currentScreen() == Screen.QIYU_POPUP) handleQiyu()
+            else { pressBack(); sleep(800) }
             return false
         }
         val greetingEventKey = currentIncomingMessageKeys(name).joinToString(",")
@@ -3236,14 +3309,25 @@ class SoulBotService : AccessibilityService() {
                         incomingSignature(readThread()) == initialIncoming &&
                         currentIncomingMessageKeys(name).joinToString(",") == initialEventAnchor
                     if (!canSend && running && isOnChat() && isExpectedConversation(name)) {
-                        setNextStep("对方已发来消息，取消广场开场并直接回复")
-                        val replied = replyToCurrentConversation(name, ConversationSeenTracker())
-                        if (replied) {
-                            seenDm += postKey
-                            greetDb.recordGreet(name, text)
+                        val currentThreadChanged = pendingIncomingVoiceBubbles().isNotEmpty() ||
+                            incomingSignature(readThread()) != initialIncoming ||
+                            currentIncomingMessageKeys(name).joinToString(",") != initialEventAnchor
+                        if (currentThreadChanged) {
+                            setNextStep("对方已发来新消息，取消广场开场并直接回复")
+                            val replied = replyToCurrentConversation(name, ConversationSeenTracker())
+                            if (replied) {
+                                seenDm += postKey
+                                greetDb.recordGreet(name, text)
+                            }
+                            backToSquare()
+                            return replied
                         }
-                        backToSquare()
-                        return replied
+                        if (hasUnreadRedDot()) {
+                            RuntimeLog.record(applicationContext, "square opening interrupted; reason=new_unread_inbox")
+                            setNextStep("发现新的私聊未读，停止广场主动任务并优先处理")
+                            returnToList()
+                            return false
+                        }
                     }
                     val squareSendKey = reply?.let {
                         ConversationIdentity.sendKey(
