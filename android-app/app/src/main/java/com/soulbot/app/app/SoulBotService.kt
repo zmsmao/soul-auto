@@ -4,6 +4,8 @@ import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.conversation.runtime.SoulConversationContextHost
 import com.soulbot.app.conversation.runtime.SoulConversationContextManager
+import com.soulbot.app.conversation.runtime.SoulReplyGenerationEngine
+import com.soulbot.app.conversation.runtime.SoulReplyGenerationHost
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*

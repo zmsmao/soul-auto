@@ -1,7 +1,6 @@
-package com.soulbot.app.model
+package com.soulbot.app.conversation.runtime
 
 import android.os.SystemClock
-import com.soulbot.app.*
 import com.soulbot.app.automation.*
 import com.soulbot.app.conversation.*
 import com.soulbot.app.data.*

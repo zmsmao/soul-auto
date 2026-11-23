@@ -1,10 +1,7 @@
-package com.soulbot.app.policy
+package com.soulbot.app.model
 
 import com.soulbot.app.conversation.*
-import com.soulbot.app.diagnostics.ReplyReplayCase
-import com.soulbot.app.diagnostics.ReplayDataset
-import com.soulbot.app.diagnostics.ReplyReplayLogic
-import com.soulbot.app.model.ModelClient
+
 
 /** Curated examples are expression references, never a source of facts about this contact. */
 object ReplyPreferencePrompt {
