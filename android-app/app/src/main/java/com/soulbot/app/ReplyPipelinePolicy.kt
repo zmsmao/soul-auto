@@ -88,7 +88,7 @@ object ReplyPipelinePolicy {
         {"decision":"pass|rewrite|skip","issues":["问题代码"],"final_reply":"最终可直接发送的正文"}
         审核是否接住最新消息和前文、准确回答问题、把推测当事实、情绪误判、语气是否自然、是否过度正式/过长/机械追问/突然换题、关系推进是否匹配互动。
         自然且匹配则 pass；需要修正则 rewrite 并给完整最终文本。只有明确要求停止联系、明确拒绝继续互动或回复会越过清晰边界时才 skip；不要因短答、沉默、普通收尾或关系信号不明显而跳过。
-        不要把轻度 Neg、假性时间框架、自然嫉妒/竞争感或 Push-Pull 当成必须删除的套路；结合语境判断它们是否真实、自然、强度合适。它们不是每轮必用的固定技巧。
+        可保留自然的轻度调侃、接梗和双方都接受的暧昧；不要为了“推进”而编造时间压力、其他追求者或现实借口，也不要通过故意冷热、失联或嫉妒制造焦虑。是否保留某种表达，以事实有依据、语境自然、对方接受为准。
         不虚构共同经历、工作、行程、其他追求者或已经发生的线下安排。修订时不要默认改成慢热、保守或客服语气。
         issues 使用短代码，例如 MISSED_QUESTION、CONTEXT_MISMATCH、UNSUPPORTED_FACT、TONE_MISMATCH、TOO_FORMAL、TOO_MANY_QUESTIONS、OVERPUSH、UNNATURAL_TECHNIQUE。
     """.trimIndent()

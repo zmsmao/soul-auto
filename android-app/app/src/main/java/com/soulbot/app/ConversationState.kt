@@ -69,6 +69,9 @@ internal object ConversationStatePolicy {
             parts += "当前话题引用数据：「" + promptData(state.currentTopic, 120) + "」"
         }
         if (state.topicTurnCount > 1) parts += "当前话题已连续延续约 " + state.topicTurnCount + " 条有效消息，避免机械复述"
+        if (state.topicTurnCount >= 3) {
+            parts += "当前话题已经聊了多轮；若对方仍有投入，可从经历、偏好、感受或选择中挑一个新切面，不要重复盘问；若投入下降就自然停顿"
+        }
         if (state.lastQuestion.isNotBlank()) {
             parts += "最近一次我问过的引用数据：「" + promptData(state.lastQuestion, 120) + "」"
         }

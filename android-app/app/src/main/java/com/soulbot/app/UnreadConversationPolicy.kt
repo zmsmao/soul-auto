@@ -11,6 +11,7 @@ internal data class UnreadConversationCandidate(
     val timeText: String,
     /** Zero-based top-to-bottom position in Soul's conversation list. */
     val displayOrder: Int,
+    val previewText: String = "",
 )
 
 /** Orders unread conversations by message age instead of accessibility-node order. */
@@ -23,12 +24,33 @@ internal object UnreadConversationPolicy {
         now: LocalDateTime = LocalDateTime.now(),
     ): List<UnreadConversationCandidate> = conversations
         .sortedWith(
-            compareBy<UnreadConversationCandidate> {
-                parsedAgeMinutes(it.timeText, now) == null
-            }.thenByDescending {
-                parsedAgeMinutes(it.timeText, now) ?: Long.MIN_VALUE
-            }.thenByDescending { it.displayOrder },
+            compareByDescending<UnreadConversationCandidate> { priorityScore(it.previewText) }
+                .thenBy { parsedAgeMinutes(it.timeText, now) == null }
+                .thenByDescending { parsedAgeMinutes(it.timeText, now) ?: Long.MIN_VALUE }
+                .thenByDescending { it.displayOrder },
         )
+
+    /**
+     * High-priority signals include explicit contact/meeting/photo interest and
+     * emotional follow-ups. This only changes queue order, never the reply content.
+     */
+    fun priorityScore(text: String): Int {
+        val normalized = text.lowercase().replace(Regex("""[\s，。！？!?、,.~～…·]+"""), "")
+        if (normalized.isBlank()) return 0
+        val directSignals = listOf(
+            "微信", "微信号", "联系方式", "加v", "加q", "v信", "q号",
+            "见面", "约出来", "见一面", "哪天见", "什么时候见", "约会",
+            "照片", "发自拍", "自拍", "看看你", "发张照片",
+            "怎么不理我", "你怎么不回", "你不理我", "你还在吗",
+            "是不是不想聊", "不想聊了吗", "我有点难过", "很难过",
+            "我很委屈", "有点委屈", "我生气了", "很失望", "伤心",
+        )
+        if (directSignals.any(normalized::contains)) return 100
+        if (Regex("""(?:加|留|发|给我).{0,3}(?:v|q)(?:号|一下|好友)?""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(normalized)
+        ) return 100
+        return 0
+    }
 
     fun ageMinutes(text: String, now: LocalDateTime = LocalDateTime.now()): Long {
         return parsedAgeMinutes(text, now) ?: UNKNOWN_AGE_MINUTES
