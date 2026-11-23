@@ -2,7 +2,6 @@ package com.soulbot.app
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
-import android.os.Bundle
 import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
