@@ -470,6 +470,13 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
                 styleQuery = transcript,
             ).toMutableList()
             reviewFragments += ContextFragment(
+                id = "reviewer-role-guidance",
+                content = "你当前只执行后台回复质量审核与必要修订，不是直接和联系人聊天。\n",
+                priority = 100,
+                order = -10,
+                required = true,
+            )
+            reviewFragments += ContextFragment(
                 id = "review-instructions",
                 content = "\n" + ReplyPipelinePolicy.reviewInstructions(),
                 priority = 100,
