@@ -58,7 +58,8 @@ class ChatRegressionCorpusTest {
             listOf("out" to "你喜欢哪种游戏？", "in" to "你这个问题是 AI 生成的吗？"),
             listOf("你这个问题是 AI 生成的吗？"),
         )
-        assertTrue(directQuestionGuidance.contains("必须如实回答"))
+        assertFalse(directQuestionGuidance.contains("必须如实回答"))
+        assertTrue(directQuestionGuidance.contains("一句简短自然的轻松反问"))
 
         val ordinaryTopics = listOf("官方活动明天开始", "我去看机器人比赛", "这个视频是 AI 生成的吗？")
         ordinaryTopics.forEach { topic ->
@@ -73,7 +74,7 @@ class ChatRegressionCorpusTest {
             listOf("out" to "你平时玩什么游戏？", "in" to toneQuestion),
             listOf(toneQuestion),
         )
-        assertTrue(toneGuidance.contains("对方在反馈我的表达像 AI"))
+        assertTrue(toneGuidance.contains("对方在反馈我的表达太官方、太书面或太机械"))
         assertFalse(toneGuidance.contains("必须如实回答"))
     }
 
