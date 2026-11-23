@@ -254,7 +254,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
 
     override fun pressBack() = pageUi.pressBack()
 
-    override fun setNextStep(action: String, delayMs: Long = 0L) {
+    override fun setNextStep(action: String, delayMs: Long) {
         if (statusText != action) {
             RuntimeLog.record(
                 applicationContext,
@@ -2421,7 +2421,7 @@ class SoulBotService : AccessibilityService(), SoulAutomationHost {
     override fun hasGreeting(): Boolean = findVisibleById(ID_GREETING_TITLE) != null
 
     /** Hidden tab-bar nodes remain in Soul's accessibility tree; only a visible dot is unread. */
-    private fun hasUnreadRedDot(): Boolean = findVisibleById(ID_MSG_RED_DOT) != null
+    override fun hasUnreadRedDot(): Boolean = findVisibleById(ID_MSG_RED_DOT) != null
 
     override fun openGreetingList(): Boolean {
         setNextStep("打开新招呼列表")
