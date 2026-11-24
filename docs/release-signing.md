@@ -5,43 +5,24 @@
 ## 当前状态
 
 - Debug CI 继续执行单元测试、Debug APK 构建和 Lint，供日常验证使用。
-- 正式发版由 `.github/workflows/android-release.yml` 负责，只响应推送到仓库的 `v*` Tag。
-- Release workflow 会检查 Tag 是否已经位于 `master` 历史中，并要求 Tag 与 Gradle 的 `versionName` 完全一致。
+- 正式发版由 `.github/workflows/android-release.yml` 负责，支持两种入口：GitHub 网页端手动运行 `Android Release` workflow，或推送 `v*` Tag。
+- 网页端发版必须选择 `master`，输入的 Tag 必须与 Gradle 的 `versionName` 完全一致；workflow 会自动创建 Tag 并发布 Release。
 - Release APK 使用固定签名密钥签名，签名验证通过后才会创建 GitHub Release 并上传 APK 与 SHA-256 文件。
-- 仓库不保存签名密钥或密码。首次使用前，仓库所有者必须自行创建密钥并配置 GitHub Actions Secrets。
+- 仓库不保存签名密钥或密码。当前仓库已经配置并通过 CI 验证固定签名密钥及四个 GitHub Actions Secrets。
 
-## 1. 创建唯一签名密钥
+## 1. 固定签名密钥（本仓库已建立）
 
-在自己的电脑上安装 JDK 17，并在一个安全目录中执行：
+本仓库已经建立唯一的正式发布签名密钥，文件名为 `soulbot-release.jks`，别名为 `soulbot`，类型为 JKS，算法为 RSA 4096。
 
-```bash
-keytool -genkeypair -v \
-  -keystore soulbot-release.jks \
-  -storetype JKS \
-  -keyalg RSA \
-  -keysize 4096 \
-  -validity 10000 \
-  -alias soulbot
-```
-
-按照提示设置 Keystore 密码、Key 密码和证书信息。请记下：
-
-| 项目 | 用途 |
-|---|---|
-| Keystore 文件 | `soulbot-release.jks` |
-| Store password | Keystore 密码 |
-| Key alias | 固定为 `soulbot` |
-| Key password | `soulbot` 对应的私钥密码 |
-
-建议 Store password 与 Key password 使用不同的强密码。不要把密码写入脚本、Gradle 文件或 Git 仓库。
-
-查看并离线保存证书 SHA-256 指纹：
+**不要再次执行 `keytool -genkeypair` 来生成新密钥。** 新生成的 JKS 会有不同的证书指纹，用户将无法用新 APK 覆盖安装旧签名版本。
 
 当前 SoulBot 固定发布证书指纹（SHA-256）：
 
 `FF:47:3F:AC:C9:19:E1:A9:F1:20:97:6B:D8:2C:45:61:01:E0:EE:98:14:9F:30:78:12:AA:C0:B2:B6:06:80:0F`
 
 CI 会将正式 APK 的证书指纹与该值比较，防止误用另一把密钥。
+
+可使用 JDK 的 `keytool` 查看本地备份的证书信息（仅供核对，不需要为了 GitHub 发版安装 JDK）：
 
 ```bash
 keytool -list -v -keystore soulbot-release.jks -alias soulbot
@@ -79,38 +60,41 @@ base64 < soulbot-release.jks | tr -d '\n' > soulbot-release.jks.base64
 | `SOULBOT_SIGNING_KEY_ALIAS` | `soulbot` |
 | `SOULBOT_SIGNING_KEY_PASSWORD` | 创建密钥时设置的 Key password |
 
-只需配置一次。不要在聊天中发送这些 Secret，也不要把密钥放入 GitHub Actions 普通变量（Variables）。完成配置后，建议从下载目录和临时位置删除包含 Base64 与明文密码的 `GITHUB_SECRETS.txt`；保留 JKS 的加密离线备份。
+本仓库的四个 Secret 已经由 GitHub Actions 实际读取并通过密钥库检查、Release 构建和 APK 证书指纹验证。不要在聊天中发送这些 Secret，也不要把密钥放入 GitHub Actions 普通变量（Variables）。配置完成后，删除下载目录和临时位置中的 `GITHUB_SECRETS.txt`（它包含 Base64 密钥和明文密码）；保留 JKS 的加密离线备份。
 
-## 3. 发布新版本
+## 3. 发布新版本（无需本地开发环境）
 
 正式发布前：
 
 1. 在功能分支完成开发并通过 Pull Request 合入 `master`。
 2. 更新 `android-app/app/build.gradle` 中的 `versionName` 和 `versionCode`。每次对外发布必须提高 `versionCode`；版本名称使用完整语义化版本，例如 `2.1.0`。
 3. 同步更新 `CHANGELOG.md` 和相关文档。
-4. 确认当前 `master` 最新提交已经通过 Debug CI，并完成必要的真机验收。
-5. 确认四个 GitHub Secrets 已配置，再在本地 `master` 上创建与 `versionName` 一致的 Tag。
+4. 确认 `master` 最新提交已经通过 Debug CI，并完成必要的真机验收。
+5. 确认四个 GitHub Secrets 仍然配置正确。
 
-例如，当前项目配置为 `versionName "2.0.0"` 时：
+### 推荐：直接在 GitHub 网页发版
+
+1. 打开仓库的 **Actions** 页面。
+2. 在左侧选择 **Android Release**。
+3. 点击 **Run workflow**。
+4. `Use workflow from` 选择 `master`。
+5. `Release tag` 输入与 Gradle `versionName` 一致的 Tag，例如 `v2.1.0`。
+6. 点击 **Run workflow**。
+
+工作流会自动检查版本号、密钥和证书指纹，运行测试、构建并签名 APK，最后创建 Tag 与 GitHub Release，上传 APK 和 SHA-256 校验文件。无需在自己的电脑安装 Git、JDK 或 Android Studio。
+
+如果 Tag 已经存在、版本号不一致、Secrets 缺失或证书指纹不一致，工作流会终止，不会发布安装包。
+
+### 可选：通过 Git 命令推送 Tag
+
+已有 Git 环境的开发者也可以在已合入 `master` 的提交上创建并推送 Tag：
 
 ```bash
 git switch master
 git pull --ff-only
-git tag -a v2.0.0 -m "SoulBot 2.0.0"
-git push origin v2.0.0
+git tag -a v2.1.0 -m "SoulBot 2.1.0"
+git push origin v2.1.0
 ```
-
-Tag 推送后，GitHub Actions 会自动：
-
-- 确认 Tag 指向已经合入 `master` 的提交；
-- 检查 Tag 与 Android `versionName` 一致；
-- 执行 Debug / Release JVM 单元测试；
-- 构建正式 Release APK 并运行 Android Lint；
-- 使用固定 JKS 签名，并通过 Android `apksigner` 验证签名；
-- 计算 APK 的 SHA-256；
-- 创建 GitHub Release，上传 `SoulBot-版本号.apk` 和对应的 `.sha256` 文件。
-
-任一验证失败都会终止发版，不会继续上传安装包。若 Secrets 缺失，工作流会明确失败并提示补充配置，不会回退成 Debug 签名。
 
 ## 4. 本地构建正式 Release APK（可选）
 
