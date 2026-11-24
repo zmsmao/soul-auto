@@ -46,6 +46,7 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 
 ## 文档
 
+- [开发与维护约定](CONTRIBUTING.md)
 - [Android 使用、设置与开发说明](android-app/README.md)
 - [产品定义与设计原则](android-app/PRODUCT.md)
 - [会话上下文与身份架构审计](docs/chat-context-baseline.md)
