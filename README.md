@@ -2,7 +2,6 @@
 
 SoulBot 是一个运行在 Android 手机上的 Soul 自动化辅助工具。它通过 Android 无障碍服务识别 Soul 页面、读取系统可访问的聊天内容并执行页面操作；通过兼容 OpenAI Chat Completions 的模型接口生成回复，并用悬浮控制器展示任务状态、下一步动作和倒计时。
 
-<text></text>
 **当前版本：2.0** · Android 8.0（API 26）及以上 · Kotlin / Android Views / Material Components
 
 ## 2.0 版本重点
@@ -65,7 +64,7 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 Windows PowerShell：
 
 ```powershell
-.\\gradlew.bat testDebugUnitTest assembleDebug lintDebug
+.\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 ```
 
 Debug APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`。
