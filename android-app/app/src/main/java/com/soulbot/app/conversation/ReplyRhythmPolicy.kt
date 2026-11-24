@@ -38,6 +38,9 @@ object ReplyRhythmPolicy {
             if (contextualAnswer || ConversationReplyContext.isLowInformation(latest)) {
                 append("短答不等于冷淡。先找它承接的上一句具体提问或陈述，结合本轮连续消息理解，不只围绕最后几个字发挥。")
             }
+            if (focus.any(ConversationReplyContext::isTopicHandoff)) {
+                append("对方已把话题主动权交给我；结合前文当前话题，给出一个具体、有内容的切入点或个人看法，不要只重复话题名称或给出空泛定义。")
+            }
             if (ConversationReplyContext.asksQuestion(latestOutgoing) && focus.isNotEmpty()) {
                 append("对方可能正在回答或补充、纠正我刚才的问题，先接住答案，不把‘会、不会、没、有、对’当成没有内容；")
                 append("若我之前猜错了，就自然承认理解错了，不替对方解释或重复原判断。")

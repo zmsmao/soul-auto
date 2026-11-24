@@ -1,33 +1,3 @@
 <resources>
-    <color name="purple_500">#C6BEFF</color>
-    <color name="purple_700">#A69AF8</color>
-    <color name="brand_primary">#C6BEFF</color>
-    <color name="brand_primary_dark">#A69AF8</color>
-    <color name="brand_on_primary">#2E266A</color>
-    <color name="brand_primary_container">#40387C</color>
-    <color name="brand_on_primary_container">#EAE7FF</color>
-    <color name="brand_secondary">#C5C2DE</color>
-    <color name="brand_secondary_container">#3D3A53</color>
-    <color name="brand_tertiary">#E8B6D2</color>
-    <color name="brand_tertiary_container">#53384B</color>
-    <color name="surface_page">#111119</color>
-    <color name="surface_card">#1B1A25</color>
-    <color name="surface_subtle">#242330</color>
-    <color name="surface_border">#393747</color>
-    <color name="text_primary">#F0EEF8</color>
-    <color name="text_secondary">#B9B5C9</color>
-    <color name="nav_selected">#D2CAFF</color>
-    <color name="nav_unselected">#B5B1C4</color>
-    <color name="state_success">#75D4AE</color>
-    <color name="state_warning">#E9B66F</color>
-    <color name="state_danger">#F2A0A8</color>
-    <color name="white">#FFFFFF</color>
-    <color name="black">#000000</color>
-    <color name="apple_page">#000000</color>
-    <color name="apple_card">#1C1C1E</color>
-    <color name="apple_text">#F5F5F7</color>
-    <color name="apple_secondary">#98989D</color>
-    <color name="apple_blue">#0A84FF</color>
-    <color name="apple_separator">#38383A</color>
-    <color name="apple_soft">#2C2C2E</color>
+<color name="purple_500">#B7BAFF</color><color name="purple_700">#9297FF</color><color name="brand_primary">#AEB3FF</color><color name="brand_primary_dark">#9297FF</color><color name="brand_on_primary">#20245B</color><color name="brand_primary_container">#30365F</color><color name="brand_on_primary_container">#E8EAFF</color><color name="brand_secondary">#B8C0D6</color><color name="brand_secondary_container">#30394B</color><color name="brand_tertiary">#75D7C0</color><color name="brand_tertiary_container">#1D473F</color><color name="surface_page">#0D1119</color><color name="surface_card">#171D29</color><color name="surface_subtle">#171D29</color><color name="surface_border">#293345</color><color name="text_primary">#F2F4FA</color><color name="text_secondary">#A5AEC0</color><color name="nav_selected">#B7BBFF</color><color name="nav_unselected">#8792A7</color><color name="state_success">#75D7B7</color><color name="state_warning">#E8BE7A</color><color name="state_danger">#F19AA8</color><color name="white">#FFFFFF</color><color name="black">#000000</color><color name="apple_page">#0D1119</color><color name="apple_card">#171D29</color><color name="apple_text">#F2F4FA</color><color name="apple_secondary">#A5AEC0</color><color name="apple_blue">#AEB3FF</color><color name="apple_separator">#293345</color><color name="apple_soft">#222B3A</color><color name="launcher_background">#5B61E8</color>
 </resources>

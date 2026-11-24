@@ -27,19 +27,23 @@ internal object ConversationStatePolicy {
             incoming.takeLast(8).joinToString("\u0001") { it.second.trim() },
         )
         val isNewIncoming = fingerprint != previous?.lastIncomingFingerprint
-        val latestIsLowInfo = incoming.lastOrNull()?.let {
-            ConversationReplyContext.isLowInformation(it.second)
-        } ?: false
+        val latestIncoming = incoming.lastOrNull()?.second.orEmpty()
+        val latestIsLowInfo = ConversationReplyContext.isLowInformation(latestIncoming)
+        val latestIsContextOnly = latestIsLowInfo ||
+            ConversationReplyContext.isContextDependentAnswer(latestIncoming) ||
+            ConversationReplyContext.isTopicHandoff(latestIncoming)
         val lowInfo = incoming.asReversed().takeWhile {
             ConversationReplyContext.isLowInformation(it.second)
         }.size
         val substantive = incoming.lastOrNull {
-            !ConversationReplyContext.isLowInformation(it.second)
+            !ConversationReplyContext.isLowInformation(it.second) &&
+                !ConversationReplyContext.isContextDependentAnswer(it.second) &&
+                !ConversationReplyContext.isTopicHandoff(it.second)
         }?.second.orEmpty().take(120)
         val sameTopic = previous != null && previous.currentTopic.isNotBlank() &&
             substantive.isNotBlank() && topicOverlap(previous.currentTopic, substantive) >= 0.10
         val topicTurns = when {
-            latestIsLowInfo -> previous?.topicTurnCount ?: 0
+            latestIsContextOnly -> previous?.topicTurnCount ?: 0
             substantive.isBlank() -> previous?.topicTurnCount ?: 0
             !isNewIncoming -> previous?.topicTurnCount ?: 1
             sameTopic -> (previous?.topicTurnCount ?: 0) + 1
@@ -51,7 +55,7 @@ internal object ConversationStatePolicy {
         val latestBanter = recentOutgoing.lastOrNull { containsBanter(it.second) }
             ?.second.orEmpty().take(100)
         val progressAt = when {
-            latestIsLowInfo || substantive.isBlank() -> previous?.lastProgressAt ?: now
+            latestIsContextOnly || substantive.isBlank() -> previous?.lastProgressAt ?: now
             isNewIncoming && !sameTopic -> now
             previous == null -> now
             else -> previous.lastProgressAt

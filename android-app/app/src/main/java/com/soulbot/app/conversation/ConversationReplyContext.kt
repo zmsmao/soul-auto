@@ -21,7 +21,9 @@ object ConversationReplyContext {
 
     private val fillerOnly = Regex("""^(?:嗯|恩|哦|噢|啊|呐|呢|哇|哈|嘿|是的|对的|好的)+$""")
     private val contextualAnswerPattern = Regex(
-        "^(?:会|不会|有|没有|没|对|不对|是|不是|能|不能|可以|不行|还没|没有了|没去|去了|不去|喜欢|不喜欢|想|不想)(?:的|呀|啊|呢|啦|哦|哇|吧){0,2}$",
+        "^(?:(?:都没有|都没|都不是|两个都没有|两个都没|两个都不是|两者都没有|两者都不是|都不|都可以|都行)|" +
+            "(?:会|不会|有|没有|没|对|不对|是|不是|能|不能|可以|不行|还没|没有了|没去|去了|不去|喜欢|不喜欢|想|不想))" +
+            "(?:的|呀|啊|呢|啦|哦|哇|吧){0,2}$",
     )
 
     fun isLowInformation(text: String): Boolean {
@@ -33,6 +35,16 @@ object ConversationReplyContext {
 
     /** A complete answer can be short; this flag asks for context, not a longer reply. */
     fun isContextDependentAnswer(text: String): Boolean = contextualAnswerPattern.matches(comparableText(text))
+
+    /** The other person explicitly hands the next conversational move to us. */
+    fun isTopicHandoff(text: String): Boolean {
+        val clean = comparableText(text)
+        return clean in setOf(
+            "你发", "你发吧", "你说", "你说吧", "你先说", "你先说吧",
+            "你来", "你来吧", "然后呢", "还有呢", "接着说", "发来看看",
+            "说说看", "你想聊什么", "你想聊啥", "想聊什么", "你定",
+        )
+    }
 
     private val questionClues = listOf(
         "什么", "为啥", "为什么", "怎么", "咋", "哪里", "哪儿",
@@ -100,11 +112,11 @@ object ConversationReplyContext {
             recent.filter { it.first == "in" }.takeLast(1).map { it.second }
         }
         val lowInformation = focus.lastOrNull()?.let(::isLowInformation) == true
-        val needsContext = lowInformation || focus.any(::isContextDependentAnswer)
+        val needsContext = lowInformation || focus.any(::isContextDependentAnswer) || focus.any(::isTopicHandoff)
         if (!needsContext) return ReplyContextAnalysis(focus, false, "")
 
         val anchorIndex = recent.indexOfLast { (role, text) ->
-            role == "in" && !isLowInformation(text) && !isContextDependentAnswer(text)
+            role == "in" && !isLowInformation(text) && !isContextDependentAnswer(text) && !isTopicHandoff(text)
         }
         val selectedIndices = linkedSetOf<Int>()
         if (anchorIndex >= 0) {

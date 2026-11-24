@@ -193,6 +193,32 @@ class ConversationReplyContextTest {
     }
 
     @Test
+    fun recognizesNegativeChoiceAnswersAndTopicHandoffsAsContextDependent() {
+        listOf("都没有", "两个都没有", "两者都不是", "都不").forEach {
+            assertTrue(it, ConversationReplyContext.isContextDependentAnswer(it))
+        }
+        listOf("你发", "你发吧", "你说", "然后呢", "说说看").forEach {
+            assertTrue(it, ConversationReplyContext.isTopicHandoff(it))
+        }
+        val answer = ConversationReplyContext.analyze(
+            listOf("in" to "今天一天吃了一顿", "out" to "忙到忘了还是没胃口？", "in" to "都没有"),
+            listOf("都没有"),
+        )
+        assertTrue(answer.needsSupportingContext)
+        assertTrue(answer.supportingTranscript.contains("忙到忘了还是没胃口"))
+        val handoff = ConversationReplyContext.analyze(
+            listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),
+            listOf("你发"),
+        )
+        assertTrue(handoff.needsSupportingContext)
+        assertTrue(handoff.supportingTranscript.contains("建模"))
+        assertTrue(ConversationReplyContext.responseGuidance(
+            listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),
+            listOf("你发"),
+        ).contains("话题主动权交给我"))
+    }
+
+    @Test
     fun contextualAnswerRecognitionDoesNotMeanAllShortMessagesAreAcknowledgements() {
         listOf("会", "不会", "没", "没有啦", "有啊", "对", "不是", "不喜欢")
             .forEach { assertTrue(it, ConversationReplyContext.isContextDependentAnswer(it)) }

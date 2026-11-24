@@ -43,6 +43,16 @@ class ConversationStatePolicyTest {
         assertEquals(300L, changed.lastProgressAt)
     }
 
+    @Test fun contextualAnswersDoNotReplaceTheCurrentTopicOrAdvanceItsCounter() {
+        val initialThread = listOf("in" to "我一天只吃了一顿")
+        val initial = ConversationStatePolicy.evolve("thread-1", ReplyScene.CHAT, initialThread, now = 100L)
+        val answeredThread = initialThread + listOf("out" to "忙到忘了还是没胃口？", "in" to "都没有")
+        val answered = ConversationStatePolicy.evolve("thread-1", ReplyScene.CHAT, answeredThread, initial, now = 200L)
+        assertEquals("我一天只吃了一顿", answered.currentTopic)
+        assertEquals(initial.topicTurnCount, answered.topicTurnCount)
+        assertEquals(initial.lastProgressAt, answered.lastProgressAt)
+    }
+
     @Test fun tracksLastQuestionBanterAndLowInformationCount() {
         val thread = listOf("in" to "我今天有点累", "out" to "今天工作很忙吗？", "in" to "嗯",
             "out" to "哈哈，今天先早点休息", "in" to "哦哦")
