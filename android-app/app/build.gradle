@@ -3,6 +3,18 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Release signing material is supplied through environment variables.
+// Never store passwords or the keystore in the repository.
+def releaseSigning = [
+    storeFile: System.getenv("SOULBOT_SIGNING_STORE_FILE"),
+    storePassword: System.getenv("SOULBOT_SIGNING_STORE_PASSWORD"),
+    keyAlias: System.getenv("SOULBOT_SIGNING_KEY_ALIAS"),
+    keyPassword: System.getenv("SOULBOT_SIGNING_KEY_PASSWORD")
+]
+def releaseSigningConfigured = releaseSigning.values().every { value ->
+    value != null && !value.trim().isEmpty()
+}
+
 android {
     namespace 'com.soulbot.app'
     compileSdk 35
@@ -12,21 +24,59 @@ android {
         minSdk 26
         targetSdk 35
         versionCode 3
-        versionName "2.0"
+        versionName "2.0.0"
+    }
+
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = '17'
+    }
+}
+
+// Fail before tasks execute instead of accidentally producing an unsigned
+// APK when someone requests a release build without the signing credentials.
+gradle.taskGraph.whenReady { taskGraph ->
+    def releasePackagingRequested = taskGraph.allTasks.any { task ->
+        task.name in ["assembleRelease", "bundleRelease", "packageRelease"]
+    }
+
+    if (releasePackagingRequested && !releaseSigningConfigured) {
+        throw new org.gradle.api.GradleException(
+            "Release signing is not configured. Set SOULBOT_SIGNING_STORE_FILE, " +
+            "SOULBOT_SIGNING_STORE_PASSWORD, SOULBOT_SIGNING_KEY_ALIAS and " +
+            "SOULBOT_SIGNING_KEY_PASSWORD. See docs/release-signing.md."
+        )
+    }
+
+    if (releasePackagingRequested && !file(releaseSigning.storeFile).isFile()) {
+        throw new org.gradle.api.GradleException(
+            "Release keystore not found at SOULBOT_SIGNING_STORE_FILE."
+        )
     }
 }
 
