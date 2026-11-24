@@ -50,7 +50,7 @@ jobs:
           fi
 
           if ! printf '%s' "$OUTPUT" | grep -q "Release signing is not configured"; then
-            printf '%s\\n' "$OUTPUT"
+            printf '%s\n' "$OUTPUT"
             echo "::error::Release build failed for an unexpected reason; signing guard was not verified."
             exit 1
           fi
