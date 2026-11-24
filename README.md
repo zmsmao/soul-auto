@@ -44,6 +44,10 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 
 新增功能应保持模块边界清晰：页面操作不承载聊天策略，场景流程不直接依赖所有 Android Service 实现，模型路由也不负责决定 Soul 页面操作。
 
+## Releases
+
+当前代码版本为 **2.0.0**（Android versionName `2.0`，versionCode `3`）。版本变化见 [CHANGELOG.md](CHANGELOG.md)。GitHub 正式安装包发布后会出现在 [Releases](https://github.com/zmsmao/soul-auto/releases) 页面；CI 中的 Debug APK 属于验证构建，不等同于正式签名版本。
+
 ## 文档
 
 - [开发与维护约定](CONTRIBUTING.md)
