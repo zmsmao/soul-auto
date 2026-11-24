@@ -74,7 +74,7 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 Windows PowerShell：
 
 ```powershell
-.\\gradlew.bat testDebugUnitTest assembleDebug lintDebug
+.\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 ```
 
 Debug APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`。
