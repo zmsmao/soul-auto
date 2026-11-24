@@ -1,86 +1,49 @@
-# SoulBot 自动助手 2.0
+# SoulBot 自动助手
 
-SoulBot 是一个运行在 Android 手机上的 Soul 自动化辅助工具。它通过 Android 无障碍服务识别 Soul 页面、读取系统可访问的聊天内容并执行页面操作；通过兼容 OpenAI Chat Completions 的模型接口生成回复，并用悬浮控制器展示任务状态、下一步动作和倒计时。
+SoulBot 是一款 Android 端的 Soul 自动化辅助工具，帮助用户整理聊天上下文、管理个人资料，并通过自己配置的 AI 模型辅助生成回复。应用提供运行状态展示和人工停止入口，自动化过程应保持可监督。
 
-**当前版本：2.0.0** · Android 8.0（API 26）及以上 · Kotlin / Android Views / Material Components
+**当前版本：2.0.0** · Android 8.0（API 26）及以上
 
-## 2.0 版本重点
+## 主要功能
 
-- **更完整的对话理解**：综合近期消息、承接问题、上下文锚点和会话状态，识别“都没有”“两者都不是”等依赖前文的短答，也能接住“你发”“那你说”“然后呢”等话题交接。
-- **按场景选择生成深度**：普通消息走轻量生成；需要更多上下文的轮次进入审核；明显情绪或关系信号进入分析与审核流程，避免每条消息都付出多轮模型调用。
-- **节奏控制**：连续低信息回应且没有待答问题或重要信号时，允许本轮等待；不会因为第一条短回复、明确问题、重要情绪或自然结束信号就机械暂停。
-- **账号资料可控**：支持性别、年龄、地区、星座、身高、职业和补充资料，并为每项设置主动公开、被问时回答或不公开。
-- **未读会话优先级**：从未读会话预览中识别联系方式、见面/照片和重要情绪跟进等信号；同优先级内仍结合消息时间排序。
-- **更易维护的 Android 结构**：按自动化调度、无障碍操作、场景流程、会话、模型、策略、数据和诊断分层。
-- **界面与品牌更新**：统一 Material 3 日夜间主题、设置页与导航视觉，并使用专属 SoulBot 启动图标。
+- 支持「星球与聊天」和「广场与私聊」两种自动化模式。
+- 结合当前对话和近期上下文生成回复，减少脱离语境的机械回应。
+- 支持配置多个兼容 OpenAI Chat Completions 的模型服务，并设置优先级。
+- 可配置个人资料的公开范围。
+- 提供联系人聊天记录、备份与恢复功能。
+- 提供运行状态悬浮控制器、设备诊断和日志导出。
+- 提供人工监督的回复回放与反馈工具。
 
-## 自动化能力
+## 安装与开始使用
 
-- 两套互斥模式：**星球与聊天**、**广场与私聊**。
-- 奇遇铃、新招呼和未读私聊优先于当前模式的空闲任务。
-- 灵魂匹配、奇遇铃、广场和普通私聊分别执行对应场景流程。
-- 多段上下文、个人资料、人工回复风格样本和本地会话状态辅助生成。
-- 最多配置 5 个模型端点，支持优先级、故障切换、冷却与单端点测试。
-- 未读语音可调用 Soul 客户端的“转文字”，等待结果稳定后再生成回复。
-- 支持聊天回放盲选对比、人工改稿与本地学习反馈；回放候选不会自动发送到 Soul。
-- 联系人聊天记录可查看、导出、合并导入与清理；另有证据关联的结构化联系人记忆，默认不自动提取。
-- 提供设备适配诊断、脱敏运行日志、诊断导出和悬浮任务控制器。
+1. 前往 [GitHub Releases](https://github.com/zmsmao/soul-auto/releases) 下载最新正式版本 APK。
+2. 在 Android 设备上安装并打开 SoulBot。
+3. 配置模型服务地址、模型名称和 API Key，并测试连接。
+4. 按需填写个人资料和任务设置。
+5. 授予无障碍服务与悬浮窗权限。
+6. 打开 Soul，启动悬浮控制器，并在确认当前状态后开始任务。
 
-## 项目结构
+详细步骤见 [Android 使用指南](android-app/README.md)。
 
-Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
+## 系统要求
 
-| 模块 | 职责 |
-|---|---|
-| `app` | Application、Activity、无障碍 Service 生命周期与组合入口 |
-| `automation` | 自动化主循环、任务调度和 Host 接口 |
-| `accessibility` | Soul 页面识别、无障碍节点操作、消息读写与导航 |
-| `workflow` | privatechat、greeting、match、qiyu、square 场景流程 |
-| `conversation` | 会话身份、上下文、状态与联系人记忆 |
-| `model` | 模型客户端、端点配置、路由和回复生成引擎 |
-| `policy` | 回复生成深度、回复节奏、开场和场景规则 |
-| `data` | 本地数据库、设置与备份持久化 |
-| `diagnostics` | 运行日志、设备兼容性诊断和聊天回放 |
+- Android 8.0（API 26）或更高版本。
+- 已安装并登录 Soul。
+- 可用的模型服务和网络连接。
+- 无障碍服务与悬浮窗权限。
 
-新增功能应保持模块边界清晰：页面操作不承载聊天策略，场景流程不直接依赖所有 Android Service 实现，模型路由也不负责决定 Soul 页面操作。
+## 隐私与数据
 
-## Releases
+SoulBot 需要通过 Android 无障碍服务读取 Soul 中可访问的页面内容。生成回复时，所选聊天上下文及已配置的资料可能会发送给用户选择的模型服务商，并可能产生费用。聊天记录、回放和诊断数据保存在设备本地；用户主动导出的文件可能包含聊天正文，请妥善保管。
 
-当前代码版本为 **2.0.0**（Android `versionName` `2.0.0`，`versionCode` `3`）。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+## 版本与更新
 
-正式发布采用固定 Android 签名密钥，由 GitHub Actions 在推送匹配版本的 `v*` Tag 后自动测试、构建、验证签名并创建 GitHub Release。首次启用前必须按 [正式签名与自动发版说明](docs/release-signing.md) 配置仓库 Secrets。未配置签名 Secrets 时不会生成或发布正式 APK。
+版本变更见 [CHANGELOG.md](CHANGELOG.md)。正式 APK 通过 GitHub Actions 构建，并使用固定发布签名。首次从此前的 Debug 测试包迁移到正式版本时，需要先备份数据、卸载 Debug 包，再安装正式包；之后使用同一发布签名的更新可直接覆盖安装。
 
-[查看 GitHub Releases](https://github.com/zmsmao/soul-auto/releases)。CI 中的 Debug APK 仅用于测试，不等同于正式签名版本。
+## 参与项目
 
-## 文档
+欢迎提交 Bug 反馈和改进建议。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-- [开发与维护约定](CONTRIBUTING.md)
-- [正式签名与自动发版说明](docs/release-signing.md)
-- [Android 使用、设置与开发说明](android-app/README.md)
-- [产品定义与设计原则](android-app/PRODUCT.md)
-- [会话上下文与身份架构审计](docs/chat-context-baseline.md)
-- [证据型联系人记忆 v1](docs/contact-memory-v1.md)
-- [主界面视觉更新](docs/ui-refresh.md)
-- [联系人记忆界面更新](docs/ui-apple-memory-refresh.md)
+## 项目说明
 
-## 构建与测试
-
-在 `android-app` 目录运行：
-
-```bash
-./gradlew testDebugUnitTest assembleDebug lintDebug
-```
-
-Windows PowerShell：
-
-```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug lintDebug
-```
-
-Debug APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`。
-
-CI 使用 JDK 17 执行单元测试、Debug APK 构建和 Android Lint。正式 Release 构建额外要求设置签名环境变量，详细步骤见 [release-signing.md](docs/release-signing.md)。
-
-## 使用边界
-
-SoulBot 依赖 Soul 当前暴露给 Android 无障碍服务的页面结构和可见内容。Soul 更新、设备后台管理、无障碍节点差异或模型服务变动都可能影响运行。模型请求会把所选聊天片段和配置资料发送给对应服务商；聊天导出文件为明文数据。建议先完成设备诊断、开启悬浮控制器监督，并妥善保护 API 密钥与备份文件。
+本项目依赖 Soul 客户端当前提供的无障碍页面结构和可见内容。客户端更新、设备后台管理策略或模型服务变化都可能影响运行效果。请在使用过程中保留人工监督，并遵守聊天对象表达的意愿。
