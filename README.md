@@ -2,7 +2,7 @@
 
 SoulBot 是一个运行在 Android 手机上的 Soul 自动化辅助工具。它通过 Android 无障碍服务识别 Soul 页面、读取系统可访问的聊天内容并执行页面操作；通过兼容 OpenAI Chat Completions 的模型接口生成回复，并用悬浮控制器展示任务状态、下一步动作和倒计时。
 
-**当前版本：2.0** · Android 8.0（API 26）及以上 · Kotlin / Android Views / Material Components
+**当前版本：2.0.0** · Android 8.0（API 26）及以上 · Kotlin / Android Views / Material Components
 
 ## 2.0 版本重点
 
@@ -46,11 +46,16 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 
 ## Releases
 
-当前代码版本为 **2.0.0**（Android versionName `2.0`，versionCode `3`）。版本变化见 [CHANGELOG.md](CHANGELOG.md)。GitHub 正式安装包发布后会出现在 [Releases](https://github.com/zmsmao/soul-auto/releases) 页面；CI 中的 Debug APK 属于验证构建，不等同于正式签名版本。
+当前代码版本为 **2.0.0**（Android `versionName` `2.0.0`，`versionCode` `3`）。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+
+正式发布采用固定 Android 签名密钥，由 GitHub Actions 在推送匹配版本的 `v*` Tag 后自动测试、构建、验证签名并创建 GitHub Release。首次启用前必须按 [正式签名与自动发版说明](docs/release-signing.md) 配置仓库 Secrets。未配置签名 Secrets 时不会生成或发布正式 APK。
+
+[查看 GitHub Releases](https://github.com/zmsmao/soul-auto/releases)。CI 中的 Debug APK 仅用于测试，不等同于正式签名版本。
 
 ## 文档
 
 - [开发与维护约定](CONTRIBUTING.md)
+- [正式签名与自动发版说明](docs/release-signing.md)
 - [Android 使用、设置与开发说明](android-app/README.md)
 - [产品定义与设计原则](android-app/PRODUCT.md)
 - [会话上下文与身份架构审计](docs/chat-context-baseline.md)
@@ -69,12 +74,12 @@ Android Kotlin 源码位于 `android-app/app/src/main/java/com/soulbot/app/`：
 Windows PowerShell：
 
 ```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug lintDebug
+.\\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 ```
 
 Debug APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`。
 
-CI 使用 JDK 17 执行单元测试、Debug APK 构建和 Android Lint。2.0 合并前的验证提交为 `d23242e9485ef599a7b088d41424c8814a0e2f69`，对应 GitHub Actions #175 全部通过；合并提交为 `10fc6605dda113cb02ce359ab87425dddf25f5fd`。
+CI 使用 JDK 17 执行单元测试、Debug APK 构建和 Android Lint。正式 Release 构建额外要求设置签名环境变量，详细步骤见 [release-signing.md](docs/release-signing.md)。
 
 ## 使用边界
 
