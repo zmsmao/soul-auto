@@ -25,6 +25,13 @@ android-app/local.properties
 *.apk
 *.aab
 
+# ===== Android release signing material (never commit) =====
+*.jks
+*.keystore
+*.p12
+*.pfx
+soulbot-release.jks.base64
+
 # ===== IDE =====
 .idea/
 *.iml

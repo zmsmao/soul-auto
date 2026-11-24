@@ -1,57 +1,49 @@
 # SoulBot 自动助手
 
-SoulBot 是运行在 Android 手机上的 Soul 聊天自动化助手。项目通过 Android 无障碍服务识别 Soul 页面、读取可见聊天内容并执行页面操作，通过 OpenAI 兼容接口生成回复，并使用悬浮控制器展示任务状态。
+SoulBot 是一款 Android 端的 Soul 自动化辅助工具，帮助用户整理聊天上下文、管理个人资料，并通过自己配置的 AI 模型辅助生成回复。应用提供运行状态展示和人工停止入口，自动化过程应保持可监督。
 
-完整功能说明、使用方式、设置项、数据备份、诊断与构建步骤见：
+**当前版本：2.0.0** · Android 8.0（API 26）及以上
 
-- [Android 使用与开发说明](android-app/README.md)
-- [产品定义](android-app/PRODUCT.md)
+## 主要功能
 
-## 当前能力概览
+- 支持「星球与聊天」和「广场与私聊」两种自动化模式。
+- 结合当前对话和近期上下文生成回复，减少脱离语境的机械回应。
+- 支持配置多个兼容 OpenAI Chat Completions 的模型服务，并设置优先级。
+- 可配置个人资料的公开范围。
+- 提供联系人聊天记录、备份与恢复功能。
+- 提供运行状态悬浮控制器、设备诊断和日志导出。
+- 提供人工监督的回复回放与反馈工具。
 
-- 星球与聊天、广场与私聊两种互斥自动化模式。
-- 奇遇铃、新招呼与未读聊天优先于模式空闲任务。
-- 多段聊天上下文、联系人记忆、人工回复风格学习和多模型故障切换。
-- 灵魂匹配、奇遇铃、同城广场和普通私聊等分场景流程。
-- 聊天回放盲选对比与人工修改反馈；回放只用于测试/学习，不会自动发送候选消息。
-- 未读语音转文字、设备页面适配诊断、结构化运行日志。
-- 本地聊天记忆查看、导入、导出与清理。
-- 悬浮控制器显示运行状态、下一步动作和倒计时。
+## 安装与开始使用
 
-## 代码结构
+1. 前往 [GitHub Releases](https://github.com/zmsmao/soul-auto/releases) 下载最新正式版本 APK。
+2. 在 Android 设备上安装并打开 SoulBot。
+3. 配置模型服务地址、模型名称和 API Key，并测试连接。
+4. 按需填写个人资料和任务设置。
+5. 授予无障碍服务与悬浮窗权限。
+6. 打开 Soul，启动悬浮控制器，并在确认当前状态后开始任务。
 
-Android Kotlin 源码按职责拆分在 com.soulbot.app 下：
+详细步骤见 [Android 使用指南](android-app/README.md)。
 
-| 目录 | 职责 |
-|---|---|
-| app | Application、Activity、设置界面和 Service 组合入口 |
-| automation | 自动化主循环、任务调度 |
-| accessibility | 无障碍操作、页面识别、消息读写和导航 |
-| workflow | privatechat、greeting、match、qiyu、square 场景流程 |
-| conversation | 会话状态、身份、上下文与记忆逻辑 |
-| model | 模型客户端、端点、路由和生成引擎 |
-| policy | 回复、开场、节奏和场景策略 |
-| data | 本地数据库与设置持久化 |
-| diagnostics | 运行日志、设备兼容性、诊断与回放 |
+## 系统要求
 
-新增功能时请遵循 android-app/README.md 中的模块边界说明。目录拆分是代码组织方式，不代表聊天策略或数据库行为发生变化。
+- Android 8.0（API 26）或更高版本。
+- 已安装并登录 Soul。
+- 可用的模型服务和网络连接。
+- 无障碍服务与悬浮窗权限。
 
-## 构建
+## 隐私与数据
 
-在 android-app 目录执行：
+SoulBot 需要通过 Android 无障碍服务读取 Soul 中可访问的页面内容。生成回复时，所选聊天上下文及已配置的资料可能会发送给用户选择的模型服务商，并可能产生费用。聊天记录、回放和诊断数据保存在设备本地；用户主动导出的文件可能包含聊天正文，请妥善保管。
 
-```bash
-./gradlew testDebugUnitTest assembleDebug lintDebug
-```
+## 版本与更新
 
-Windows PowerShell：
+版本变更见 [CHANGELOG.md](CHANGELOG.md)。正式 APK 通过 GitHub Actions 构建，并使用固定发布签名。首次从此前的 Debug 测试包迁移到正式版本时，需要先备份数据、卸载 Debug 包，再安装正式包；之后使用同一发布签名的更新可直接覆盖安装。
 
-```powershell
-.\\gradlew.bat testDebugUnitTest assembleDebug lintDebug
-```
+## 参与项目
 
-Debug APK 输出位置：app/build/outputs/apk/debug/app-debug.apk。
+欢迎提交 Bug 反馈和改进建议。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 说明
+## 项目说明
 
-本项目面向个人设备上的自动化研究与辅助操作。无障碍服务只能读取 Soul 暴露给系统的可见内容；Soul 页面改版、设备后台限制和模型服务差异都可能影响运行。请在使用时保留人工监督，并妥善保护聊天导出文件与模型密钥。
+本项目依赖 Soul 客户端当前提供的无障碍页面结构和可见内容。客户端更新、设备后台管理策略或模型服务变化都可能影响运行效果。请在使用过程中保留人工监督，并遵守聊天对象表达的意愿。
