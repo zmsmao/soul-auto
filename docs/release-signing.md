@@ -37,6 +37,12 @@ keytool -genkeypair -v \
 
 查看并离线保存证书 SHA-256 指纹：
 
+当前 SoulBot 固定发布证书指纹（SHA-256）：
+
+`FF:47:3F:AC:C9:19:E1:A9:F1:20:97:6B:D8:2C:45:61:01:E0:EE:98:14:9F:30:78:12:AA:C0:B2:B6:06:80:0F`
+
+CI 会将正式 APK 的证书指纹与该值比较，防止误用另一把密钥。
+
 ```bash
 keytool -list -v -keystore soulbot-release.jks -alias soulbot
 ```
@@ -73,7 +79,7 @@ base64 < soulbot-release.jks | tr -d '\n' > soulbot-release.jks.base64
 | `SOULBOT_SIGNING_KEY_ALIAS` | `soulbot` |
 | `SOULBOT_SIGNING_KEY_PASSWORD` | 创建密钥时设置的 Key password |
 
-只需配置一次。不要在聊天中发送这些 Secret，也不要把密钥放入 GitHub Actions 普通变量（Variables）。
+只需配置一次。不要在聊天中发送这些 Secret，也不要把密钥放入 GitHub Actions 普通变量（Variables）。完成配置后，建议从下载目录和临时位置删除包含 Base64 与明文密码的 `GITHUB_SECRETS.txt`；保留 JKS 的加密离线备份。
 
 ## 3. 发布新版本
 
