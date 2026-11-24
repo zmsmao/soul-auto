@@ -147,7 +147,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
                 required = true,
             )
         }
-        if (contextAnalysis.needsSupportingContext) {
+        if (contextAnalysis.needsSupportingContext || contextAnalysis.hasTopicHandoff) {
             fragments += ContextFragment(
                 id = "supporting-transcript",
                 content = "\n最新消息需要结合前文解释，先判断它是在回答哪句话，不要仅因字少判定冷淡。" +

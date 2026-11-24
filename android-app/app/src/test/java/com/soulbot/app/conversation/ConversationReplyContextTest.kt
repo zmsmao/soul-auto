@@ -210,7 +210,8 @@ class ConversationReplyContextTest {
             listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),
             listOf("你发"),
         )
-        assertTrue(handoff.needsSupportingContext)
+        assertFalse(handoff.needsSupportingContext)
+        assertTrue(handoff.hasTopicHandoff)
         assertTrue(handoff.supportingTranscript.contains("建模"))
         assertTrue(ConversationReplyContext.responseGuidance(
             listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),

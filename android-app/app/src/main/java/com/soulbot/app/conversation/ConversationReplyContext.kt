@@ -6,6 +6,7 @@ data class ReplyContextAnalysis(
     val latestIsLowInformation: Boolean,
     val supportingTranscript: String,
     val needsSupportingContext: Boolean = latestIsLowInformation,
+    val hasTopicHandoff: Boolean = false,
 )
 
 /** Selects the real topic when the newest message is only an acknowledgement. */
@@ -112,8 +113,11 @@ object ConversationReplyContext {
             recent.filter { it.first == "in" }.takeLast(1).map { it.second }
         }
         val lowInformation = focus.lastOrNull()?.let(::isLowInformation) == true
-        val needsContext = lowInformation || focus.any(::isContextDependentAnswer) || focus.any(::isTopicHandoff)
-        if (!needsContext) return ReplyContextAnalysis(focus, false, "")
+        val needsSupportingContext = lowInformation || focus.any(::isContextDependentAnswer)
+        val hasTopicHandoff = focus.any(::isTopicHandoff)
+        if (!needsSupportingContext && !hasTopicHandoff) {
+            return ReplyContextAnalysis(focus, false, "")
+        }
 
         val anchorIndex = recent.indexOfLast { (role, text) ->
             role == "in" && !isLowInformation(text) && !isContextDependentAnswer(text) && !isTopicHandoff(text)
@@ -131,6 +135,12 @@ object ConversationReplyContext {
             val (role, text) = recent[index]
             "${if (role == "in") "对方" else "我"}：$text"
         }
-        return ReplyContextAnalysis(focus, lowInformation, transcript, needsContext)
+        return ReplyContextAnalysis(
+            focusIncoming = focus,
+            latestIsLowInformation = lowInformation,
+            supportingTranscript = transcript,
+            needsSupportingContext = needsSupportingContext,
+            hasTopicHandoff = hasTopicHandoff,
+        )
     }
 }
