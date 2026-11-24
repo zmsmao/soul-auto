@@ -213,6 +213,13 @@ class ConversationReplyContextTest {
         assertFalse(handoff.needsSupportingContext)
         assertTrue(handoff.hasTopicHandoff)
         assertTrue(handoff.supportingTranscript.contains("建模"))
+        assertTrue(
+            ReplyPipelinePolicy.classify(
+                listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),
+                listOf("你发"),
+                handoff.needsSupportingContext,
+            ) == ReplyGenerationDepth.SINGLE,
+        )
         assertTrue(ConversationReplyContext.responseGuidance(
             listOf("in" to "我最近在学建模", "out" to "3D 还是数据建模？", "in" to "你发"),
             listOf("你发"),

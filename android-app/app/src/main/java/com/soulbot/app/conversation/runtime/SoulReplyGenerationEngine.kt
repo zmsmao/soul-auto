@@ -150,8 +150,11 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
         if (contextAnalysis.needsSupportingContext || contextAnalysis.hasTopicHandoff) {
             fragments += ContextFragment(
                 id = "supporting-transcript",
-                content = "\n最新消息需要结合前文解释，先判断它是在回答哪句话，不要仅因字少判定冷淡。" +
-                    "回应可以简短，不要求开启新话题、加引子或追加问题，也不要编造自身经历来附和。" +
+                content = (if (contextAnalysis.hasTopicHandoff && !contextAnalysis.needsSupportingContext) {
+                    "\n对方已把话题主动权交给我；结合前文当前话题继续，不要把话题名称改写成空泛定义。"
+                } else {
+                    "\n最新消息需要结合前文解释，先判断它是在回答哪句话，不要仅因字少判定冷淡。"
+                }) + "回应可以简短，不要求开启新话题、加引子或追加问题，也不要编造自身经历来附和。" +
                     "\n用于判断话题的最近对话：\n${contextAnalysis.supportingTranscript}",
                 priority = 100,
                 order = 500,
