@@ -25,6 +25,8 @@ The app is a control and settings companion. Frequent actions are checking readi
 - API credentials and conversation memory stay on the device unless the user explicitly exports them.
 - Conversation-memory exports are plaintext JSON and imports merge without replacing existing records.
 - Android system Back and accessibility settings are part of the expected workflow.
+- The app includes supervised chat replay comparisons with blind A/B evaluation and optional, explicitly approved local learning feedback; replay candidates are not sent to Soul.
+- Device compatibility diagnostics and structured, sanitized runtime logs are available for troubleshooting.
 - The interface uses Android Views and Material Components, with a minimum supported SDK of 26.
 
 ## Brand Commitments
@@ -38,3 +40,4 @@ The product name is SoulBot 自动助手. Interface copy is direct, operational,
 - Explain what each automation setting changes before the user saves it.
 - Preserve local data and make risky operations explicit and recoverable through export.
 - Keep automation state independent from navigation and configuration screens.
+- Keep scenario workflows, accessibility operations, conversation logic, model access, policies, persistence, and diagnostics separated by package responsibility.
