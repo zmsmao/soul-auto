@@ -1,25 +1,35 @@
-# SoulBot UI refresh
+# SoulBot 2.0 UI 更新说明
 
-## Visual system
+## 设计方向
 
-- Material 3 day/night palettes use a restrained lavender/indigo accent, softened page surfaces, and higher-contrast text.
-- Shared typography styles define page titles, section labels, supporting copy, and consistent text-input corner radii.
-- Primary actions, outlined actions, cards, and navigation use a common rounded shape language.
-- Bottom navigation uses local vector icons, explicit selected/unselected colors, and the Material 3 active indicator.
+2.0 将原有界面统一到现代 Android / Material 3 视觉体系，并借鉴 Apple 系统设置的分组式信息组织方式。目标是更清楚的状态层级、更低的页面噪声和一致的日夜间体验，不是将 Android 界面改造成 iOS。
 
-## Refreshed screens
+## 视觉系统
 
-- Dashboard: clearer status hierarchy, prominent runtime action, grouped permissions/configuration, and a dedicated contact-library entry.
-- Contacts: simplified search header, card-based list rows, clearer identity metadata, and calmer empty state.
-- Contact detail: stronger identity summary, horizontal context tabs, and a memory timeline with timestamps.
-- Learning: clearer introduction and refreshed stats card, with existing feedback controls and switches retained.
-- Settings: grouped navigation cards with icons and descriptive subtitles.
-- Existing task, model, profile, backup, diagnostic, and log screens inherit the refreshed shared theme and text-input styles.
+- 浅色与深色主题使用配套的靛蓝/紫色强调色、柔和页面背景和明确文字对比。
+- 页面标题、分区标签、辅助说明和输入控件采用统一的排版层级。
+- 主按钮、描边按钮、卡片和底部导航使用一致的圆角规则。
+- 底部导航使用本地矢量图标、选中/未选中状态颜色和 Material 3 指示器。
+- 状态栏、导航栏和 API 26 以上系统属性通过主题资源配置；启动器使用专属对话气泡与星光图标。
 
-## Memory visibility
+## 页面更新范围
 
-The contact memory timeline reads the existing contact_memories table and displays each stored fragment with its timestamp. It is intentionally read-only in this iteration. A stored fragment is not presented as a verified fact, personality assessment, or relationship score.
+- **运行首页**：突出运行状态、下一步动作、权限和常用任务入口。
+- **联系人**：统一搜索区和列表卡片，明确展示联系人身份信息。
+- **联系人详情**：通过分组卡片和上下文入口组织聊天记录、会话状态、旧式摘要及结构化记忆。
+- **回复与学习**：整理学习状态、反馈入口、统计信息和聊天回放操作。
+- **设置中心**：以图标卡片和描述文字组织任务、模型、资料、备份与诊断入口。
+- **模型、资料、任务、备份、诊断和日志页面**：继承统一主题、输入控件和操作样式。
 
-## Behavior boundary
+## 信息展示约束
 
-This update changes visual presentation and memory observability only. It does not change the automatic memory extraction rules, memory retrieval ranking, prompt content, reply policies, model routing, or contact-relationship interpretation.
+- 旧式联系人摘要缺少逐条来源证据，必须与结构化事实分开展示，并标记为未经验证的线索。
+- 结构化记忆卡片展示证据和生命周期状态，允许用户主动确认、修正、拒绝或删除。
+- 结构化记忆提取默认关闭，UI 需提示启用后会产生模型 API 请求。
+- 不把普通聊天摘录包装成关系评分、性格判断或心理结论。
+
+## 行为边界
+
+本轮 UI 更新不改变自动化两种模式、任务优先级、回复策略规则、模型端点排序/冷却、联系人 thread_id 解析和数据库迁移语义。运行状态与设置页面保持分离，停止任务的入口应始终容易找到。
+
+界面可读性和资源编译由 CI 检查；真机上的无障碍节点布局、字体缩放、分屏和厂商系统行为仍需设备验收。

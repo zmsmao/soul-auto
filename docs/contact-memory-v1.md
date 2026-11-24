@@ -1,10 +1,12 @@
-# Contact Memory v1
+# 证据型联系人记忆 v1
 
-## Scope
+## 目标与当前状态
 
-This version adds an evidence-backed contact memory store and a best-effort background extraction queue. It intentionally does not replace or inject the legacy contact-memory fragments into Writer. Existing reply prompts, Analyzer/Writer/Reviewer selection, pacing, relationship strategy, and model routing remain unchanged.
+v1 为联系人建立带来源证据的结构化记忆，并提供尽力而为的后台提取队列。它与旧式联系人摘要分开保存，避免把模型概括直接当成事实。
 
-## Storage
+**当前边界：**提取默认关闭，必须由用户主动开启；结构化事实可以查看、确认、修正、拒绝和删除，但当前版本不会把它们自动注入 Writer 或 Reviewer。回复策略、Analyzer/Writer/Reviewer 选择、节奏策略和模型路由不因开启提取而改变。
+
+## 数据库结构
 
 ```text
 contact_memory.db
@@ -13,50 +15,59 @@ contact_memory.db
 └── contact_memory_sources
 ```
 
-- Facts are scoped by the existing stable `thread_id`.
-- Evidence points to an exact `conversation_messages.event_key`, with scene, timestamp and a source quote.
-- The old `chat_learning.db/contact_memories` table is left intact and is shown separately as unverified legacy clues.
-- No automatic migration is performed: legacy snippets have no reliable message-level provenance.
-- The independent database avoids bumping or destructively migrating the two existing databases.
+- Facts 以稳定 `thread_id` 为联系人范围。
+- Evidence 指向 `conversation_memory.db` 中的确切 `event_key`，并保存场景、角色、时间戳、证据类型和原文摘录。
+- Sources 保存等待提取的入站消息、处理状态与重试次数。
+- 该数据库独立于 `chat_learning.db`，可单独升级、清理或回滚。
 
-## Categories and lifecycle
+## 与旧式联系人摘要的区别
 
-- `FACT`: explicit, durable information.
-- `PREFERENCE`: explicitly stated interests, preferences and boundaries.
-- `STATE`: temporary state; defaults to a 30-day expiry when the extractor omits one, capped at 180 days.
-- `EXPERIENCE`: a clearly stated event or experience.
+`chat_learning.db/contact_memories` 是旧式短文本摘要/线索，按 thread_id 存储并在联系人详情中与结构化事实分开显示；它没有逐条消息级证据，不能自动视为已核实事实。
 
-Statuses: `ACTIVE`, `PENDING`, `CONFLICTED`, `SUPERSEDED`, `REJECTED`, `EXPIRED`.
+2.0 的身份键迁移将该旧表重建为 thread_id 结构。无法从旧昵称可靠映射到稳定联系人身份的历史摘要和自动回复去重记录不会被猜测迁移，因此升级后旧数据可能不再显示。结构化记忆的 `contact_memory.db` 是另一套独立存储，不会从无来源的旧摘要自动导入。
 
-Only explicit evidence can create an active candidate. Uncertain candidates stay pending. Different values under the same category/key are marked conflicted rather than guessed as an update. A user confirmation resolves the chosen value and supersedes other active/conflicted values for that same key. Manual correction is marked `USER_CONFIRMED`.
+## 事实类型与生命周期
 
-## Extraction
+- `FACT`：明确陈述的持久信息。
+- `PREFERENCE`：明确表达的兴趣、偏好和边界。
+- `STATE`：临时状态；提取器未提供期限时默认 30 天，最长不超过 180 天。
+- `EXPERIENCE`：明确描述的事件或经历。
 
-- Extraction is off by default; the user must opt in from the contact detail page.
-- Only incoming messages are queued. Outgoing bot text is never an evidence source.
-- Messages are batched by contact and scene, with up to 12 messages per request and at most two batches per wake.
-- The first enabled, valid configured endpoint is called directly with a 20-second timeout. This avoids changing ModelRouter health/cooldown state for background memory calls.
-- Each source message is deduplicated by event key, retried up to three times, and recovered from `PROCESSING` after process restart.
-- The returned quote must be an exact substring of an incoming source message and its event key must belong to the submitted batch. Invalid evidence is discarded.
-- Completed and permanently failed source payloads are blanked; queue metadata is pruned after 60 days.
-- If no runnable endpoint is configured, the batch is returned to pending without consuming retries.
-- Extraction calls may consume provider API quota. The UI states this before the user enables it.
+状态包括 `ACTIVE`、`PENDING`、`CONFLICTED`、`SUPERSEDED`、`REJECTED` 和 `EXPIRED`。
 
-## Privacy boundaries
+只有有明确原文证据的候选才可成为有效事实；不确定候选保持待确认。相同类别和 key 出现冲突值时标记为冲突，不自动选择新值。用户确认后才把所选值设为确认项，并替代该 key 下不再有效的旧值。人工修正标记为 `USER_CONFIRMED`。
 
-The extractor is instructed not to infer personality, psychology or relationship intent, and not to retain health, religion, political position, sexual history, precise address, financial information, identity credentials or account details. Message contents are supplied as untrusted data, not executable instructions.
+## 提取流程
 
-## Management and backup
+- 提取总开关默认关闭；用户需要在联系人详情页主动开启。
+- 只排入入站消息，不将机器人输出当作证据。
+- 按联系人与场景分批，每次最多 12 条，每次唤醒最多处理两个批次。
+- 使用首个已启用且配置有效的模型端点；单次请求超时为 20 秒。
+- 同一来源消息按 event_key 去重，最多重试三次；进程重启后会恢复中断的 PROCESSING 项。
+- 返回的 quote 必须是入站原文的精确子串，event_key 必须属于本次提交批次；无效证据会被丢弃。
+- 完成或永久失败的来源内容会清空；队列元数据超过 60 天后清理。
+- 没有可运行端点时，任务回到 PENDING，不消耗重试次数。
+- 提取会消耗模型服务额度，开启前应理解其网络和费用影响。
 
-The contact page supports viewing exact evidence, confirming, correcting, rejecting and deleting individual facts. The data/backup page has a separate JSON export/import for structured memories and their evidence. Its existing full-clear operation now clears structured facts, pending extraction sources and legacy contact snippets as well as conversation history. It continues to preserve the send-attempt ledger.
+## 隐私与数据边界
 
-## Deliberate non-goals in v1
+提取器被要求避免推断人格、心理和关系意图，也不应保留健康、宗教、政治立场、性经历、精确地址、财务信息、身份凭据或账户详情。消息正文作为不可信输入数据处理，不能当作指令执行。
 
-- No new memory injection into Writer or Reviewer.
-- No automatic personality, relationship or psychological profile.
-- No speculative confidence score.
-- No vector database.
-- No automatic identity merging if a nickname-derived fallback identity changes.
-- No automatic migration from legacy snippets.
+结构化记忆与聊天历史、运行日志、API 配置分开存储。聊天/记忆导出可能包含原始聊天文本和证据摘录，应按敏感文件保护；API Key 不应进入聊天记忆导出文件。
 
-The next behavior-changing phase must compare retrieval quality and approve the injection rules separately.
+## 管理与备份
+
+联系人详情页支持查看事实及其原始证据，并对单条事实执行确认、修正、拒绝或删除。数据与备份页提供结构化记忆及证据的独立 JSON 导出/导入。导入采用校验后事务写入，避免无效文件造成部分导入。
+
+应用的完整清理操作会清除结构化事实、待提取来源和旧式联系人摘要及聊天历史，但会保留发送尝试账本。执行清理前应先导出需要保留的数据。
+
+## v1 不包含的能力
+
+- 不自动将结构化事实注入 Writer 或 Reviewer。
+- 不自动生成性格、心理或关系画像。
+- 不提供缺乏依据的置信度评分。
+- 不使用向量数据库。
+- 不在昵称回退身份变更时自动合并联系人。
+- 不从没有消息级证据的旧摘要自动迁移结构化事实。
+
+下一阶段如需把结构化记忆用于自动回复，必须单独评估检索准确率、冲突解决、隐私边界和提示词注入规则，并补充验证后再调整。

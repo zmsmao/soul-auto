@@ -1,64 +1,93 @@
-# Chat context safety baseline
+# SoulBot 2.0 会话上下文与身份架构审计
 
-## Audited source baseline
+## 版本基线
 
-- Pull request: `#1` (kept open; no merge performed)
-- Audited head before this refactor: `defdeb20e0ff363e40af39f908da4ed476544eb9`
-- Scope: Android accessibility event -> workflow routing -> conversation context -> model pipeline.
-- This refactor does not alter `QingshengSoulPrompt`, `ReplyPipelinePolicy`, `ReplyRhythmPolicy`, `ConversationReplyContext`, or the local reply rejection/validation rules.
+- 版本：SoulBot 2.0
+- PR：[#1](https://github.com/zmsmao/soul-auto/pull/1)，已于 2026-11-24 合并至 `master`
+- CI 验证提交：`d23242e9485ef599a7b088d41424c8814a0e2f69`，GitHub Actions #175 成功
+- 合并提交：`10fc6605dda113cb02ce359ab87425dddf25f5fd`
+- 旧审计基线 `defdeb20e0ff363e40af39f908da4ed476544eb9` 仅用于描述重构前状态，不代表当前代码版本。
 
-## Runtime call chain
+## 运行链路
 
-1. `SoulBotService` owns the Android AccessibilityService lifecycle, currently visible Soul page, active conversation, and the live database handles.
-2. `SoulWorkflowHostFactory` constructs the private-chat, match, greeting, square, and Qiyu workflows. Those workflows call back into `SoulBotService` for reading threads, stable conversation identity, generation, sending, and post-send recording.
-3. `SoulServiceComponentFactory` wires `SoulConversationContextManager` and `SoulReplyGenerationEngine` to the service-owned databases and accessibility operations.
-4. `SoulConversationContextManager` resolves the conversation identity, synchronizes visible messages, updates persisted conversation state, and records manual/automated interaction learning.
-5. `SoulReplyGenerationEngine.generateValidatedChatReplyInternal` applies the existing `ReplyPipelinePolicy` depth selection. Depending on that unchanged decision it runs Analyzer, Writer, and Reviewer; Writer retains the existing maximum of two attempts, local validation, and one targeted correction. The overall deadline and per-stage budget policy remain unchanged.
-6. The Writer system prompt is assembled from `ModelClient.buildSystemPrompt`, the current-turn instruction, personalization, repeated-reply avoidance, focus/supporting context, optional correction and analysis summary, `ConversationReplyContext.responseGuidance`, and persisted `ConversationStatePolicy.promptHint`. The Reviewer continues to use `ReplyPipelinePolicy.reviewInstructions`.
-7. `ModelRouter` selects/routs the configured endpoint and sends the assembled system prompt plus transcript to the selected compatible chat-completions endpoint.
+1. `SoulBotService` 持有 Android AccessibilityService 生命周期、当前 Soul 页面、活动会话与运行期数据库句柄。
+2. `SoulWorkflowHostFactory` 组装 privatechat、match、greeting、square 和 Qiyu 场景工作流；工作流通过 Host 获取消息、会话身份、生成、发送和发送后记录能力。
+3. `SoulServiceComponentFactory` 将 `SoulConversationContextManager`、`SoulReplyGenerationEngine` 与数据库、无障碍操作及相关组件装配在一起。
+4. `SoulConversationContextManager` 解析联系人身份、同步可见消息、更新持久化会话状态，并协调手动/自动交互学习。
+5. `SoulReplyGenerationEngine` 调用 `ReplyPipelinePolicy` 选择生成深度，再按需执行 Analyzer、Writer 和 Reviewer；最终消息仍经过本地校验和发送确认。
+6. `ConversationContextBuilder` 根据必须保留的系统规则、当前轮指令、焦点消息、支撑上下文、资料、状态提示和可选历史片段组装模型上下文。
+7. `ModelRouter` 根据用户配置的端点优先级、可用状态和冷却状态选择服务商；模型路由负责请求，不决定 Soul 页面任务或聊天优先级。
 
-## Prompt invariants
+## 2.0 对话行为
 
-The baseline prompt is the exact content returned by:
+### 自适应生成深度
 
-- `ModelClient.buildSystemPrompt(profile, historicalReplay)`
-- `SelfProfile.promptContext()`
-- `QingshengSoulPrompt.guidance()`
-- `ReplyPreferencePrompt.build()`
-- `ConversationReplyContext.responseGuidance()`
-- `ConversationStatePolicy.promptHint()`
+- `SINGLE`：简单直接消息，走轻量生成路径。
+- `REVIEW`：焦点消息包含多条、需要支撑上下文，或较长对话里出现短消息时，增加 Reviewer。
+- `ANALYZE_AND_REVIEW`：出现明确情绪或关系信号时，先分析意图、情绪、上下文锚点和可用事实，再生成和审核。
+- Analyzer 的结构化结果仅是辅助标签，不能超越原始对话证据，不可将礼貌、回复速度、单次提问等推断为好感。
+- Reviewer 可返回 pass、rewrite 或 skip；skip 仅用于明确停止、明确拒绝或越过清晰边界等情况，不应因短答或信号不明显而跳过。
+- Writer 的输出继续受本地质量校验、发送确认和整体时间预算约束。
 
-The prompt source text and strategy rules are kept intact. The only persona default correction is that a fresh install has no pre-filled gender or other personal facts; profile completion remains optional. A blank profile contributes no identity facts.
+### 对话节奏与上下文衔接
 
-## Conversation identity audit
+- 低信息等待需要连续低信息回应，并且不能有未回答的问题、重要意图/情绪信号或明确收尾；第一条短回应不单独触发等待。
+- 最近两次我方回复均以陈述为主时，可提示模型寻找新切面或分享相关看法，但不强制提问。
+- 对“都没有”“两者都不是”等依赖前文的短答，继续保留其承接问题。
+- 对“你发”“那你说”“然后呢”等话题交接，补充相关支撑对话并提醒模型沿已有话题继续；handoff 本身不单独升级生成深度。
+- 可选轻量时间框架和 Push-Pull 仍按语境选择，不要求每轮使用，也不应由审核器统一删改。
 
-- When a native Soul user ID is visible, `ConversationIdentity.threadId` hashes it into a `soul-user:<sha256>` scope. The raw platform ID is not stored in the conversation key.
-- When the native ID is unavailable, `DiagnosticIdentity.contactId` provides a per-install salted nickname hash. This separates same-name strings only as far as the visible nickname allows; it cannot reliably recognize a renamed user without a native ID.
-- Conversation messages and conversation state are scoped by `thread_id` and, for state/history retrieval, by `scene`.
-- Contact memory and automated-reply deduplication previously used the display nickname. Runtime reads/writes now use the resolved thread ID instead.
-- Contact-specific negative feedback now carries a separate `contact_id`. Free-text feedback is attached to a contact only when the typed display name resolves to exactly one thread ID; ambiguous names are not guessed.
-- Quality-event labels remain display-oriented diagnostics and are not used as a source of contact facts.
+## 未读会话调度
 
-## Database and legacy-data decision
+未读扫描会尽力从未读会话行提取有限预览文本。联系方式交换、见面/照片意向和重要情绪跟进可获得较高优先级；同级再按消息年龄排序，最后以列表显示顺序稳定排序。该策略只影响队列调度，不修改消息内容或回复策略。若预览文本缺失，候选按普通优先级处理。
 
-The audited version used:
+## 人设资料边界
 
-- `conversation_memory.db`: `conversation_messages`, `conversation_state`, and `send_attempts`.
-- `chat_learning.db`: `style_samples`, `contact_memories(thread_id)`, `automated_replies(thread_id)`, `reply_feedback(contact_id)`, `reply_quality_events`, and sent-opening patterns.
-- Separate history/replay databases for display, export, and controlled evaluation.
+`SelfProfile` 支持性别、年龄、地区、星座、身高、职业与补充资料。每项资料可设为：
 
-The old runtime seeded the new conversation memory from legacy history during service startup and from the dashboard. Those implicit imports have been removed. This branch does not migrate old nickname-keyed contact memories or automated-reply records; the learning DB is advanced to a schema with explicit thread_id columns and those old tables are dropped/recreated. Contact-scoped feedback has a separate contact_id and old feedback rows are discarded rather than mis-associated. A clean reinstall is the expected reset path.
+- `PUBLIC`：主动公开；
+- `ASKED`：被自然问到时回答；
+- `PRIVATE`：不对外使用。
 
-## Context Builder rules
+空白或 PRIVATE 字段不进入人设上下文；程序不应从其他联系人记录中借用资料，也不应补造未知事实。新安装不会预填个人身份事实。
 
-- `ModelClient.buildSystemPrompt` still produces the same complete prompt string. At runtime it exposes a composable prefix and shared-rule suffix; `PersonaContextProvider` inserts the same `SelfProfile.promptContext()` between them, then adds learned style profile/preferences as separate fragments.
-- A single `ConversationContextBuilder` assembles Writer, Reviewer, and opening prompts from ordered, independently budgeted fragments. Persona identity, shared dialogue rules, current-turn instructions, and review instructions are required fragments; optional style examples, contact memories, state hints, and older history are selected by a shared priority queue.
-- Recent history still starts from the existing 20-message window. The latest six messages are retained as mandatory context; older messages are budgeted by recency.
-- Required instructions, the current focus, supporting transcript, correction, analysis summary, response guidance, and review instructions are never silently removed.
-- Optional contact facts have high priority, followed by persisted state, the most recent optional transcript turns, persona-style profile/preferences, relevant older excerpts, and style examples. Fragment and history candidates compete in the same priority queue; final prompt order remains independent of selection order.
-- The estimated input budget is 10,000 tokens with 1,200 reserved for output. The estimator is intentionally provider-neutral and conservative for Chinese; it is an estimate, not an exact tokenizer for every endpoint.
-- If required context alone exceeds the estimate budget, it is kept and overflow is logged. Optional context/history is the part eligible for eviction.
+## 联系人身份
 
-## UI scope
+- 优先从可访问节点的 extras / content description 中查找明确的 Soul 用户 ID。
+- 原生 ID 不以明文作为 thread_id，而是生成 `soul-user:<sha256>` 标识。
+- 无法取得原生 ID 时使用 `DiagnosticIdentity.contactId`：将昵称与本机持久化随机盐组合后哈希，避免明文昵称作为主要联系人键。
+- 回退标识只在昵称可见的范围内尽力区分；没有原生 ID 时无法可靠追踪改名联系人。
+- 消息事件键优先使用原生 message ID；缺失时用 thread_id、角色、归一化正文、前序锚点和重复序号构造哈希。
+- 联系人记忆与自动回复去重使用解析后的 thread_id；联系人负反馈单独使用 contact_id，按昵称匹配必须唯一，不能猜测同名归属。
 
-The app navigation is now organized around Run, Contacts, Learning, and Settings. Contact detail exposes the current per-contact memory snippets, chat history, and persisted state. It does not display speculative relationship scores or claim that raw excerpts are already verified personality facts.
+## 数据存储与迁移边界
+
+- `conversation_memory.db`：聊天消息、会话状态和发送尝试记录。
+- `chat_learning.db`：人工风格样本、场景反馈、旧式联系人摘要、自动回复记录及开场去重数据。
+- `contact_memory.db`：结构化联系人事实、证据和待提取入站消息队列。
+- `reply_replay.db`：聊天回放、盲选评价与人工改稿。
+- `greet.db`、`history.db`：广场去重及兼容历史展示。
+- `soulbot_prefs`：任务设置、个人资料、模型端点与 API Key。
+
+身份键升级时，无法可靠对应 thread_id 的旧昵称键联系人摘要、自动回复去重记录及联系人反馈不会被猜测迁移；聊天历史也不会再从旧历史库隐式灌入新的会话记忆库。需要保留的数据应在升级前通过应用提供的导出功能备份，并在升级后按对应导入流程处理。
+
+## 结构化联系人记忆
+
+证据型记忆位于独立的 `contact_memory.db`，由事实、证据和来源队列表构成。提取默认关闭，需要用户主动开启；只排入入站消息，不以机器人输出作为证据。有效证据必须引用提交批次中真实存在的 event_key，且 quote 必须是原始入站消息的精确子串。当前版本展示和管理该结构化记忆，但不把它自动注入 Writer 或 Reviewer。
+
+## 上下文构建约束
+
+- 近期历史以既有 20 条消息窗口为基础，最新 6 条为必需上下文；更早内容按预算选择。
+- 必须保留的系统规则、当前轮指令、焦点消息、支撑上下文、修正指令和审核规则不能被静默丢弃。
+- 联系人事实、会话状态、相关历史和风格样本属于可选上下文，按优先级与预算竞争。
+- 估算预算不是所有供应商 tokenizer 的精确值；必要上下文超出估算预算时优先保留必要内容并记录溢出。
+
+## UI 范围
+
+2.0 将主导航整理为 Run、Contacts、Learning、Settings 四个入口；联系人详情集中呈现身份信息、聊天历史、会话状态和联系人记忆。结构化事实与旧式摘要应区分展示，不能把未经确认的摘录包装成已核实人格、关系评分或心理结论。
+
+## 审计提醒
+
+- CI 覆盖单元测试、Debug APK 构建与 Android Lint；不等于完成了真机可访问性验收。
+- 页面操作仍依赖 Soul 当前节点树和可见文本；必须在目标设备和当前 Soul 版本上做实际检查。
+- 改动生成策略、任务优先级、身份键或数据库迁移时，应分别补充测试和迁移审查，不要把纯 UI 整理与行为策略变更混成同一项工作。

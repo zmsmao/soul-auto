@@ -1,15 +1,20 @@
-# Contact Memory UI Refresh
+# 联系人记忆界面更新
 
-The contact detail screen adopts an Apple Settings-inspired visual language while retaining native Android controls:
+联系人详情页采用受 Apple Settings 启发的分组式信息层级，同时保留原生 Android 导航、对话框和无障碍行为。
 
-- Large section heading and compact identity summary.
-- Grouped cards on a system-style page surface.
-- Restrained system-blue accent, thin separators and rounded grouped surfaces.
-- Matching light and dark palettes.
-- Memory cards emphasize category, lifecycle state, timestamp and evidence count.
-- Tapping a memory opens source viewing and management actions instead of exposing a dense admin toolbar.
-- Legacy snippets remain visibly separated from structured facts and are labeled unverified.
-- The extraction switch is explicitly global, opt-in and warns about model API usage.
-- The screen states that structured memories are not currently used by automatic replies.
+## 视觉与布局
 
-This is an Apple-inspired Android implementation, not an iOS clone; Android navigation, dialogs, accessibility and platform conventions remain native.
+- 页面顶部显示较清晰的联系人身份摘要和主要上下文入口。
+- 使用分组卡片、轻量分隔线、圆角容器和克制的强调色，减少密集管理工具栏。
+- 支持浅色与深色主题，组件遵循 Android Material 体系。
+- 记忆卡片突出类别、生命周期状态、更新时间和证据数量。
+- 点击结构化记忆可查看来源证据，并进入确认、修正、拒绝或删除操作。
+- 旧式摘要与结构化事实分开展示；没有逐条证据的摘要会明确标为线索，不展示为已核实事实。
+- 提取开关是全局 opt-in 控制项，开启前提示模型 API 使用和数据发送影响。
+- 页面明确说明结构化记忆当前不会自动参与回复生成。
+
+## 行为边界
+
+该界面主要改进数据可读性和管理能力，不通过视觉呈现暗示关系评分、心理分析或模型已经掌握某个联系人的全部事实。结构化记忆的提取开关不会改变自动回复的模型调用深度、消息策略、任务优先级或模型路由。
+
+这是 Apple Settings 风格的 Android 界面参考，不是 iOS 复刻；系统返回、对话框、可访问性节点和导航仍遵循 Android 约定。
