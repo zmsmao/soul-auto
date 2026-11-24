@@ -69,7 +69,7 @@ gradle.taskGraph.whenReady { taskGraph ->
         throw new org.gradle.api.GradleException(
             "Release signing is not configured. Set SOULBOT_SIGNING_STORE_FILE, " +
             "SOULBOT_SIGNING_STORE_PASSWORD, SOULBOT_SIGNING_KEY_ALIAS and " +
-            "SOULBOT_SIGNING_KEY_PASSWORD. See docs/release-signing.md."
+            "SOULBOT_SIGNING_KEY_PASSWORD. See repository Actions signing secrets configuration."
         )
     }
 
