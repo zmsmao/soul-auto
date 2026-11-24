@@ -22,9 +22,9 @@ import org.junit.Test
 
 class ChatRegressionCorpusTest {
     @Test
-    fun corpusContainsNineAnnotatedAndDeidentifiedEvaluationCases() {
-        assertEquals(9, ChatRegressionCorpus.cases.size)
-        assertEquals(9, ChatRegressionCorpus.cases.map { it.id }.distinct().size)
+    fun corpusContainsEighteenAnnotatedAndDeidentifiedEvaluationCases() {
+        assertEquals(18, ChatRegressionCorpus.cases.size)
+        assertEquals(18, ChatRegressionCorpus.cases.map { it.id }.distinct().size)
 
         ChatRegressionCorpus.cases.forEach { case ->
             assertTrue(case.title, case.messages.isNotEmpty())
@@ -44,6 +44,25 @@ class ChatRegressionCorpusTest {
                 ReplyReplayLogic.validationError(replay))
             assertEquals("Evaluation cases must never become style references", "",
                 ReplyReplayLogic.learningReply(replay))
+        }
+    }
+
+
+    @Test
+    fun newlyAddedRealConversationCasesAreEvaluationOnlyAndCoverBothFailuresAndPositiveControls() {
+        val added = ChatRegressionCorpus.cases.filter { it.id in setOf(
+            "chat-regression-10", "chat-regression-11", "chat-regression-12", "chat-regression-13", "chat-regression-14", "chat-regression-15", "chat-regression-16", "chat-regression-17", "chat-regression-18"
+        ) }
+        assertEquals(9, added.size)
+        assertTrue(added.any { it.failureType == "missed_contextual_answer" })
+        assertTrue(added.any { it.failureType == "overinterpretation_after_disclosure" })
+        assertTrue(added.any { it.failureType == "missed_topic_handoff" })
+        assertTrue(added.any { it.failureType == "positive_control_flirt_and_close" })
+        assertTrue(added.any { it.failureType == "positive_control_short_acknowledgement" })
+        added.forEach { case ->
+            assertEquals(ReplayDataset.EVALUATION, case.asReplayCase().dataset)
+            assertEquals("", ReplyReplayLogic.learningReply(case.asReplayCase()))
+            assertTrue(case.messages.last().role == "in")
         }
     }
 
