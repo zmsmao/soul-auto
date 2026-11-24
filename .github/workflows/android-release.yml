@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: android-release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate-signing:
@@ -50,7 +50,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.SOULBOT_SIGNING_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Missing one or more required GitHub Actions secrets. See repository Actions signing secrets configuration."
+            echo "::error::Missing one or more required GitHub Actions secrets. Configure the four required repository Actions secrets."
             exit 1
           fi
           if [ "$KEY_ALIAS" != "soulbot" ]; then
@@ -191,7 +191,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.SOULBOT_SIGNING_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Missing one or more required GitHub Actions secrets. See repository Actions signing secrets configuration."
+            echo "::error::Missing one or more required GitHub Actions secrets. Configure the four required repository Actions secrets."
             exit 1
           fi
           if [ "$KEY_ALIAS" != "soulbot" ]; then
