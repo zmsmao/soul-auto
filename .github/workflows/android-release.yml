@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+  create:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -111,7 +112,7 @@ jobs:
 
   release:
     name: Build and publish signed APK
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -147,6 +148,12 @@ jobs:
 
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             RELEASE_TAG="$INPUT_RELEASE_TAG"
+          elif [ "$GITHUB_EVENT_NAME" = "create" ]; then
+            if [[ "$GITHUB_REF_NAME" != release/* ]]; then
+              echo "::error::Only release/<version> branch creation can trigger publication."
+              exit 1
+            fi
+            RELEASE_TAG="${GITHUB_REF_NAME#release/}"
           else
             RELEASE_TAG="$GITHUB_REF_NAME"
           fi
@@ -162,7 +169,7 @@ jobs:
             exit 1
           fi
 
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+          if { [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "create" ]; } && git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
             echo "::error::Tag $RELEASE_TAG already exists. Bump versionName/versionCode before publishing another release."
             exit 1
           fi
