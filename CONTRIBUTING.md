@@ -1,6 +1,6 @@
 # SoulBot 开发与维护约定
 
-本文是 SoulBot 项目的长期维护规则。当前正式基线为 **SoulBot 2.0**。后续开发以本文件和仓库中的产品/架构文档为准，不依赖聊天记录作为唯一规范。
+本文是 SoulBot 项目的长期维护规则。当前正式基线为 **SoulBot 2.0.0**。后续开发以本文件和仓库中的产品/架构文档为准，不依赖聊天记录作为唯一规范。
 
 ## 1. 项目主线与决策权
 
@@ -130,8 +130,8 @@
 
 当前基线：
 
-- 产品版本：`2.0`
-- Android `versionName`：`2.0`
+- 产品版本：`2.0.0`
+- Android `versionName`：`2.0.0`
 - Android `versionCode`：`3`
 - 正式主线：`master`
 
@@ -141,7 +141,16 @@
 - `2.1.0`：向后兼容的新功能或可选能力；
 - `3.0.0`：不兼容的数据格式、核心架构或产品行为变更。
 
-每次对外发布都必须递增 Android `versionCode`；`versionName` 与产品版本保持一致。仅文档修订或内部提交不递增 App 版本号。发布标签应指向已经通过 CI、完成功能验收且经项目所有者确认的 `master` 提交。Debug artifact 和 GitHub Release 必须区分，不要把临时 CI 工件称为正式版安装包。
+每次对外发布都必须递增 Android `versionCode`；`versionName` 与产品版本保持一致。仅文档修订或内部提交不递增 App 版本号。发布标签应为 `v<versionName>`，并指向已经合入 `master`、通过 CI、完成功能验收且经项目所有者确认的提交。正式 Release 由 GitHub Actions 构建，必须使用固定签名密钥，且在签名验证通过后才能上传 APK。
+
+首次启用签名与自动发版前，项目所有者需要创建唯一的 JKS 密钥，并在仓库配置以下 GitHub Actions Secrets：
+
+- `SOULBOT_SIGNING_KEYSTORE_BASE64`
+- `SOULBOT_SIGNING_STORE_PASSWORD`
+- `SOULBOT_SIGNING_KEY_ALIAS`
+- `SOULBOT_SIGNING_KEY_PASSWORD`
+
+密钥生成、备份、Secrets 配置、Tag 发布和 Debug 到正式版迁移步骤见 [正式签名与自动发版说明](docs/release-signing.md)。**密钥不提交到 Git，且不得在后续版本中随意更换。**
 
 ## 9. 密钥与用户数据
 
