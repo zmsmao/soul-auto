@@ -197,7 +197,7 @@ class ConversationReplyContextTest {
         listOf("都没有", "两个都没有", "两者都不是", "都不").forEach {
             assertTrue(it, ConversationReplyContext.isContextDependentAnswer(it))
         }
-        listOf("你发", "你发吧", "你说", "然后呢", "说说看").forEach {
+        listOf("你发", "你发吧", "你说", "然后呢", "说说看", "奥，你发", "那你说").forEach {
             assertTrue(it, ConversationReplyContext.isTopicHandoff(it))
         }
         val answer = ConversationReplyContext.analyze(

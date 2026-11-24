@@ -38,13 +38,14 @@ object ConversationReplyContext {
     fun isContextDependentAnswer(text: String): Boolean = contextualAnswerPattern.matches(comparableText(text))
 
     /** The other person explicitly hands the next conversational move to us. */
+    private val topicHandoffPattern = Regex(
+        "^(?:哦|噢|奥|那|行|好)?(?:你发|你说|你先说|你来|然后呢|还有呢|接着说|发来看看|说说看|你定)(?:吧|呀|啊|呢)?$",
+    )
+
     fun isTopicHandoff(text: String): Boolean {
         val clean = comparableText(text)
-        return clean in setOf(
-            "你发", "你发吧", "你说", "你说吧", "你先说", "你先说吧",
-            "你来", "你来吧", "然后呢", "还有呢", "接着说", "发来看看",
-            "说说看", "你想聊什么", "你想聊啥", "想聊什么", "你定",
-        )
+        return clean in setOf("你想聊什么", "你想聊啥", "想聊什么") ||
+            topicHandoffPattern.matches(clean)
     }
 
     private val questionClues = listOf(
