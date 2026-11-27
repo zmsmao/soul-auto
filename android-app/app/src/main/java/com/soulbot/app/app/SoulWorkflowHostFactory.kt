@@ -95,7 +95,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun findExactText(text: String): List<AccessibilityNodeInfo> = service.findExactText(text)
                 override fun tapNode(node: AccessibilityNodeInfo): Boolean = service.tapNode(node)
                 override fun handleQiyu(): Boolean = service.handleQiyu()
-                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
                 override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
                     service.generateValidatedOpening(action, context)
