@@ -48,7 +48,8 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
         } finally {
             if (host.isOnList()) host.scrollToTop()
         }
-        val ordered = UnreadConversationPolicy.oldestFirst(collected.values.toList())
+        val merged = collected.values.mapIndexed { index, item -> item.copy(displayOrder = index) }
+        val ordered = UnreadConversationPolicy.oldestFirst(merged)
         RuntimeLog.record(
             host.context,
             "unread scan completed; pages=$pages; visibleRows=$visibleRows; visibleBadges=$visibleBadges; candidates=\${ordered.size}; selectedContact=\${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(host.context, it.name) } ?: "none"}",
