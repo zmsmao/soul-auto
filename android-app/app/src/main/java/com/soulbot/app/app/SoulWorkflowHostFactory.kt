@@ -316,6 +316,12 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun memoryThreadId(contactName: String): String = service.memoryThreadId(contactName)
                 override fun currentIncomingMessageKeys(contactName: String): List<String> =
                     service.currentIncomingMessageKeys(contactName)
+                override fun updateQueueEvents(
+                    contactName: String,
+                    eventKeys: List<String>,
+                    state: MessageQueueState,
+                    reason: String,
+                ) = service.updateQueueEvents(contactName, eventKeys, state, reason)
                 override fun visibleTitleTexts(): List<String> = service.visibleTitleTexts()
                 override fun readQiyuSignature(): String = service.readQiyuSignature()
                 override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
