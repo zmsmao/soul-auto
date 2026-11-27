@@ -182,6 +182,42 @@ internal class MessageDeliveryQueue(context: Context) :
         } finally { db.endTransaction() }
     }
 
+    /** Close queued inbound events that are followed by an outgoing message in the observed thread. */
+    @Synchronized
+    fun markManuallyHandledIfPending(threadId: String, eventKeys: List<String>) {
+        if (eventKeys.isEmpty()) return
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            eventKeys.distinct().forEach { key ->
+                db.update(
+                    "conversation_events",
+                    ContentValues().apply {
+                        put("queue_state", "HANDLED_MANUALLY")
+                        put("batch_id", "")
+                        put("lease_until", 0)
+                        put("updated_at", now)
+                        put("last_error", "outgoing_message_observed_without_queue_ack")
+                    },
+                    "thread_id=? AND event_key=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT')",
+                    arrayOf(threadId, key),
+                )
+            }
+            db.update(
+                "reply_batches",
+                ContentValues().apply {
+                    put("state", "HANDLED_MANUALLY")
+                    put("updated_at", now)
+                },
+                "thread_id=? AND state='PROCESSING' AND NOT EXISTS " +
+                    "(SELECT 1 FROM conversation_events e WHERE e.batch_id=reply_batches.batch_id AND e.queue_state='PROCESSING')",
+                arrayOf(threadId),
+            )
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
     @Synchronized
     fun retryEvents(threadId: String, eventKeys: List<String>, error: String, maxAttempts: Int = 5) {
         if (eventKeys.isEmpty()) return
