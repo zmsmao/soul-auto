@@ -59,6 +59,17 @@ class MessageQueuePolicyTest {
     }
 
     @Test
+    fun `future retry at queue head blocks later events`() {
+        val now = 1_000_000L
+        assertTrue(MessageQueuePolicy.isReadyHead("PENDING", 0L, now))
+        assertTrue(MessageQueuePolicy.isReadyHead("RETRY_WAIT", now, now))
+        org.junit.Assert.assertFalse(MessageQueuePolicy.isReadyHead("RETRY_WAIT", now + 1L, now))
+        org.junit.Assert.assertFalse(MessageQueuePolicy.isReadyHead("SEND_UNCERTAIN", 0L, now))
+        org.junit.Assert.assertFalse(MessageQueuePolicy.isReadyHead("DEAD_LETTER", 0L, now))
+        org.junit.Assert.assertFalse(MessageQueuePolicy.isReadyHead("PROCESSING", 0L, now))
+    }
+
+    @Test
     fun `retry delay backs off and remains capped`() {
         assertEquals(3_000L, MessageQueuePolicy.retryDelay(1))
         assertEquals(10_000L, MessageQueuePolicy.retryDelay(2))
