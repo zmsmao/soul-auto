@@ -480,8 +480,9 @@ class SoulBotService : AccessibilityService() {
         thread: List<Pair<String, String>>,
         tracker: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent> =
-        conversationContextManager.unseenIncomingEvents(contactName, thread, tracker, pendingCount)
+        conversationContextManager.unseenIncomingEvents(contactName, thread, tracker, pendingCount, scene)
 
     private fun currentNativeSoulUserId(): String? = conversationContextManager.currentNativeSoulUserId()
 
