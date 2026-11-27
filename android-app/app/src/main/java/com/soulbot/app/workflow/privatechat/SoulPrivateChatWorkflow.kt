@@ -128,7 +128,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                 return false
             }
             if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
-                seen.markSeenEvents(host.memoryThreadId(name), newEvents)
+                seen.markSuppressedEvents(host.memoryThreadId(name), newEvents)
                 RuntimeLog.record(
                     host.context,
                     "conversation reply paused; reason=repeated_low_information; contactId=${DiagnosticIdentity.contactId(host.context, name)}",
@@ -150,6 +150,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     host.setNextStep("收到新消息，改用最新上下文重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
+                seen.retryEvents(host.memoryThreadId(name), newEvents, "generation_failed")
                 RuntimeLog.record(host.context, "conversation reply aborted; reason=generation_failed")
                 val reason = ModelRouter.lastError.ifBlank { "连续生成内容不合格" }.take(36)
                 host.setNextStep("本轮回复失败：$reason，返回列表避免卡住", 2000)
@@ -163,6 +164,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     .map { host.normalizeReply(it.second) }
                     .any { it.isNotEmpty() && it == normalized }
                 if (repeated) {
+                    seen.markSuppressedEvents(host.memoryThreadId(name), newEvents)
                     RuntimeLog.record(host.context, "conversation reply aborted; reason=duplicate_output")
                     host.setNextStep("回复内容与历史重复，本轮不发送并返回列表", 1500)
                     host.sleep(1500)
@@ -181,6 +183,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                 continue@replyCycle
             }
             if (!host.isExpectedConversation(name)) {
+                seen.retryEvents(host.memoryThreadId(name), newEvents, "conversation_changed")
                 RuntimeLog.record(host.context, "conversation reply cancelled; reason=conversation_changed")
                 host.setNextStep("会话已切换，取消本次发送并重新检查列表", 800)
                 host.gotoChatList()
@@ -207,8 +210,11 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                     host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
                     continue@replyCycle
                 }
+                seen.markUncertainEvents(host.memoryThreadId(name), newEvents, "send_not_confirmed")
                 RuntimeLog.record(host.context, "conversation reply send failed; chatStillVisible=true")
                 host.setNextStep("回复未完成，保留当前会话")
+            } else if (!host.isRunning || !host.isOnChat()) {
+                seen.retryEvents(host.memoryThreadId(name), newEvents, "chat_closed_before_send")
             }
             return false
         }
