@@ -99,7 +99,11 @@ internal class SoulNavigationController(
             ui.swipeVertically(SoulAccessibilityIds.ID_CONV_LIST, 0.84f, 0.30f, 450)
         }
         pause(650)
-        val after = conversationListSnapshot()
+        var after = conversationListSnapshot()
+        if (after == before) {
+            pause(450)
+            after = conversationListSnapshot()
+        }
         return after.isNotBlank() && after != before
     }
 
@@ -194,6 +198,6 @@ internal class SoulNavigationController(
     // ===== 延时 =====
 
     companion object {
-        const val MAX_SCROLLS_TO_TOP = 20
+        const val MAX_SCROLLS_TO_TOP = 100
     }
 }
