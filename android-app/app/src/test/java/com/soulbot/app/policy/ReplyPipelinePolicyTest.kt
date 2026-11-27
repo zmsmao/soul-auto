@@ -101,6 +101,25 @@ class ReplyPipelinePolicyTest {
     }
 
     @Test
+    fun reviewerSkipMapsToTerminalNoReplyInsteadOfGenerationFailure() {
+        val skip = ReplyPipelinePolicy.parseReview(
+            """{"decision":"skip","issues":["EXPLICIT_STOP"]}""",
+        )
+        val terminal = ReplyPipelinePolicy.noReplyRequiredResult(skip)
+
+        assertEquals(
+            ChatReplyGenerationResult.NoReplyRequired("EXPLICIT_STOP"),
+            terminal,
+        )
+        assertNull(ReplyPipelinePolicy.noReplyRequiredResult(null))
+        assertNull(
+            ReplyPipelinePolicy.noReplyRequiredResult(
+                ReplyPipelinePolicy.parseReview("""{"decision":"pass","issues":[]}"""),
+            ),
+        )
+    }
+
+    @Test
     fun reviewerParsesPassRewriteAndSkip() {
         val pass = ReplyPipelinePolicy.parseReview("""{"decision":"pass","issues":[]}""")
         val rewrite = ReplyPipelinePolicy.parseReview(
