@@ -44,6 +44,15 @@ internal class ConversationSeenTracker(
         markEvents(conversation, incoming, "SUPPRESSED_POLICY")
     }
 
+    fun markNoReplyRequiredEvents(
+        conversation: String,
+        incoming: List<ConversationIncomingEvent>,
+        reason: String,
+    ) {
+        if (incoming.isEmpty()) return
+        markEvents(conversation, incoming, "NO_REPLY_REQUIRED:$reason")
+    }
+
     fun retryEvents(conversation: String, incoming: List<ConversationIncomingEvent>, reason: String) {
         if (incoming.isEmpty()) return
         onEventsMarked(conversation, incoming.map { it.key }, "RETRY_WAIT:$reason")
