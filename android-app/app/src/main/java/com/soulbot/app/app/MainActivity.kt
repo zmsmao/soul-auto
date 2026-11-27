@@ -83,6 +83,14 @@ class MainActivity : AppCompatActivity() {
             R.id.nav_home,
         )
 
+        findViewById<View>(R.id.btnCompose).setOnClickListener {
+            val launchIntent = packageManager.getLaunchIntentForPackage("cn.soulapp.android")
+            if (launchIntent != null) {
+                startActivity(launchIntent)
+            } else {
+                Snackbar.make(queueList, "未检测到 Soul 客户端", Snackbar.LENGTH_SHORT).show()
+            }
+        }
         findViewById<View>(R.id.tabOpen).setOnClickListener { selectFilter(InboxFilter.OPEN) }
         findViewById<View>(R.id.tabSnoozed).setOnClickListener { selectFilter(InboxFilter.SNOOZED) }
         findViewById<View>(R.id.tabDone).setOnClickListener { selectFilter(InboxFilter.DONE) }
