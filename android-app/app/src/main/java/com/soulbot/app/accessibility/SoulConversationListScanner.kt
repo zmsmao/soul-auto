@@ -31,7 +31,7 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
     /** Scan every visible viewport; names are deduplicated while the list is paged. */
     fun scanUnread(): List<UnreadConversationCandidate> {
         if (!host.isOnList()) return emptyList()
-        val collected = linkedMapOf<String, UnreadConversationCandidate>()
+        val scannedPages = mutableListOf<List<UnreadConversationCandidate>>()
         var pages = 0
         var visibleRows = 0
         var visibleBadges = 0
@@ -41,14 +41,14 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
                 val page = scanVisibleUnread()
                 visibleRows += page.first
                 visibleBadges += page.second
-                page.third.forEach { candidate -> collected.putIfAbsent(candidate.name, candidate) }
+                scannedPages += page.third
                 pages += 1
                 if (!host.scrollPageDown()) break
             }
         } finally {
             if (host.isOnList()) host.scrollToTop()
         }
-        val merged = collected.values.mapIndexed { index, item -> item.copy(displayOrder = index) }
+        val merged = UnreadConversationPolicy.mergeVisiblePages(scannedPages)
         val ordered = UnreadConversationPolicy.oldestFirst(merged)
         RuntimeLog.record(
             host.context,
