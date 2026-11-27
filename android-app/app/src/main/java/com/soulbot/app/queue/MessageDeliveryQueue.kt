@@ -455,6 +455,38 @@ internal class MessageDeliveryQueue(context: Context) :
         } finally { db.endTransaction() }
     }
 
+    @Synchronized
+    fun unsnooze(threadId: String, eventKeys: List<String>) {
+        if (eventKeys.isEmpty()) return
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            eventKeys.distinct().forEach { key ->
+                db.update(
+                    "conversation_events",
+                    ContentValues().apply {
+                        put("queue_state", MessageQueueState.PENDING.name)
+                        put("next_attempt_at", 0L)
+                        put("batch_id", "")
+                        put("lease_until", 0L)
+                        put("updated_at", now)
+                        put("last_error", "manually_unsnoozed_from_inbox")
+                    },
+                    "thread_id=? AND event_key=? AND queue_state='SUPPRESSED_POLICY'",
+                    arrayOf(threadId, key),
+                )
+            }
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply { put("state", "OPEN"); put("last_detected_at", now) },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
     /** Explicit user-triggered retry; SEND_UNCERTAIN is retried only after the user confirms it was not sent. */
     @Synchronized
     fun retryNow(threadId: String, eventKeys: List<String>) {
