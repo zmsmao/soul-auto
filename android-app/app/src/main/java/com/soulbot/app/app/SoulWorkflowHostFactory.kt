@@ -155,7 +155,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     contactName: String,
                     thread: List<Pair<String, String>>,
                     focusIncoming: List<String>,
-                ): String? =
+                ): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming)
                 override fun normalizeReply(text: String): String = service.normalizeReply(text)
                 override fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean =
@@ -325,7 +325,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 ) = service.updateQueueEvents(contactName, eventKeys, state, reason)
                 override fun visibleTitleTexts(): List<String> = service.visibleTitleTexts()
                 override fun readQiyuSignature(): String = service.readQiyuSignature()
-                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
                 override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
                     service.generateValidatedOpening(action, context)
