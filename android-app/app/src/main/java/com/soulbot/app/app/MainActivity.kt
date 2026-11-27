@@ -23,11 +23,11 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
+import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.queue.InboxConversationSummary
 import com.soulbot.app.queue.InboxFilter
 import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueueState
-import com.soulbot.app.logging.RuntimeLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -154,7 +154,7 @@ class MainActivity : AppCompatActivity() {
                 System.currentTimeMillis(),
             )
             rawStatus.isNotBlank() && rawStatus != "用户手动停止" -> rawStatus
-            else -> "自动任务尚未运行 · 消息队列仍会保留已采集内容"
+            else -> "自动任务尚未运行 · 已采集的消息仍保留在队列中"
         }
         btnPrimary.text = if (overlayEnabled) "控制" else "授权"
         renderInbox()
@@ -167,6 +167,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTabs() {
+        if (!::deliveryQueue.isInitialized) return
         val counts = deliveryQueue.counts()
         tvTabOpen.text = "Open  " + (counts[InboxFilter.OPEN] ?: 0)
         tvTabSnoozed.text = "Snoozed  " + (counts[InboxFilter.SNOOZED] ?: 0)
@@ -218,11 +219,9 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                val label = queueStateLabel(item.state)
-                Snackbar.make(this, "${item.displayName} · $label", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(this, "${item.displayName} · ${queueStateLabel(item.state)}", Snackbar.LENGTH_SHORT).show()
             }
         }
-        val avatarColor = avatarColor(item.displayName)
         val avatar = TextView(this).apply {
             text = item.displayName.trim().firstOrNull()?.toString() ?: "S"
             gravity = Gravity.CENTER
@@ -231,7 +230,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(avatarColor)
+                setColor(avatarColor(item.displayName))
             }
             layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
         }
@@ -335,9 +334,18 @@ class MainActivity : AppCompatActivity() {
         MessageQueueState.SENT -> "已发送"
     }
 
-    private fun queueStateLabel(state: MessageQueueState): String = rowTag(
-        InboxConversationSummary("", "", "", 0L, 0, state),
-    )
+    private fun queueStateLabel(state: MessageQueueState): String =
+        when (state) {
+            MessageQueueState.PENDING -> "待回复"
+            MessageQueueState.PROCESSING -> "正在处理"
+            MessageQueueState.SENT -> "已发送"
+            MessageQueueState.RETRY_WAIT -> "等待重试"
+            MessageQueueState.SUPPRESSED_POLICY -> "暂缓"
+            MessageQueueState.HANDLED_MANUALLY -> "手动处理"
+            MessageQueueState.BASELINE -> "历史记录"
+            MessageQueueState.SEND_UNCERTAIN -> "发送待确认"
+            MessageQueueState.DEAD_LETTER -> "需要检查"
+        }
 
     private fun avatarColor(name: String): Int {
         val palette = intArrayOf(
@@ -350,25 +358,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun formatTime(timestamp: Long): String {
         val date = Date(timestamp)
-        val pattern = if (SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(date) ==
-            SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-        ) "HH:mm" else "MM/dd"
+        val today = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        val day = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(date)
+        val pattern = if (today == day) "HH:mm" else "MM/dd"
         return SimpleDateFormat(pattern, Locale.getDefault()).format(date)
     }
 
     private fun openOverlaySettings() {
-        startActivity(
-            Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"),
-            ),
-        )
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
     }
 
     private fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: return false
         return enabled.contains(packageName)
     }
