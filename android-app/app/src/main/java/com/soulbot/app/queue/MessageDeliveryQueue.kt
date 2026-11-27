@@ -564,15 +564,23 @@ internal class MessageDeliveryQueue(context: Context) :
     }
 
     private fun queryBatchEvents(batchId: String): List<QueueMessageEvent> =
-        readableDatabase.rawQuery("SELECT event_key, content, queue_state FROM conversation_events WHERE batch_id=? ORDER BY event_id",
-            arrayOf(batchId)).use { cursor ->
+        readableDatabase.rawQuery(
+            "SELECT event_key, content, queue_state, observed_at, attempt_count, last_error " +
+                "FROM conversation_events WHERE batch_id=? ORDER BY event_id",
+            arrayOf(batchId),
+        ).use { cursor ->
             buildList {
-                while (cursor.moveToNext()) add(QueueMessageEvent(
-                    key = cursor.getString(0),
-                    text = cursor.getString(1),
-                    state = runCatching { MessageQueueState.valueOf(cursor.getString(2)) }
-                        .getOrDefault(MessageQueueState.PROCESSING),
-                ))
+                while (cursor.moveToNext()) add(
+                    QueueMessageEvent(
+                        key = cursor.getString(0),
+                        text = cursor.getString(1),
+                        state = runCatching { MessageQueueState.valueOf(cursor.getString(2)) }
+                            .getOrDefault(MessageQueueState.PROCESSING),
+                        observedAt = cursor.getLong(3),
+                        attemptCount = cursor.getInt(4),
+                        lastError = cursor.getString(5),
+                    ),
+                )
             }
         }
 
