@@ -11,6 +11,7 @@ import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
+import com.soulbot.app.queue.MessageQueueState
 
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
