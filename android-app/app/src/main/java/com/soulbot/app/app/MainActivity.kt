@@ -19,6 +19,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
@@ -218,9 +219,7 @@ class MainActivity : AppCompatActivity() {
             minimumHeight = dp(100)
             isClickable = true
             isFocusable = true
-            setOnClickListener {
-                Snackbar.make(this, "${item.displayName} · ${queueStateLabel(item.state)}", Snackbar.LENGTH_SHORT).show()
-            }
+            setOnClickListener { showConversationDetails(item) }
         }
         val avatar = TextView(this).apply {
             text = item.displayName.trim().firstOrNull()?.toString() ?: "S"
@@ -320,6 +319,73 @@ class MainActivity : AppCompatActivity() {
             root.addView(badge)
         }
         return root
+    }
+
+    private fun showConversationDetails(item: InboxConversationSummary) {
+        val events = deliveryQueue.eventsForThread(item.threadId)
+        if (events.isEmpty()) {
+            Snackbar.make(queueList, "该会话暂无已采集的消息事件", Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val details = events.take(24).joinToString("\n\n") { event ->
+            buildString {
+                append("[")
+                append(queueStateLabel(event.state))
+                append("] ")
+                append(formatTime(event.observedAt))
+                append("\n")
+                append(event.text)
+                if (event.attemptCount > 0) {
+                    append("\n重试次数：")
+                    append(event.attemptCount)
+                }
+                if (event.lastError.isNotBlank()) {
+                    append("\n记录：")
+                    append(event.lastError)
+                }
+            }
+        }
+        val uncertain = events.filter { it.state == MessageQueueState.SEND_UNCERTAIN }
+            .map { it.key }
+        val retryable = events.filter {
+            it.state == MessageQueueState.RETRY_WAIT || it.state == MessageQueueState.DEAD_LETTER
+        }.map { it.key }
+        val manuallyResolvable = events.filter {
+            it.state == MessageQueueState.PENDING ||
+                it.state == MessageQueueState.RETRY_WAIT ||
+                it.state == MessageQueueState.SEND_UNCERTAIN ||
+                it.state == MessageQueueState.DEAD_LETTER
+        }.map { it.key }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(item.displayName)
+            .setMessage(details)
+            .setCancelable(true)
+        if (uncertain.isNotEmpty()) {
+            dialog.setPositiveButton("已确认发送") { _, _ ->
+                deliveryQueue.updateEvents(item.threadId, uncertain, MessageQueueState.SENT)
+                renderInbox()
+            }
+            dialog.setNegativeButton("确认未发送后重试") { _, _ ->
+                deliveryQueue.retryNow(item.threadId, uncertain)
+                renderInbox()
+            }
+        } else if (retryable.isNotEmpty()) {
+            dialog.setPositiveButton("关闭", null)
+            dialog.setNegativeButton("立即重试") { _, _ ->
+                deliveryQueue.retryNow(item.threadId, retryable)
+                renderInbox()
+            }
+        } else {
+            dialog.setPositiveButton("关闭", null)
+        }
+        if (manuallyResolvable.isNotEmpty()) {
+            dialog.setNeutralButton("标记人工已处理") { _, _ ->
+                deliveryQueue.resolveAsManual(item.threadId, manuallyResolvable)
+                renderInbox()
+            }
+        }
+        dialog.show()
     }
 
     private fun rowTag(item: InboxConversationSummary): String = when (item.state) {
