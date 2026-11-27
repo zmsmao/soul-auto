@@ -22,6 +22,10 @@ internal object MessageQueuePolicy {
             else -> MessageQueueState.BASELINE
         }
 
+    fun isReadyHead(state: String?, nextAttemptAt: Long, now: Long): Boolean =
+        state in setOf(MessageQueueState.PENDING.name, MessageQueueState.RETRY_WAIT.name) &&
+            nextAttemptAt <= now
+
     fun retryDelay(attempt: Int): Long = when (attempt) {
         1 -> 3_000L
         2 -> 10_000L
