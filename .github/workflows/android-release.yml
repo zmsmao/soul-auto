@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+      - feat/dev-soul
   create:
   workflow_dispatch:
     inputs:
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   validate-signing:
     name: Validate repository signing secrets (no publication)
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/release-signing-automation' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/release-signing-automation' || github.event.pull_request.head.ref == 'fix/message-delivery-queue') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
