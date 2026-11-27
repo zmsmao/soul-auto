@@ -104,34 +104,112 @@ internal class MessageDeliveryQueue(context: Context) :
                 "SELECT batch_id FROM reply_batches WHERE thread_id=? AND state='PROCESSING' AND lease_until>? ORDER BY created_at DESC LIMIT 1",
                 arrayOf(threadId, now.toString()),
             ).use { cursor -> if (cursor.moveToFirst()) batchId = cursor.getString(0) }
+
+            val lowerBound = if (batchId.isNotBlank()) {
+                db.rawQuery(
+                    "SELECT COALESCE(MAX(event_id), 0) FROM conversation_events WHERE batch_id=? AND queue_state='PROCESSING'",
+                    arrayOf(batchId),
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+            } else {
+                var firstId = -1L
+                var firstState = ""
+                var firstRetryAt = 0L
+                db.rawQuery(
+                    """SELECT event_id, queue_state, next_attempt_at FROM conversation_events
+                       WHERE thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')
+                       ORDER BY event_id ASC LIMIT 1""".trimIndent(),
+                    arrayOf(threadId),
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        firstId = cursor.getLong(0)
+                        firstState = cursor.getString(1)
+                        firstRetryAt = cursor.getLong(2)
+                    }
+                }
+                if (firstId < 0L ||
+                    firstState !in setOf("PENDING", "RETRY_WAIT") ||
+                    firstRetryAt > now
+                ) {
+                    db.setTransactionSuccessful()
+                    return emptyList()
+                }
+                firstId - 1L
+            }
+
+            val blockerArgs = if (batchId.isBlank()) {
+                arrayOf(threadId, lowerBound.toString(), now.toString())
+            } else {
+                arrayOf(threadId, lowerBound.toString(), now.toString())
+            }
+            val blockerId = db.rawQuery(
+                """SELECT MIN(event_id) FROM conversation_events
+                   WHERE thread_id=? AND event_id>?
+                     AND (queue_state IN ('PROCESSING','SEND_UNCERTAIN','DEAD_LETTER')
+                       OR (queue_state='RETRY_WAIT' AND next_attempt_at>?))""".trimIndent(),
+                blockerArgs,
+            ).use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else Long.MAX_VALUE
+            }
+
+            val pendingCount = db.rawQuery(
+                """SELECT COUNT(*) FROM conversation_events
+                   WHERE thread_id=? AND event_id>? AND event_id<?
+                     AND queue_state IN ('PENDING','RETRY_WAIT') AND next_attempt_at<=?""".trimIndent(),
+                arrayOf(threadId, lowerBound.toString(), blockerId.toString(), now.toString()),
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
             if (batchId.isBlank()) {
-                val pendingCount = db.rawQuery(
-                    "SELECT COUNT(*) FROM conversation_events WHERE thread_id=? AND queue_state IN ('PENDING','RETRY_WAIT') AND next_attempt_at<=?",
-                    arrayOf(threadId, now.toString()),
-                ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
-                if (pendingCount == 0) { db.setTransactionSuccessful(); return emptyList() }
+                if (pendingCount == 0) {
+                    db.setTransactionSuccessful()
+                    return emptyList()
+                }
                 batchId = UUID.randomUUID().toString()
                 db.insertOrThrow("reply_batches", null, ContentValues().apply {
-                    put("batch_id", batchId); put("thread_id", threadId); put("scene", scene)
-                    put("state", "PROCESSING"); put("event_count", pendingCount)
-                    put("lease_until", leaseUntil); put("created_at", now); put("updated_at", now)
+                    put("batch_id", batchId)
+                    put("thread_id", threadId)
+                    put("scene", scene)
+                    put("state", "PROCESSING")
+                    put("event_count", pendingCount)
+                    put("lease_until", leaseUntil)
+                    put("created_at", now)
+                    put("updated_at", now)
                 })
             }
-            db.update("conversation_events", ContentValues().apply {
-                put("queue_state", "PROCESSING"); put("batch_id", batchId); put("lease_until", leaseUntil)
-            }, "thread_id=? AND queue_state IN ('PENDING','RETRY_WAIT') AND next_attempt_at<=?",
-                arrayOf(threadId, now.toString()))
+
+            db.update(
+                "conversation_events",
+                ContentValues().apply {
+                    put("queue_state", "PROCESSING")
+                    put("batch_id", batchId)
+                    put("lease_until", leaseUntil)
+                },
+                """thread_id=? AND event_id>? AND event_id<?
+                   AND queue_state IN ('PENDING','RETRY_WAIT') AND next_attempt_at<=?""".trimIndent(),
+                arrayOf(threadId, lowerBound.toString(), blockerId.toString(), now.toString()),
+            )
             val count = db.rawQuery(
                 "SELECT COUNT(*) FROM conversation_events WHERE batch_id=? AND queue_state='PROCESSING'",
                 arrayOf(batchId),
             ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            if (count == 0) {
+                db.setTransactionSuccessful()
+                return emptyList()
+            }
             db.update("reply_batches", ContentValues().apply {
-                put("event_count", count); put("lease_until", leaseUntil); put("updated_at", now)
+                put("event_count", count)
+                put("lease_until", leaseUntil)
+                put("updated_at", now)
             }, "batch_id=?", arrayOf(batchId))
-            db.update("inbox_conversations", ContentValues().apply { put("state", "PROCESSING") },
-                "thread_id=?", arrayOf(threadId))
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply { put("state", "PROCESSING") },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally {
+            db.endTransaction()
+        }
         return queryBatchEvents(batchId)
     }
 
@@ -309,7 +387,7 @@ internal class MessageDeliveryQueue(context: Context) :
         return rows
     }
 
-    /** Conversations with immediately claimable events, even when Soul's unread dot has vanished. */
+    /** Head-of-line scheduling preserves message order across retries and uncertain sends. */
     fun readyConversations(limit: Int = 100): List<InboxConversationSummary> {
         val now = System.currentTimeMillis()
         val rows = mutableListOf<InboxConversationSummary>()
@@ -319,11 +397,11 @@ internal class MessageDeliveryQueue(context: Context) :
                  AND x.queue_state IN ('PENDING','RETRY_WAIT') AND x.next_attempt_at<=?)
                FROM conversation_events e JOIN inbox_conversations c ON c.thread_id=e.thread_id
                WHERE e.queue_state IN ('PENDING','RETRY_WAIT') AND e.next_attempt_at<=?
-                 AND e.event_id=(SELECT MAX(y.event_id) FROM conversation_events y
-                   WHERE y.thread_id=e.thread_id AND y.queue_state IN ('PENDING','RETRY_WAIT')
-                     AND y.next_attempt_at<=?)
+                 AND e.event_id=(SELECT MIN(y.event_id) FROM conversation_events y
+                   WHERE y.thread_id=e.thread_id
+                     AND y.queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER'))
                ORDER BY e.observed_at ASC LIMIT ?""".trimIndent(),
-            arrayOf(now.toString(), now.toString(), now.toString(), limit.coerceIn(1, 500).toString()),
+            arrayOf(now.toString(), now.toString(), limit.coerceIn(1, 500).toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) rows += InboxConversationSummary(
                 threadId = cursor.getString(0),
