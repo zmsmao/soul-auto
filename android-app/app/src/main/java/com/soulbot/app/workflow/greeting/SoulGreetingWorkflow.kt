@@ -120,7 +120,28 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             return false
         }
         val greetingEventKey = host.currentIncomingMessageKeys(name).joinToString(",")
-        val reply = host.generateValidatedChatReply(name, thread, new) ?: run {
+        val generationResult = host.generateValidatedChatReply(name, thread, new)
+        val reply = when (generationResult) {
+            is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
+            is ChatReplyGenerationResult.NoReplyRequired -> {
+                seen.markNoReplyRequiredEvents(
+                    host.memoryThreadId(name),
+                    newEvents,
+                    generationResult.reason,
+                )
+                greetDb.recordGreet(systemGreetingName, replyContext)
+                RuntimeLog.record(
+                    host.context,
+                    "greeting reply intentionally skipped; reason=${generationResult.reason}; contactId=${DiagnosticIdentity.contactId(host.context, name)}",
+                )
+                host.setNextStep("$name 本轮无需回复，已归档", 1000)
+                if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
+                else { host.pressBack(); host.sleep(1000) }
+                return false
+            }
+            null -> null
+        }
+        if (reply.isNullOrBlank()) {
             if (host.isExpectedConversation(name) &&
                 host.currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
             ) {
