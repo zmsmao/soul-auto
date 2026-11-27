@@ -531,7 +531,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
                 ReplyReviewDecision.SKIP -> {
                     cancellation.throwIfCancelled()
                     RuntimeLog.record(host.context, "reply review skipped sending; reason=explicit_boundary")
-                    return ChatReplyGenerationResult.NoReplyRequired("explicit_boundary")
+                    return ReplyPipelinePolicy.noReplyRequiredResult(review)
                 }
                 ReplyReviewDecision.REWRITE -> {
                     val revised = review.finalReply?.let(ReplyNaturalness::sanitize)
