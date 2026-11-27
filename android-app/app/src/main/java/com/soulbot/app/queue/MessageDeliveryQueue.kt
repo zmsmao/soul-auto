@@ -75,10 +75,14 @@ internal class MessageDeliveryQueue(context: Context) :
                 put("display_name", displayName); put("contact_id", contactId)
                 put("scene", scene); put("initialized", 1); put("last_detected_at", now)
             }, "thread_id=?", arrayOf(threadId))
-            val pendingStart = if (initialized) 0 else (incoming.size - pendingCount.coerceIn(0, incoming.size))
+            val pendingStart = incoming.size - pendingCount.coerceIn(0, incoming.size)
             incoming.forEachIndexed { index, event ->
                 if (event.key.isBlank() || event.text.isBlank()) return@forEachIndexed
-                val initialState = if (!initialized && index < pendingStart) "BASELINE" else "PENDING"
+                val initialState = when {
+                    index >= pendingStart -> "PENDING"
+                    initialized -> "HANDLED_MANUALLY"
+                    else -> "BASELINE"
+                }
                 val eventValues = ContentValues().apply {
                     put("thread_id", threadId); put("event_key", event.key); put("scene", scene)
                     put("direction", "IN"); put("content", event.text)
