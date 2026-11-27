@@ -15,6 +15,7 @@ import com.soulbot.app.conversation.context.ContactMemoryContextProvider
 import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
 import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueuePolicy
+import com.soulbot.app.queue.MessageQueueState
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -83,6 +84,16 @@ internal class SoulConversationContextManager(private val host: SoulConversation
             )
         }
         return claimed.map { ConversationIncomingEvent(it.key, it.text) }
+    }
+
+    fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: MessageQueueState,
+        reason: String = "",
+    ) {
+        if (eventKeys.isEmpty()) return
+        deliveryQueue.updateEvents(memoryThreadId(contactName), eventKeys, state, reason)
     }
 
     fun currentNativeSoulUserId(): String? {
