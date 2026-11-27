@@ -59,6 +59,14 @@ internal class SoulConversationContextManager(private val host: SoulConversation
             incoming = events,
             pendingCount = pendingCount,
         )
+        val lastOutgoingIndex = thread.indexOfLast { it.first == "out" }
+        if (lastOutgoingIndex >= 0) {
+            val answeredIncomingCount = thread.take(lastOutgoingIndex).count { it.first == "in" }
+            deliveryQueue.markManuallyHandledIfPending(
+                threadId,
+                events.take(answeredIncomingCount).map { it.key },
+            )
+        }
         // Reconcile the crash window where the send ledger was confirmed but queue ACK was not.
         val confirmedKeys = host.memoryDatabase?.confirmedMessageKeys(threadId).orEmpty()
         deliveryQueue.markConfirmedKeys(threadId, confirmedKeys)
