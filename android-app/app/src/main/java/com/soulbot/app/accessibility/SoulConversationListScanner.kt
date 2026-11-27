@@ -73,12 +73,21 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
                 ?.let(host::textOf).orEmpty()
             val time = times.firstOrNull { host.contains(bounds, host.rect(it)) }
                 ?.let(host::textOf).orEmpty()
-            if (name.isNotBlank()) result += UnreadConversationCandidate(
-                name = name,
-                timeText = time,
-                displayOrder = displayOrder,
-                previewText = conversationRowPreview(item, name, time),
-            )
+            if (name.isNotBlank()) {
+                if (ConversationRowPolicy.isPlatformNotice(name)) {
+                    RuntimeLog.record(
+                        host.context,
+                        "unread row excluded; reason=platform_notice; displayName=$name",
+                    )
+                    continue
+                }
+                result += UnreadConversationCandidate(
+                    name = name,
+                    timeText = time,
+                    displayOrder = displayOrder,
+                    previewText = conversationRowPreview(item, name, time),
+                )
+            }
         }
         return Triple(items.size, badges.size, result)
     }
