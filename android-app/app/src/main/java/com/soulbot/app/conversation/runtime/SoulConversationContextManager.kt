@@ -22,6 +22,7 @@ internal interface SoulConversationContextHost {
     val memoryDatabase: ConversationMemoryDatabase?
     val replyReplayDatabase: ReplyReplayDatabase?
     fun currentIncomingMessageKeys(contactName: String): List<String>
+    fun outgoingMessageCount(): Int
     fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint
     fun isOnChat(): Boolean
     fun isExpectedConversation(contactName: String): Boolean
@@ -69,8 +70,19 @@ internal class SoulConversationContextManager(private val host: SoulConversation
         // The durable ledger is authoritative for claimed events. Applying the volatile
         // seen tracker here would suppress an event that the user explicitly unsnoozed
         // or manually requeued from the inbox during the same service session.
-        return deliveryQueue.claimPending(threadId, scene.name)
-            .map { ConversationIncomingEvent(it.key, it.text) }
+        val claimed = deliveryQueue.claimPending(threadId, scene.name)
+        val explicitlyRetried = claimed
+            .filter { it.lastError == "manual_retry_from_inbox" }
+            .map { it.key }
+            .toSet()
+        if (explicitlyRetried.isNotEmpty()) {
+            host.memoryDatabase?.resetUncertainSendAttemptsForEvents(
+                threadId = threadId,
+                eventKeys = explicitlyRetried,
+                outgoingBaseline = host.outgoingMessageCount(),
+            )
+        }
+        return claimed.map { ConversationIncomingEvent(it.key, it.text) }
     }
 
     fun currentNativeSoulUserId(): String? {
