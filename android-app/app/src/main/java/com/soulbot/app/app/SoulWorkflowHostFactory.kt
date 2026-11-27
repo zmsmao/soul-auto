@@ -85,8 +85,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.conversationMemoryDb?.hasHistory(memoryThreadId(name), scene) == true
                 override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>, scene: ReplyScene) =
                     service.learnFromManualReplies(name, thread, scene)
-                override fun unseenIncomingEvents(name: String, thread: List<Pair<String, String>>, seen: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent> =
-                    service.unseenIncomingEvents(name, thread, seen, pendingCount)
+                override fun unseenIncomingEvents(name: String, thread: List<Pair<String, String>>, seen: ConversationSeenTracker, pendingCount: Int, scene: ReplyScene): List<ConversationIncomingEvent> =
+                    service.unseenIncomingEvents(name, thread, seen, pendingCount, scene)
                 override fun memoryThreadId(name: String): String = service.memoryThreadId(name)
                 override fun hasUnreadRedDot(): Boolean = service.hasUnreadRedDot()
                 override fun gotoChatList(): Boolean = service.gotoChatList()
