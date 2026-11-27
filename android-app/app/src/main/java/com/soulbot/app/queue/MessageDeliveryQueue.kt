@@ -309,6 +309,35 @@ internal class MessageDeliveryQueue(context: Context) :
         return rows
     }
 
+    /** Conversations with immediately claimable events, even when Soul's unread dot has vanished. */
+    fun readyConversations(limit: Int = 100): List<InboxConversationSummary> {
+        val now = System.currentTimeMillis()
+        val rows = mutableListOf<InboxConversationSummary>()
+        readableDatabase.rawQuery(
+            """SELECT e.thread_id, c.display_name, e.content, e.observed_at, e.queue_state,
+                (SELECT COUNT(*) FROM conversation_events x WHERE x.thread_id=e.thread_id
+                 AND x.queue_state IN ('PENDING','RETRY_WAIT') AND x.next_attempt_at<=?)
+               FROM conversation_events e JOIN inbox_conversations c ON c.thread_id=e.thread_id
+               WHERE e.queue_state IN ('PENDING','RETRY_WAIT') AND e.next_attempt_at<=?
+                 AND e.event_id=(SELECT MAX(y.event_id) FROM conversation_events y
+                   WHERE y.thread_id=e.thread_id AND y.queue_state IN ('PENDING','RETRY_WAIT')
+                     AND y.next_attempt_at<=?)
+               ORDER BY e.observed_at ASC LIMIT ?""".trimIndent(),
+            arrayOf(now.toString(), now.toString(), now.toString(), limit.coerceIn(1, 500).toString()),
+        ).use { cursor ->
+            while (cursor.moveToNext()) rows += InboxConversationSummary(
+                threadId = cursor.getString(0),
+                displayName = cursor.getString(1),
+                preview = cursor.getString(2),
+                updatedAt = cursor.getLong(3),
+                state = runCatching { MessageQueueState.valueOf(cursor.getString(4)) }
+                    .getOrDefault(MessageQueueState.PENDING),
+                openCount = cursor.getInt(5),
+            )
+        }
+        return rows
+    }
+
     fun counts(): Map<InboxFilter, Int> = mapOf(
         InboxFilter.OPEN to countThreads("PENDING", "PROCESSING", "RETRY_WAIT", "SEND_UNCERTAIN", "DEAD_LETTER"),
         InboxFilter.SNOOZED to countThreads("SUPPRESSED_POLICY"),
