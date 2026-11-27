@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.soulbot.app.conversation.ConversationIncomingEvent
+import com.soulbot.app.conversation.ConversationRowPolicy
 import java.util.UUID
 
 internal enum class MessageQueueState {
@@ -106,6 +107,7 @@ internal class MessageDeliveryQueue(context: Context) :
         var batchId = ""
         db.beginTransaction()
         try {
+            excludeKnownPlatformNoticesLocked(db)
             recoverExpiredLocked(db, now)
             db.rawQuery(
                 "SELECT batch_id FROM reply_batches WHERE thread_id=? AND state='PROCESSING' AND lease_until>? ORDER BY created_at DESC LIMIT 1",
@@ -363,6 +365,8 @@ internal class MessageDeliveryQueue(context: Context) :
     }
 
     fun summaries(filter: InboxFilter, search: String = "", limit: Int = 100): List<InboxConversationSummary> {
+        val db = writableDatabase
+        excludeKnownPlatformNoticesLocked(db)
         val states = when (filter) {
             InboxFilter.OPEN -> listOf("PENDING", "PROCESSING", "RETRY_WAIT", "SEND_UNCERTAIN", "DEAD_LETTER")
             InboxFilter.SNOOZED -> listOf("SUPPRESSED_POLICY")
@@ -373,7 +377,7 @@ internal class MessageDeliveryQueue(context: Context) :
         val args = states + (if (search.isBlank()) emptyList() else listOf("%" + search.trim() + "%", "%" + search.trim() + "%")) +
             states + listOf(limit.coerceIn(1, 500).toString())
         val rows = mutableListOf<InboxConversationSummary>()
-        readableDatabase.rawQuery(
+        db.rawQuery(
             """SELECT e.thread_id, c.display_name, e.content, e.observed_at, e.queue_state,
                 (SELECT COUNT(*) FROM conversation_events x WHERE x.thread_id=e.thread_id
                  AND x.queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER'))
@@ -523,9 +527,11 @@ internal class MessageDeliveryQueue(context: Context) :
 
     /** Head-of-line scheduling preserves message order across retries and uncertain sends. */
     fun readyConversations(limit: Int = 100): List<InboxConversationSummary> {
+        val db = writableDatabase
+        excludeKnownPlatformNoticesLocked(db)
         val now = System.currentTimeMillis()
         val rows = mutableListOf<InboxConversationSummary>()
-        readableDatabase.rawQuery(
+        db.rawQuery(
             """SELECT e.thread_id, c.display_name, e.content, e.observed_at, e.queue_state,
                 (SELECT COUNT(*) FROM conversation_events x WHERE x.thread_id=e.thread_id
                  AND x.queue_state IN ('PENDING','RETRY_WAIT') AND x.next_attempt_at<=?)
@@ -547,14 +553,66 @@ internal class MessageDeliveryQueue(context: Context) :
                 openCount = cursor.getInt(5),
             )
         }
-        return rows
+        return rows.filterNot { ConversationRowPolicy.isPlatformNotice(it.displayName) }
     }
 
-    fun counts(): Map<InboxFilter, Int> = mapOf(
+    fun counts(): Map<InboxFilter, Int> {
+        val db = writableDatabase
+        excludeKnownPlatformNoticesLocked(db)
+        return mapOf(
         InboxFilter.OPEN to countThreads("PENDING", "PROCESSING", "RETRY_WAIT", "SEND_UNCERTAIN", "DEAD_LETTER"),
         InboxFilter.SNOOZED to countThreads("SUPPRESSED_POLICY"),
         InboxFilter.DONE to countThreads("SENT", "HANDLED_MANUALLY", "BASELINE", "NO_REPLY_REQUIRED"),
-    )
+        )
+    }
+
+    private fun excludeKnownPlatformNoticesLocked(db: SQLiteDatabase) {
+        val notices = mutableListOf<Pair<String, String>>()
+        db.rawQuery("SELECT thread_id, display_name FROM inbox_conversations", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                val threadId = cursor.getString(0)
+                val name = cursor.getString(1)
+                if (ConversationRowPolicy.isPlatformNotice(name)) notices += threadId to name
+            }
+        }
+        if (notices.isEmpty()) return
+        val now = System.currentTimeMillis()
+        notices.forEach { (threadId, name) ->
+            db.update(
+                "conversation_events",
+                ContentValues().apply {
+                    put("queue_state", MessageQueueState.NO_REPLY_REQUIRED.name)
+                    put("batch_id", "")
+                    put("lease_until", 0L)
+                    put("updated_at", now)
+                    put("last_error", "system_notice_excluded")
+                },
+                "thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER','SUPPRESSED_POLICY')",
+                arrayOf(threadId),
+            )
+            db.update(
+                "reply_batches",
+                ContentValues().apply {
+                    put("state", MessageQueueState.NO_REPLY_REQUIRED.name)
+                    put("lease_until", 0L)
+                    put("updated_at", now)
+                    put("last_error", "system_notice_excluded")
+                },
+                "thread_id=? AND state IN ('PROCESSING','RETRY_WAIT','INTERRUPTED','SEND_UNCERTAIN','DEAD_LETTER')",
+                arrayOf(threadId),
+            )
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply {
+                    put("state", "DONE")
+                    put("last_error", "system_notice_excluded")
+                    put("last_detected_at", now)
+                },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
+        }
+    }
 
     private fun countThreads(vararg states: String): Int {
         val placeholders = states.joinToString(",") { "?" }
