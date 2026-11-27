@@ -13,6 +13,7 @@ import com.soulbot.app.conversation.context.ContextFragment
 import com.soulbot.app.conversation.context.PersonaContextProvider
 import com.soulbot.app.conversation.context.ContactMemoryContextProvider
 import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
+import com.soulbot.app.queue.MessageDeliveryQueue
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -33,24 +34,36 @@ internal interface SoulConversationContextHost {
 }
 
 internal class SoulConversationContextManager(private val host: SoulConversationContextHost) {
+    private val deliveryQueue by lazy(LazyThreadSafetyMode.NONE) { MessageDeliveryQueue(host.context) }
     fun unseenIncomingEvents(
         contactName: String,
         thread: List<Pair<String, String>>,
         tracker: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent> {
-        if (pendingCount <= 0) return emptyList()
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val eventKeys = host.currentIncomingMessageKeys(contactName)
         val alignedCount = minOf(incomingTexts.size, eventKeys.size)
-        if (alignedCount == 0) return emptyList()
-        val events = incomingTexts.takeLast(alignedCount)
-            .zip(eventKeys.takeLast(alignedCount))
-            .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
-            .takeLast(pendingCount)
+        val events = if (alignedCount == 0) emptyList() else {
+            incomingTexts.takeLast(alignedCount)
+                .zip(eventKeys.takeLast(alignedCount))
+                .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
+        }
         val threadId = memoryThreadId(contactName)
+        deliveryQueue.observeSnapshot(
+            threadId = threadId,
+            contactId = DiagnosticIdentity.contactId(host.context, contactName),
+            displayName = contactName,
+            scene = scene.name,
+            incoming = events,
+            pendingCount = pendingCount,
+        )
+        // Reconcile the crash window where the send ledger was confirmed but queue ACK was not.
         val confirmedKeys = host.memoryDatabase?.confirmedMessageKeys(threadId).orEmpty()
-        return tracker.unseenEvents(threadId, events, confirmedKeys)
+        deliveryQueue.markConfirmedKeys(threadId, confirmedKeys)
+        return deliveryQueue.claimPending(threadId, scene.name)
+            .map { ConversationIncomingEvent(it.key, it.text) }
     }
 
     fun currentNativeSoulUserId(): String? {
