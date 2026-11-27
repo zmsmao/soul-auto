@@ -45,6 +45,13 @@ internal class SoulConversationContextManager(private val host: SoulConversation
         pendingCount: Int,
         scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent> {
+        if (ConversationRowPolicy.isPlatformNotice(contactName)) {
+            RuntimeLog.record(
+                host.context,
+                "inbox event capture skipped; reason=platform_notice; displayName=$contactName",
+            )
+            return emptyList()
+        }
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val eventKeys = host.currentIncomingMessageKeys(contactName)
         val events = MessageQueuePolicy.alignIncoming(incomingTexts, eventKeys)
