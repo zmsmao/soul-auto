@@ -356,12 +356,19 @@ class MainActivity : AppCompatActivity() {
                 it.state == MessageQueueState.SEND_UNCERTAIN ||
                 it.state == MessageQueueState.DEAD_LETTER
         }.map { it.key }
+        val snoozed = events.filter { it.state == MessageQueueState.SUPPRESSED_POLICY }.map { it.key }
 
         val dialog = AlertDialog.Builder(this)
             .setTitle(item.displayName)
             .setMessage(details)
             .setCancelable(true)
-        if (uncertain.isNotEmpty()) {
+        if (selectedFilter == InboxFilter.SNOOZED && snoozed.isNotEmpty()) {
+            dialog.setPositiveButton("恢复到 Open") { _, _ ->
+                deliveryQueue.unsnooze(item.threadId, snoozed)
+                renderInbox()
+            }
+            dialog.setNegativeButton("关闭", null)
+        } else if (uncertain.isNotEmpty()) {
             dialog.setPositiveButton("已确认发送") { _, _ ->
                 deliveryQueue.updateEvents(item.threadId, uncertain, MessageQueueState.SENT)
                 renderInbox()
