@@ -78,11 +78,7 @@ internal class MessageDeliveryQueue(context: Context) :
             val pendingStart = incoming.size - pendingCount.coerceIn(0, incoming.size)
             incoming.forEachIndexed { index, event ->
                 if (event.key.isBlank() || event.text.isBlank()) return@forEachIndexed
-                val initialState = when {
-                    index >= pendingStart -> "PENDING"
-                    initialized -> "HANDLED_MANUALLY"
-                    else -> "BASELINE"
-                }
+                val initialState = MessageQueuePolicy.initialState(index, pendingStart, initialized).name
                 val eventValues = ContentValues().apply {
                     put("thread_id", threadId); put("event_key", event.key); put("scene", scene)
                     put("direction", "IN"); put("content", event.text)
@@ -338,8 +334,6 @@ internal class MessageDeliveryQueue(context: Context) :
             }
         }
 
-    private fun retryDelay(attempt: Int): Long = when (attempt) {
-        1 -> 3_000L; 2 -> 10_000L; 3 -> 30_000L; 4 -> 120_000L; else -> 300_000L
-    }
+    private fun retryDelay(attempt: Int): Long = MessageQueuePolicy.retryDelay(attempt)
     companion object { private const val DEFAULT_LEASE_MS = 5 * 60_000L }
 }
