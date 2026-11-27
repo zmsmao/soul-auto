@@ -409,6 +409,7 @@ class MainActivity : AppCompatActivity() {
         MessageQueueState.RETRY_WAIT -> "等待重试"
         MessageQueueState.SEND_UNCERTAIN -> "发送待确认"
         MessageQueueState.DEAD_LETTER -> "需要检查"
+        MessageQueueState.NO_REPLY_REQUIRED -> "无需回复 · 已归档"
         MessageQueueState.SUPPRESSED_POLICY -> "暂缓 · 回复节奏"
         MessageQueueState.HANDLED_MANUALLY -> "手动处理"
         MessageQueueState.BASELINE -> "历史记录"
@@ -426,6 +427,7 @@ class MainActivity : AppCompatActivity() {
             MessageQueueState.BASELINE -> "历史记录"
             MessageQueueState.SEND_UNCERTAIN -> "发送待确认"
             MessageQueueState.DEAD_LETTER -> "需要检查"
+            MessageQueueState.NO_REPLY_REQUIRED -> "无需回复"
         }
 
     private fun avatarColor(name: String): Int {
