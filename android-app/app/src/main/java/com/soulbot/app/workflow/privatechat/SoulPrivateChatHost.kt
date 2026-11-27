@@ -31,7 +31,7 @@ internal interface SoulPrivateChatHost : SoulWorkflowHost {
         contactName: String,
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
-    ): String?
+    ): ChatReplyGenerationResult?
     fun normalizeReply(text: String): String
     fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean
     fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String)
