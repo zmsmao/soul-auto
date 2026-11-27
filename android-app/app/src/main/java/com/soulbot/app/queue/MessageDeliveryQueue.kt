@@ -127,8 +127,7 @@ internal class MessageDeliveryQueue(context: Context) :
                     }
                 }
                 if (firstId < 0L ||
-                    firstState !in setOf("PENDING", "RETRY_WAIT") ||
-                    firstRetryAt > now
+                    !MessageQueuePolicy.isReadyHead(firstState, firstRetryAt, now)
                 ) {
                     db.setTransactionSuccessful()
                     return emptyList()
