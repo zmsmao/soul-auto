@@ -12,6 +12,7 @@ import com.soulbot.app.diagnostics.*
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
+import com.soulbot.app.queue.MessageQueueState
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
