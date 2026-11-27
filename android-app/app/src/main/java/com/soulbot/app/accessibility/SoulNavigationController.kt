@@ -87,6 +87,22 @@ internal class SoulNavigationController(
             if (before.isNotEmpty() && after == before) return
         }
     }
+    /** Scroll the inbox down by one viewport and report whether its visible rows changed. */
+    fun scrollConversationPageDown(): Boolean {
+        if (!isOnList()) return false
+        val before = conversationListSnapshot()
+        val list = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
+        val accepted = runCatching {
+            list?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true
+        }.getOrDefault(false)
+        if (!accepted) {
+            ui.swipeVertically(SoulAccessibilityIds.ID_CONV_LIST, 0.84f, 0.30f, 450)
+        }
+        pause(650)
+        val after = conversationListSnapshot()
+        return after.isNotBlank() && after != before
+    }
+
     fun returnToList(): Boolean {
         updateStatus("返回会话列表")
         // 从任意界面返回聊天列表：二级界面按 back，广场点聊天 tab
