@@ -30,6 +30,21 @@ internal object UnreadConversationPolicy {
                 .thenBy { it.displayOrder },
         )
 
+    /** Merge overlapping viewport results without losing the first observed row order. */
+    fun mergeVisiblePages(
+        pages: Iterable<List<UnreadConversationCandidate>>,
+    ): List<UnreadConversationCandidate> {
+        val byName = linkedMapOf<String, UnreadConversationCandidate>()
+        pages.forEach { page ->
+            page.forEach { candidate ->
+                if (candidate.name.isNotBlank()) byName.putIfAbsent(candidate.name, candidate)
+            }
+        }
+        return byName.values.mapIndexed { index, candidate ->
+            candidate.copy(displayOrder = index)
+        }
+    }
+
     /**
      * High-priority signals include explicit contact/meeting/photo interest and
      * emotional follow-ups. This only changes queue order, never the reply content.
