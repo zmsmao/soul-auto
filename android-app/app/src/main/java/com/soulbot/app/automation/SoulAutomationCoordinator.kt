@@ -35,6 +35,9 @@ internal class SoulAutomationCoordinator(
             when {
                 state == "SENT" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SENT)
                 state == "SUPPRESSED_POLICY" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SUPPRESSED_POLICY)
+                state.startsWith("NO_REPLY_REQUIRED:") -> deliveryQueue.updateEvents(
+                    threadId, keys, MessageQueueState.NO_REPLY_REQUIRED, state.substringAfter(':'),
+                )
                 state.startsWith("SEND_UNCERTAIN:") -> deliveryQueue.markSendUncertain(threadId, keys, state.substringAfter(':'))
                 state.startsWith("RETRY_WAIT:") -> deliveryQueue.retryEvents(threadId, keys, state.substringAfter(':'))
             }
