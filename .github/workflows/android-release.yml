@@ -89,6 +89,12 @@ jobs:
         run: |
           APK_PATH="android-app/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK_PATH"
+          VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]+"([^"]+)".*/\1/p' android-app/app/build.gradle)"
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::Could not read versionName from android-app/app/build.gradle."
+            exit 1
+          fi
+          echo "SOULBOT_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           APKSIGNER="$(find "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH" | tee "$RUNNER_TEMP/apksigner-verification.txt"
@@ -99,14 +105,14 @@ jobs:
             exit 1
           fi
           mkdir -p signed-validation
-          cp "$APK_PATH" signed-validation/SoulBot-2.0.0-signed-validation.apk
-          (cd signed-validation && sha256sum SoulBot-2.0.0-signed-validation.apk > SoulBot-2.0.0-signed-validation.apk.sha256)
+          cp "$APK_PATH" "signed-validation/SoulBot-$VERSION_NAME-signed-validation.apk"
+          (cd signed-validation && sha256sum "SoulBot-$VERSION_NAME-signed-validation.apk" > "SoulBot-$VERSION_NAME-signed-validation.apk.sha256")
           echo "APK signature and expected certificate identity verified."
 
       - name: Upload signed validation APK (not a public Release)
         uses: actions/upload-artifact@v4
         with:
-          name: soulbot-2.0.0-signed-validation
+          name: soulbot-${{ env.SOULBOT_VERSION_NAME }}-signed-validation
           path: signed-validation/*
           if-no-files-found: error
           retention-days: 7
