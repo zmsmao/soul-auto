@@ -66,6 +66,9 @@ internal class SoulConversationContextManager(private val host: SoulConversation
         // Reconcile the crash window where the send ledger was confirmed but queue ACK was not.
         val confirmedKeys = host.memoryDatabase?.confirmedMessageKeys(threadId).orEmpty()
         deliveryQueue.markConfirmedKeys(threadId, confirmedKeys)
+        // The durable ledger is authoritative for claimed events. Applying the volatile
+        // seen tracker here would suppress an event that the user explicitly unsnoozed
+        // or manually requeued from the inbox during the same service session.
         return deliveryQueue.claimPending(threadId, scene.name)
             .map { ConversationIncomingEvent(it.key, it.text) }
     }
