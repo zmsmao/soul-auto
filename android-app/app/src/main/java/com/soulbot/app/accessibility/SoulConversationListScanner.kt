@@ -10,6 +10,8 @@ import com.soulbot.app.conversation.*
 internal interface SoulConversationListHost {
     val context: Context
     fun isOnList(): Boolean
+    fun scrollToTop()
+    fun scrollPageDown(): Boolean
     fun findByIds(id: String): List<AccessibilityNodeInfo>
     fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean
     fun rect(node: AccessibilityNodeInfo): Rect
@@ -21,45 +23,63 @@ internal interface SoulConversationListHost {
 internal class SoulConversationListScanner(private val host: SoulConversationListHost) {
     fun snapshot(): String =
         host.findByIds(SoulAccessibilityIds.ID_CONV_NAME)
+            .filter(host::isVisibleOnScreen)
             .map { node -> host.rect(node).top to host.textOf(node) }
             .sortedBy { it.first }
             .joinToString("|") { (top, name) -> "$top:$name" }
 
+    /** Scan every visible viewport; names are deduplicated while the list is paged. */
     fun scanUnread(): List<UnreadConversationCandidate> {
         if (!host.isOnList()) return emptyList()
+        val collected = linkedMapOf<String, UnreadConversationCandidate>()
+        var pages = 0
+        var visibleRows = 0
+        var visibleBadges = 0
+        host.scrollToTop()
+        try {
+            while (host.isOnList() && pages < MAX_INBOX_PAGES) {
+                val page = scanVisibleUnread()
+                visibleRows += page.first
+                visibleBadges += page.second
+                page.third.forEach { candidate -> collected.putIfAbsent(candidate.name, candidate) }
+                pages += 1
+                if (!host.scrollPageDown()) break
+            }
+        } finally {
+            if (host.isOnList()) host.scrollToTop()
+        }
+        val ordered = UnreadConversationPolicy.oldestFirst(collected.values.toList())
+        RuntimeLog.record(
+            host.context,
+            "unread scan completed; pages=$pages; visibleRows=$visibleRows; visibleBadges=$visibleBadges; candidates=\${ordered.size}; selectedContact=\${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(host.context, it.name) } ?: "none"}",
+        )
+        return ordered
+    }
+
+    private fun scanVisibleUnread(): Triple<Int, Int, List<UnreadConversationCandidate>> {
         val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM)
             .filter(host::isVisibleOnScreen)
             .sortedBy { host.rect(it).top }
         val names = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME).filter(host::isVisibleOnScreen)
         val times = host.findByIds(SoulAccessibilityIds.ID_CONV_TIME).filter(host::isVisibleOnScreen)
-        // Soul keeps recycled/hidden unread badges in the accessibility tree. Using
-        // them made an already-read row reopen forever and wait for content that
-        // could never be "unread" again.
+        // Only visible badges count: Soul keeps recycled/hidden unread badges in the tree.
         val badges = host.findByIds(SoulAccessibilityIds.ID_UNREAD_BADGE).filter(host::isVisibleOnScreen)
         val result = mutableListOf<UnreadConversationCandidate>()
         for ((displayOrder, item) in items.withIndex()) {
-            val ib = host.rect(item)
-            val hasBadge = badges.any { host.contains(ib, host.rect(it)) }
-            if (!hasBadge) continue
-            var name = ""
-            for (n in names) { if (host.contains(ib, host.rect(n))) { name = host.textOf(n); break } }
-            var time = ""
-            for (tm in times) { if (host.contains(ib, host.rect(tm))) { time = host.textOf(tm); break } }
-            if (name.isNotBlank()) {
-                result += UnreadConversationCandidate(
-                    name = name,
-                    timeText = time,
-                    displayOrder = displayOrder,
-                    previewText = conversationRowPreview(item, name, time),
-                )
-            }
+            val bounds = host.rect(item)
+            if (badges.none { host.contains(bounds, host.rect(it)) }) continue
+            val name = names.firstOrNull { host.contains(bounds, host.rect(it)) }
+                ?.let(host::textOf).orEmpty()
+            val time = times.firstOrNull { host.contains(bounds, host.rect(it)) }
+                ?.let(host::textOf).orEmpty()
+            if (name.isNotBlank()) result += UnreadConversationCandidate(
+                name = name,
+                timeText = time,
+                displayOrder = displayOrder,
+                previewText = conversationRowPreview(item, name, time),
+            )
         }
-        val ordered = UnreadConversationPolicy.oldestFirst(result)
-        RuntimeLog.record(
-            host.context,
-            "unread scan completed; visibleRows=${items.size}; visibleBadges=${badges.size}; candidates=${ordered.size}; selectedContact=${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(host.context, it.name) } ?: "none"}",
-        )
-        return ordered
+        return Triple(items.size, badges.size, result)
     }
 
     private fun conversationRowPreview(
@@ -103,16 +123,28 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
     }
 
     fun findConversation(name: String): AccessibilityNodeInfo? {
-        if (!host.isOnList()) return null
-        val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM).filter(host::isVisibleOnScreen)
-        val names = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME).filter(host::isVisibleOnScreen)
-        for (item in items) {
-            val ib = host.rect(item)
-            for (n in names) {
-                if (host.contains(ib, host.rect(n)) && host.textOf(n) == name) return item
+        if (!host.isOnList() || name.isBlank()) return null
+        host.scrollToTop()
+        for (page in 0 until MAX_INBOX_PAGES) {
+            val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM)
+                .filter(host::isVisibleOnScreen)
+            val names = host.findByIds(SoulAccessibilityIds.ID_CONV_NAME)
+                .filter(host::isVisibleOnScreen)
+            for (item in items) {
+                val bounds = host.rect(item)
+                val match = names.firstOrNull {
+                    host.contains(bounds, host.rect(it)) && host.textOf(it) == name
+                }
+                if (match != null) return item
             }
+            if (!host.scrollPageDown()) break
         }
+        host.scrollToTop()
         return null
+    }
+
+    companion object {
+        private const val MAX_INBOX_PAGES = 60
     }
 
     // ===== LLM =====
