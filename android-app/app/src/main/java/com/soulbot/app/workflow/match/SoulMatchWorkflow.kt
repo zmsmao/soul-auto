@@ -147,7 +147,24 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         }
 
         val finalReply = if (replyingToMessage) {
-            host.generateValidatedChatReply(contactName, thread, newIncoming, ReplyScene.SOUL_MATCH)
+            when (val result = host.generateValidatedChatReply(contactName, thread, newIncoming, ReplyScene.SOUL_MATCH)) {
+                null -> null
+                is ChatReplyGenerationResult.ReadyToSend -> result.text
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    seen.markNoReplyRequiredEvents(
+                        host.memoryThreadId(contactName),
+                        newIncomingEvents,
+                        result.reason,
+                    )
+                    RuntimeLog.record(
+                        host.context,
+                        "soul-match reply intentionally skipped; reason=${result.reason}; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}",
+                    )
+                    host.setNextStep("匹配会话本轮无需回复，返回星球页", 800)
+                    host.gotoSoulPlanet()
+                    return false
+                }
+            }
         } else {
             host.generateValidatedOpening(
                 "根据 $contactName 的匹配资料生成开场白",
