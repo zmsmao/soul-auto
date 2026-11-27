@@ -216,7 +216,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     contactName: String,
                     thread: List<Pair<String, String>>,
                     focusIncoming: List<String>,
-                ): String? =
+                ): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming)
                 override fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
                     service.replyToCurrentConversation(name, seen)
