@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.greeting
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android and conversation capabilities used by the greeting workflow. */
