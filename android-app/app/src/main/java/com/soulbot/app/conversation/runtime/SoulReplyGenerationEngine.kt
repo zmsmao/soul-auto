@@ -286,7 +286,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
         scene: ReplyScene = ReplyScene.CHAT,
-    ): String? {
+    ): ChatReplyGenerationResult? {
         host.activeGenerationCancellation?.cancel()
         val cancellation = ModelCallCancellation()
         host.activeGenerationCancellation = cancellation
@@ -334,7 +334,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
         focusIncoming: List<String>,
         scene: ReplyScene,
         cancellation: ModelCallCancellation,
-    ): String? {
+    ): ChatReplyGenerationResult? {
         cancellation.throwIfCancelled()
         val startedAt = SystemClock.elapsedRealtime()
         val deadline = startedAt + 90_000L
@@ -530,7 +530,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
             when (review?.decision) {
                 ReplyReviewDecision.SKIP -> {
                     RuntimeLog.record(host.context, "reply review skipped sending; reason=explicit_boundary")
-                    return null
+                    return ChatReplyGenerationResult.NoReplyRequired("explicit_boundary")
                 }
                 ReplyReviewDecision.REWRITE -> {
                     val revised = review.finalReply?.let(ReplyNaturalness::sanitize)
@@ -562,7 +562,7 @@ internal class SoulReplyGenerationEngine(private val host: SoulReplyGenerationHo
             host.context,
             "reply generation accepted; depth=$depth; elapsedMs=${SystemClock.elapsedRealtime() - startedAt}; chars=${finalCandidate.length}; endpointId=${writer.endpointId}",
         )
-        return finalCandidate
+        return ChatReplyGenerationResult.ReadyToSend(finalCandidate)
     }
 
     fun generateValidatedOpening(
