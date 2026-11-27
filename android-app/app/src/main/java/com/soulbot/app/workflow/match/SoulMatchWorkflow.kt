@@ -117,7 +117,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
         if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
-            seen.markSeenEvents(host.memoryThreadId(contactName), newIncomingEvents)
+            seen.markSuppressedEvents(host.memoryThreadId(contactName), newIncomingEvents)
             host.setNextStep("匹配聊天连续收到简短回应，本轮自然停顿")
             host.gotoSoulPlanet()
             return false
@@ -160,6 +160,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             ) {
                 return host.replyToCurrentConversation(contactName, seen)
             }
+            seen.retryEvents(host.memoryThreadId(contactName), newIncomingEvents, "generation_failed")
             RuntimeLog.record(host.context, "soul-match reply generation exhausted")
             host.setNextStep("匹配回复生成失败，返回星球避免卡住", 2000)
             host.sleep(2000)
@@ -185,6 +186,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             if (host.isOnChat() && host.isExpectedConversation(contactName)) {
                 return host.replyToCurrentConversation(contactName, seen)
             }
+            if (replyingToMessage) seen.retryEvents(host.memoryThreadId(contactName), newIncomingEvents, "snapshot_changed_before_send")
             return false
         }
         val matchOpeningKey = if (replyingToMessage) null else {
@@ -217,6 +219,8 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             host.setNextStep("灵魂匹配开场白已发送，返回星球页", 1200)
             host.sleep(1200)
             host.gotoSoulPlanet()
+        } else if (replyingToMessage) {
+            seen.markUncertainEvents(host.memoryThreadId(contactName), newIncomingEvents, "send_not_confirmed")
         } else if (host.isOnChat() && host.isExpectedConversation(contactName) &&
             host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
         ) {
