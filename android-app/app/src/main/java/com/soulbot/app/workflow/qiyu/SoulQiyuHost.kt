@@ -26,6 +26,12 @@ internal interface SoulQiyuHost : SoulWorkflowHost {
     fun unseenIncomingEvents(contactName: String, thread: List<Pair<String, String>>, tracker: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent>
     fun memoryThreadId(contactName: String): String
     fun currentIncomingMessageKeys(contactName: String): List<String>
+    fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: com.soulbot.app.queue.MessageQueueState,
+        reason: String = "",
+    )
     fun visibleTitleTexts(): List<String>
     fun readQiyuSignature(): String
     fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String?
