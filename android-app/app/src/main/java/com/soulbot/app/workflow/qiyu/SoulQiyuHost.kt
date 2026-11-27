@@ -34,7 +34,7 @@ internal interface SoulQiyuHost : SoulWorkflowHost {
     )
     fun visibleTitleTexts(): List<String>
     fun readQiyuSignature(): String
-    fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String?
+    fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult?
     fun generateValidatedOpening(action: String, context: OpeningContext): String?
     fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo>
     fun splitReply(text: String): List<String>
