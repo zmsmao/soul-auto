@@ -476,6 +476,13 @@ class SoulBotService : AccessibilityService() {
     internal fun readThread(): List<Pair<String, String>> = messageReader.readThread()
 
     internal fun currentIncomingMessageKeys(contactName: String): List<String> = messageReader.currentIncomingMessageKeys(contactName)
+    internal fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: MessageQueueState,
+        reason: String = "",
+    ) = conversationContextManager.updateQueueEvents(contactName, eventKeys, state, reason)
+
 
     internal fun unseenIncomingEvents(
         contactName: String,
