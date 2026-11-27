@@ -38,7 +38,7 @@ internal interface SoulMatchHost : SoulWorkflowHost {
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
         scene: ReplyScene,
-    ): String?
+    ): ChatReplyGenerationResult?
     fun generateValidatedOpening(action: String, context: OpeningContext): String?
     fun currentConversationHasChanged(name: String, thread: List<Pair<String, String>>): Boolean
     fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean
