@@ -142,8 +142,30 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
         )
         val replying = route == OpeningConversationAction.REPLY
         val eventAnchor = host.currentIncomingMessageKeys(contactName).joinToString(",")
-        val finalReply = if (replying) {
+        val generationResult = if (replying) {
             host.generateValidatedChatReply(contactName, thread, pending, ReplyScene.QIYU)
+        } else null
+        val finalReply = if (replying) {
+            when (generationResult) {
+                null -> null
+                is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    host.updateQueueEvents(
+                        contactName,
+                        pendingEvents.map { it.key },
+                        MessageQueueState.NO_REPLY_REQUIRED,
+                        generationResult.reason,
+                    )
+                    pendingQiyu = null
+                    RuntimeLog.record(
+                        host.context,
+                        "qiyu reply intentionally skipped; reason=${generationResult.reason}; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}",
+                    )
+                    host.setNextStep("奇遇铃本轮无需回复，已归档", 800)
+                    host.gotoChatList()
+                    return false
+                }
+            }
         } else host.generateValidatedOpening("优先生成奇遇铃开场", openingContext)
         if (finalReply == null) {
             if (host.pendingIncomingVoiceBubbles().isNotEmpty() || host.readThread() != thread ||
@@ -253,6 +275,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
     private fun finishQiyuSend(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         pendingQiyu = null
         qiyuSeen.markSeen(host.memoryThreadId(session.contactName), prepared.pendingEventKeys)
+        host.updateQueueEvents(session.contactName, prepared.pendingEventKeys, MessageQueueState.SENT)
         host.recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening, scene = ReplyScene.QIYU)
         host.recordHistory(session.contactName,
             prepared.opening?.let { "奇遇铃资料：${it.content}" } ?: prepared.pending.joinToString("\n"), prepared.text)
