@@ -156,6 +156,7 @@ internal class SoulServiceComponentFactory(private val service: SoulBotService) 
             override val replyReplayDatabase: ReplyReplayDatabase? get() = service.replyReplayDb
             override fun currentIncomingMessageKeys(contactName: String): List<String> =
                 service.currentIncomingMessageKeys(contactName)
+            override fun outgoingMessageCount(): Int = service.outgoingMessageCount()
             override fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint =
                 OpeningReplyPolicy.fingerprint(reply, context)
             override fun isOnChat(): Boolean = service.isOnChat()
