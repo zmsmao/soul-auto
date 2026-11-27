@@ -1,5 +1,7 @@
 package com.soulbot.app.policy
 
+import com.soulbot.app.conversation.ChatReplyGenerationResult
+
 enum class ReplyGenerationDepth { SINGLE, REVIEW, ANALYZE_AND_REVIEW }
 enum class ReplyReviewDecision { PASS, REWRITE, SKIP }
 
@@ -111,6 +113,13 @@ object ReplyPipelinePolicy {
             relationshipSignal = (json["relationship_signal"] as? String).orEmpty().ifBlank { "none" }.trim().take(100),
             signalConfidence = if (confidence.isFinite()) confidence.coerceIn(0.0, 1.0) else 0.0,
             factsToUse = facts.distinct(),
+        )
+    }
+
+    fun noReplyRequiredResult(review: ReplyReview?): ChatReplyGenerationResult.NoReplyRequired? {
+        if (review?.decision != ReplyReviewDecision.SKIP) return null
+        return ChatReplyGenerationResult.NoReplyRequired(
+            review.issues.firstOrNull() ?: "explicit_boundary",
         )
     }
 
