@@ -14,6 +14,7 @@ import com.soulbot.app.conversation.context.PersonaContextProvider
 import com.soulbot.app.conversation.context.ContactMemoryContextProvider
 import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
 import com.soulbot.app.queue.MessageDeliveryQueue
+import com.soulbot.app.queue.MessageQueuePolicy
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -44,12 +45,7 @@ internal class SoulConversationContextManager(private val host: SoulConversation
     ): List<ConversationIncomingEvent> {
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val eventKeys = host.currentIncomingMessageKeys(contactName)
-        val alignedCount = minOf(incomingTexts.size, eventKeys.size)
-        val events = if (alignedCount == 0) emptyList() else {
-            incomingTexts.takeLast(alignedCount)
-                .zip(eventKeys.takeLast(alignedCount))
-                .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
-        }
+        val events = MessageQueuePolicy.alignIncoming(incomingTexts, eventKeys)
         val threadId = memoryThreadId(contactName)
         deliveryQueue.observeSnapshot(
             threadId = threadId,
