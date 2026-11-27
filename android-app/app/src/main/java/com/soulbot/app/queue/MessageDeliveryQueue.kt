@@ -587,7 +587,7 @@ internal class MessageDeliveryQueue(context: Context) :
                     put("updated_at", now)
                     put("last_error", "system_notice_excluded")
                 },
-                "thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER','SUPPRESSED_POLICY')",
+                "thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','DEAD_LETTER','SUPPRESSED_POLICY')",
                 arrayOf(threadId),
             )
             db.update(
@@ -598,7 +598,7 @@ internal class MessageDeliveryQueue(context: Context) :
                     put("updated_at", now)
                     put("last_error", "system_notice_excluded")
                 },
-                "thread_id=? AND state IN ('PROCESSING','RETRY_WAIT','INTERRUPTED','SEND_UNCERTAIN','DEAD_LETTER')",
+                "thread_id=? AND state IN ('PROCESSING','RETRY_WAIT','INTERRUPTED','DEAD_LETTER')",
                 arrayOf(threadId),
             )
             db.update(
