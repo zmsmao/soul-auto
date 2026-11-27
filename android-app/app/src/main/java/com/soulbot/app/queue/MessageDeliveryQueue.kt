@@ -16,7 +16,14 @@ internal data class InboxConversationSummary(
     val threadId: String, val displayName: String, val preview: String,
     val updatedAt: Long, val openCount: Int, val state: MessageQueueState,
 )
-internal data class QueueMessageEvent(val key: String, val text: String, val state: MessageQueueState)
+internal data class QueueMessageEvent(
+    val key: String,
+    val text: String,
+    val state: MessageQueueState,
+    val observedAt: Long = 0L,
+    val attemptCount: Int = 0,
+    val lastError: String = "",
+)
 
 /** Durable inbound event ledger, isolated from conversation history schema upgrades. */
 internal class MessageDeliveryQueue(context: Context) :
@@ -386,6 +393,101 @@ internal class MessageDeliveryQueue(context: Context) :
         return rows
     }
 
+    fun eventsForThread(threadId: String, limit: Int = 80): List<QueueMessageEvent> =
+        readableDatabase.rawQuery(
+            """SELECT event_key, content, queue_state, observed_at, attempt_count, last_error
+               FROM conversation_events WHERE thread_id=? ORDER BY event_id DESC LIMIT ?""".trimIndent(),
+            arrayOf(threadId, limit.coerceIn(1, 300).toString()),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(
+                    QueueMessageEvent(
+                        key = cursor.getString(0),
+                        text = cursor.getString(1),
+                        state = runCatching { MessageQueueState.valueOf(cursor.getString(2)) }
+                            .getOrDefault(MessageQueueState.PENDING),
+                        observedAt = cursor.getLong(3),
+                        attemptCount = cursor.getInt(4),
+                        lastError = cursor.getString(5),
+                    ),
+                )
+            }
+        }
+
+    /** Manual acknowledgement is only permitted for events not currently being processed. */
+    @Synchronized
+    fun resolveAsManual(threadId: String, eventKeys: List<String>) {
+        if (eventKeys.isEmpty()) return
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            eventKeys.distinct().forEach { key ->
+                db.update(
+                    "conversation_events",
+                    ContentValues().apply {
+                        put("queue_state", MessageQueueState.HANDLED_MANUALLY.name)
+                        put("lease_until", 0)
+                        put("updated_at", now)
+                        put("last_error", "manually_acknowledged_from_inbox")
+                    },
+                    "thread_id=? AND event_key=? AND queue_state IN ('PENDING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
+                    arrayOf(threadId, key),
+                )
+            }
+            db.update(
+                "reply_batches",
+                ContentValues().apply { put("state", "HANDLED_MANUALLY"); put("updated_at", now) },
+                "thread_id=? AND state IN ('RETRY_WAIT','INTERRUPTED','SEND_UNCERTAIN','DEAD_LETTER')",
+                arrayOf(threadId),
+            )
+            val open = db.rawQuery(
+                "SELECT COUNT(*) FROM conversation_events WHERE thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
+                arrayOf(threadId),
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply { put("state", if (open > 0) "OPEN" else "DONE") },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    /** Explicit user-triggered retry; SEND_UNCERTAIN is retried only after the user confirms it was not sent. */
+    @Synchronized
+    fun retryNow(threadId: String, eventKeys: List<String>) {
+        if (eventKeys.isEmpty()) return
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            eventKeys.distinct().forEach { key ->
+                db.update(
+                    "conversation_events",
+                    ContentValues().apply {
+                        put("queue_state", MessageQueueState.PENDING.name)
+                        put("next_attempt_at", 0L)
+                        put("batch_id", "")
+                        put("lease_until", 0L)
+                        put("updated_at", now)
+                        put("last_error", "manual_retry_from_inbox")
+                    },
+                    "thread_id=? AND event_key=? AND queue_state IN ('RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
+                    arrayOf(threadId, key),
+                )
+            }
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply { put("state", "OPEN"); put("last_error", "") },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
     /** Head-of-line scheduling preserves message order across retries and uncertain sends. */
     fun readyConversations(limit: Int = 100): List<InboxConversationSummary> {
         val now = System.currentTimeMillis()
@@ -434,8 +536,10 @@ internal class MessageDeliveryQueue(context: Context) :
             arrayOf(batchId)).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) add(QueueMessageEvent(
-                    cursor.getString(0), cursor.getString(1),
-                    runCatching { MessageQueueState.valueOf(cursor.getString(2)) }.getOrDefault(MessageQueueState.PROCESSING),
+                    key = cursor.getString(0),
+                    text = cursor.getString(1),
+                    state = runCatching { MessageQueueState.valueOf(cursor.getString(2)) }
+                        .getOrDefault(MessageQueueState.PROCESSING),
                 ))
             }
         }
