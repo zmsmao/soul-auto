@@ -52,7 +52,7 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
         val ordered = UnreadConversationPolicy.oldestFirst(merged)
         RuntimeLog.record(
             host.context,
-            "unread scan completed; pages=$pages; visibleRows=$visibleRows; visibleBadges=$visibleBadges; candidates=\${ordered.size}; selectedContact=\${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(host.context, it.name) } ?: "none"}",
+            "unread scan completed; pages=$pages; visibleRows=$visibleRows; visibleBadges=$visibleBadges; candidates=${ordered.size}; selectedContact=${ordered.firstOrNull()?.let { DiagnosticIdentity.contactId(host.context, it.name) } ?: "none"}",
         )
         return ordered
     }
