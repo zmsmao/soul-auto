@@ -546,7 +546,7 @@ class SoulBotService : AccessibilityService() {
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
         scene: ReplyScene = ReplyScene.CHAT,
-    ): String? = replyGenerationEngine.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
+    ): ChatReplyGenerationResult? = replyGenerationEngine.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
 
     internal fun generateValidatedOpening(
         action: String,
