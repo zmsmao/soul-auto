@@ -8,6 +8,8 @@ import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.GreetingSessionPolicy
+import com.soulbot.app.queue.MessageDeliveryQueue
+import com.soulbot.app.queue.MessageQueueState
 import android.content.Context
 
 /**
@@ -23,7 +25,16 @@ internal class SoulAutomationCoordinator(
     private val host: SoulAutomationHost,
 ) {
     fun run() {
-        val seen = ConversationSeenTracker()
+        val deliveryQueue = MessageDeliveryQueue(context)
+        deliveryQueue.recoverProcessingAtWorkerStart()
+        val seen = ConversationSeenTracker { threadId, keys, state ->
+            when {
+                state == "SENT" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SENT)
+                state == "SUPPRESSED_POLICY" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SUPPRESSED_POLICY)
+                state.startsWith("SEND_UNCERTAIN:") -> deliveryQueue.markSendUncertain(threadId, keys, state.substringAfter(':'))
+                state.startsWith("RETRY_WAIT:") -> deliveryQueue.retryEvents(threadId, keys, state.substringAfter(':'))
+            }
+        }
         val seenDm = mutableSetOf<String>()
         val attemptedDmProfiles = mutableSetOf<String>()
 
@@ -78,6 +89,7 @@ internal class SoulAutomationCoordinator(
 
         mainLoop@ while (host.isRunning) {
             try {
+                deliveryQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
                 if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
                 if (screen.name == lastScreenName) stuckCount++ else {
