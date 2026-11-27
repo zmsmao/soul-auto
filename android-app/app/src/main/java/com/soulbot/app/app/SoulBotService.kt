@@ -251,6 +251,8 @@ class SoulBotService : AccessibilityService() {
 
     internal fun scrollConversationToTop() = navigation.scrollConversationToTop()
 
+    internal fun scrollConversationPageDown(): Boolean = navigation.scrollConversationPageDown()
+
     internal fun findById(id: String): AccessibilityNodeInfo? = pageUi.findById(id)
 
     internal fun findByIds(id: String): List<AccessibilityNodeInfo> = pageUi.findByIds(id)
