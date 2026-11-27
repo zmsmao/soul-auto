@@ -112,7 +112,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             return false
         }
         if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
-            seen.markSeenEvents(host.memoryThreadId(name), newEvents)
+            seen.markSuppressedEvents(host.memoryThreadId(name), newEvents)
             greetDb.recordGreet(systemGreetingName, replyContext)
             host.setNextStep("$name 连续简短回应，本轮自然停顿")
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
@@ -126,12 +126,14 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             ) {
                 return host.replyToCurrentConversation(name, seen)
             }
+            seen.retryEvents(host.memoryThreadId(name), newEvents, "generation_failed")
             host.setNextStep("招呼回复生成失败，返回列表避免卡住", 1200)
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
             else { host.pressBack(); host.sleep(1200) }
             return false
         }
         if (host.currentScreen() == SoulScreen.QIYU_POPUP) {
+            seen.retryEvents(host.memoryThreadId(name), newEvents, "qiyu_interrupted")
             host.handleQiyu()
             return false
         }
@@ -152,6 +154,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             RuntimeLog.record(host.context, "greeting reply regenerated; reason=incoming_changed_before_send")
             return host.replyToCurrentConversation(name, seen)
         } else {
+            seen.markUncertainEvents(host.memoryThreadId(name), newEvents, "send_not_confirmed")
             host.setNextStep("给 $name 的消息未发出，本轮不再重复进入", 1500)
             host.sleep(1500)
         }
