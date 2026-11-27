@@ -12,7 +12,9 @@ internal data class ConversationIncomingEvent(
     val text: String,
 )
 
-internal class ConversationSeenTracker {
+internal class ConversationSeenTracker(
+    private val onEventsMarked: (conversation: String, keys: List<String>, state: String) -> Unit = { _, _, _ -> },
+) {
     private val handledByConversation = mutableMapOf<String, List<String>>()
 
     fun unseen(conversation: String, incoming: List<String>): List<String> {
@@ -35,7 +37,31 @@ internal class ConversationSeenTracker {
     }
 
     fun markSeenEvents(conversation: String, incoming: List<ConversationIncomingEvent>) {
+        markEvents(conversation, incoming, "SENT")
+    }
+
+    fun markSuppressedEvents(conversation: String, incoming: List<ConversationIncomingEvent>) {
+        markEvents(conversation, incoming, "SUPPRESSED_POLICY")
+    }
+
+    fun retryEvents(conversation: String, incoming: List<ConversationIncomingEvent>, reason: String) {
+        if (incoming.isEmpty()) return
+        onEventsMarked(conversation, incoming.map { it.key }, "RETRY_WAIT:$reason")
+    }
+
+    fun markUncertainEvents(conversation: String, incoming: List<ConversationIncomingEvent>, reason: String) {
+        if (incoming.isEmpty()) return
+        onEventsMarked(conversation, incoming.map { it.key }, "SEND_UNCERTAIN:$reason")
+    }
+
+    private fun markEvents(
+        conversation: String,
+        incoming: List<ConversationIncomingEvent>,
+        state: String,
+    ) {
+        if (incoming.isEmpty()) return
         markSeen(conversation, incoming.map { it.key })
+        onEventsMarked(conversation, incoming.map { it.key }, state)
     }
 
     fun markSeen(conversation: String, incoming: List<String>) {
