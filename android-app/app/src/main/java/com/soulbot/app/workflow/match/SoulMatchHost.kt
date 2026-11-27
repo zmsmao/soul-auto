@@ -22,6 +22,7 @@ internal interface SoulMatchHost : SoulWorkflowHost {
         thread: List<Pair<String, String>>,
         seen: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent>
     fun memoryThreadId(name: String): String
     fun hasUnreadRedDot(): Boolean
