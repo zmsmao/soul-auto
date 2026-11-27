@@ -9,7 +9,7 @@ import java.util.UUID
 
 internal enum class MessageQueueState {
     PENDING, PROCESSING, SENT, RETRY_WAIT, SUPPRESSED_POLICY,
-    HANDLED_MANUALLY, BASELINE, SEND_UNCERTAIN, DEAD_LETTER
+    HANDLED_MANUALLY, BASELINE, SEND_UNCERTAIN, DEAD_LETTER, NO_REPLY_REQUIRED
 }
 internal enum class InboxFilter { OPEN, SNOOZED, DONE }
 internal data class InboxConversationSummary(
@@ -224,7 +224,8 @@ internal class MessageDeliveryQueue(context: Context) :
         if (eventKeys.isEmpty()) return
         val allowed = setOf(MessageQueueState.SENT, MessageQueueState.SUPPRESSED_POLICY,
             MessageQueueState.HANDLED_MANUALLY, MessageQueueState.PENDING, MessageQueueState.RETRY_WAIT,
-            MessageQueueState.SEND_UNCERTAIN, MessageQueueState.DEAD_LETTER)
+            MessageQueueState.SEND_UNCERTAIN, MessageQueueState.DEAD_LETTER,
+            MessageQueueState.NO_REPLY_REQUIRED)
         require(state in allowed) { "Unsupported queue transition: $state" }
         val db = writableDatabase
         val now = System.currentTimeMillis()
@@ -365,7 +366,7 @@ internal class MessageDeliveryQueue(context: Context) :
         val states = when (filter) {
             InboxFilter.OPEN -> listOf("PENDING", "PROCESSING", "RETRY_WAIT", "SEND_UNCERTAIN", "DEAD_LETTER")
             InboxFilter.SNOOZED -> listOf("SUPPRESSED_POLICY")
-            InboxFilter.DONE -> listOf("SENT", "HANDLED_MANUALLY", "BASELINE")
+            InboxFilter.DONE -> listOf("SENT", "HANDLED_MANUALLY", "BASELINE", "NO_REPLY_REQUIRED")
         }
         val placeholders = states.joinToString(",") { "?" }
         val searchClause = if (search.isBlank()) "" else "AND (c.display_name LIKE ? OR e.content LIKE ?)"
@@ -552,7 +553,7 @@ internal class MessageDeliveryQueue(context: Context) :
     fun counts(): Map<InboxFilter, Int> = mapOf(
         InboxFilter.OPEN to countThreads("PENDING", "PROCESSING", "RETRY_WAIT", "SEND_UNCERTAIN", "DEAD_LETTER"),
         InboxFilter.SNOOZED to countThreads("SUPPRESSED_POLICY"),
-        InboxFilter.DONE to countThreads("SENT", "HANDLED_MANUALLY", "BASELINE"),
+        InboxFilter.DONE to countThreads("SENT", "HANDLED_MANUALLY", "BASELINE", "NO_REPLY_REQUIRED"),
     )
 
     private fun countThreads(vararg states: String): Int {
