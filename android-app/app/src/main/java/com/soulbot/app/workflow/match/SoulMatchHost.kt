@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.match
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import com.soulbot.app.conversation.OpeningContext
 import com.soulbot.app.conversation.ReplyScene
 import android.view.accessibility.AccessibilityNodeInfo
