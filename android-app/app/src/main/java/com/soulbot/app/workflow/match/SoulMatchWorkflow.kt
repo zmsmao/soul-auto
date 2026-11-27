@@ -113,7 +113,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         val route = OpeningConversationRoute.action(thread, host.hasConversationHistory(contactName, ReplyScene.SOUL_MATCH))
         host.learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
-        val newIncomingEvents = host.unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
+        val newIncomingEvents = host.unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size, ReplyScene.SOUL_MATCH)
         val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
         if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
