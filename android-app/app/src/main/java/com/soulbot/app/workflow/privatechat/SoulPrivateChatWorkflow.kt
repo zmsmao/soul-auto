@@ -139,7 +139,25 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             }
             val eventAnchor = host.currentIncomingMessageKeys(name).joinToString(",")
 
-            val reply = host.generateValidatedChatReply(name, thread, new)
+            val generationResult = host.generateValidatedChatReply(name, thread, new)
+            val reply = when (generationResult) {
+                is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    seen.markNoReplyRequiredEvents(
+                        host.memoryThreadId(name),
+                        newEvents,
+                        generationResult.reason,
+                    )
+                    RuntimeLog.record(
+                        host.context,
+                        "conversation reply intentionally skipped; reason=${generationResult.reason}; contactId=${DiagnosticIdentity.contactId(host.context, name)}",
+                    )
+                    host.setNextStep("$name 本轮无需回复，已归档", 800)
+                    host.gotoChatList()
+                    return false
+                }
+                null -> null
+            }
             if (reply.isNullOrBlank()) {
                 if (!host.isExpectedConversation(name)) return false
                 val refreshedAfterCancel = host.readThread()
