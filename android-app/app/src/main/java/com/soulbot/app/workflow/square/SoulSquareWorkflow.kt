@@ -253,9 +253,12 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                     continue
                 }
                 ProfileOpenResult.TIMEOUT -> {
-                    // A safe tap that does not reach a confirmed profile is never repeated:
-                    // the destination may be a live layer that the current Soul build hides.
-                    if (!host.isOnSquare() && !host.backToSquare()) return false
+                    // The underlying pager can remain visible while a live layer is on top.
+                    // Force one Back action even if the page detector still reports SQUARE.
+                    host.setNextStep("主页未确认，退出当前页面并恢复同城")
+                    host.pressBack()
+                    host.sleep(600)
+                    if (!host.backToSquare()) return false
                     handledInViewport += viewportKey
                     RuntimeLog.record(host.context, "square card skipped; reason=profile_destination_unconfirmed")
                     continue
