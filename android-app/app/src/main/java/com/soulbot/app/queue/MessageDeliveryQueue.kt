@@ -28,7 +28,7 @@ internal data class QueueMessageEvent(
 
 /** Durable inbound event ledger, isolated from conversation history schema upgrades. */
 internal class MessageDeliveryQueue(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "message_delivery_queue.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "message_delivery_queue.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE inbox_conversations (
@@ -55,7 +55,27 @@ internal class MessageDeliveryQueue(context: Context) :
         db.execSQL("CREATE INDEX idx_delivery_event_batch ON conversation_events(batch_id, queue_state)")
         db.execSQL("CREATE INDEX idx_delivery_inbox_state ON inbox_conversations(state, last_detected_at)")
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            // Version 1 copied the whole visible transcript into the queue as BASELINE
+            // and blank-error HANDLED_MANUALLY rows. They are not actionable delivery
+            // events. Keep real user acknowledgements, sent events and uncertain sends.
+            db.delete(
+                "conversation_events",
+                "queue_state='BASELINE' OR " +
+                    "(queue_state='HANDLED_MANUALLY' AND COALESCE(last_error, '')='')",
+                null,
+            )
+            db.execSQL(
+                "DELETE FROM reply_batches WHERE NOT EXISTS " +
+                    "(SELECT 1 FROM conversation_events e WHERE e.batch_id=reply_batches.batch_id)",
+            )
+            db.execSQL(
+                "DELETE FROM inbox_conversations WHERE NOT EXISTS " +
+                    "(SELECT 1 FROM conversation_events e WHERE e.thread_id=inbox_conversations.thread_id)",
+            )
+        }
+    }
 
     /**
      * Persist only events already admitted by QueueAdmissionPolicy.
