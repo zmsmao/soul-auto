@@ -421,7 +421,7 @@ internal class ContactTaskQueue(context: Context) :
                 put("last_error", reason.take(240))
                 put("updated_at", System.currentTimeMillis())
             },
-            "contact_key=? AND state='PROCESSING'",
+            "contact_key=? AND state IN ('PROCESSING','PENDING','RETRY_WAIT')",
             arrayOf(contactKey),
         )
     }
