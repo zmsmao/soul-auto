@@ -30,7 +30,6 @@ import com.soulbot.app.queue.ContactTaskOutcome
 import com.soulbot.app.queue.ContactTaskSummary
 import com.soulbot.app.queue.InboxConversationSummary
 import com.soulbot.app.queue.InboxFilter
-import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueueState
 import java.text.SimpleDateFormat
 import java.util.Date
