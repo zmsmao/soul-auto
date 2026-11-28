@@ -26,6 +26,9 @@ data class RuntimeReadinessSnapshot(
     val isReadyForManualStart: Boolean
         get() = automationStartBlockers().isEmpty()
 
+    val canOpenFloatingController: Boolean
+        get() = overlayGranted
+
     fun automationStartBlockers(): List<String> = buildList {
         if (!soulInstalled) add("请先安装 Soul 客户端")
         if (!accessibilityEnabled) {
