@@ -30,6 +30,16 @@ internal data class ContactTask(
     val updatedAt: Long,
 )
 
+private data class LegacyContactTask(
+    val contactKey: String,
+    val displayName: String,
+    val memoryThreadId: String,
+    val detectedAt: Long,
+    val state: ContactTaskState,
+    val outcome: ContactTaskOutcome?,
+    val unreadCleared: Boolean,
+)
+
 internal data class ContactTaskSummary(
     val contactKey: String,
     val displayName: String,
@@ -100,56 +110,81 @@ internal class ContactTaskQueue(context: Context) :
         }
 
         val legacyFile = appContext.getDatabasePath(LEGACY_DB_NAME)
-        if (legacyFile.exists()) {
+        val migrationSucceeded = if (!legacyFile.exists()) {
+            true
+        } else {
             runCatching {
                 SQLiteDatabase.openDatabase(
                     legacyFile.absolutePath,
                     null,
                     SQLiteDatabase.OPEN_READONLY,
                 ).use { legacy ->
-                    val migrated = mutableListOf<Pair<Triple<String, String, Long>, String>>()
-                    val uncertain = mutableSetOf<String>()
+                    val migrated = mutableListOf<LegacyContactTask>()
                     legacy.rawQuery(
-                        """SELECT c.contact_id, c.display_name, c.first_detected_at, c.thread_id
+                        """SELECT c.contact_id, c.display_name, c.first_detected_at, c.thread_id,
+                                  EXISTS(SELECT 1 FROM conversation_events e
+                                         WHERE e.thread_id=c.thread_id AND e.queue_state='SEND_UNCERTAIN'),
+                                  EXISTS(SELECT 1 FROM conversation_events e
+                                         WHERE e.thread_id=c.thread_id
+                                           AND e.queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','DEAD_LETTER')),
+                                  EXISTS(SELECT 1 FROM conversation_events e
+                                         WHERE e.thread_id=c.thread_id AND e.queue_state='SUPPRESSED_POLICY')
                            FROM inbox_conversations c
                            WHERE c.scene='CHAT'
-                             AND EXISTS (
-                               SELECT 1 FROM conversation_events e
-                               WHERE e.thread_id=c.thread_id
-                                 AND e.queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')
+                             AND (
+                               EXISTS(SELECT 1 FROM conversation_events e
+                                      WHERE e.thread_id=c.thread_id
+                                        AND e.queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER'))
+                               OR EXISTS(SELECT 1 FROM conversation_events e
+                                         WHERE e.thread_id=c.thread_id AND e.queue_state='SUPPRESSED_POLICY')
                              )
                            ORDER BY c.first_detected_at ASC""".trimIndent(),
                         null,
                     ).use { cursor ->
                         while (cursor.moveToNext()) {
-                            val contactId = cursor.getString(0).orEmpty().ifBlank { cursor.getString(3).orEmpty() }
+                            val contactKey = cursor.getString(0).orEmpty().ifBlank { cursor.getString(3).orEmpty() }
                             val name = cursor.getString(1).orEmpty()
-                            if (contactId.isBlank() || name.isBlank() || ConversationRowPolicy.isPlatformNotice(name)) continue
-                            val threadId = cursor.getString(3).orEmpty()
-                            migrated += Triple(contactId, name, cursor.getLong(2)) to threadId
-                            val hasUncertain = legacy.rawQuery(
-                                "SELECT 1 FROM conversation_events WHERE thread_id=? AND queue_state='SEND_UNCERTAIN' LIMIT 1",
-                                arrayOf(threadId),
-                            ).use { it.moveToFirst() }
-                            if (hasUncertain) uncertain += contactId
+                            if (contactKey.isBlank() || name.isBlank() || ConversationRowPolicy.isPlatformNotice(name)) {
+                                continue
+                            }
+                            val memoryThreadId = cursor.getString(3).orEmpty()
+                            val isUncertain = cursor.getInt(4) != 0
+                            val hasActionableEvents = cursor.getInt(5) != 0
+                            val hasSuppressedEvents = cursor.getInt(6) != 0
+                            val state = when {
+                                isUncertain -> ContactTaskState.VERIFY_SEND
+                                hasActionableEvents -> ContactTaskState.PENDING
+                                hasSuppressedEvents -> ContactTaskState.DONE
+                                else -> ContactTaskState.PENDING
+                            }
+                            migrated += LegacyContactTask(
+                                contactKey = contactKey,
+                                displayName = name,
+                                memoryThreadId = memoryThreadId,
+                                detectedAt = cursor.getLong(2),
+                                state = state,
+                                outcome = if (state == ContactTaskState.DONE) ContactTaskOutcome.NO_REPLY else null,
+                                unreadCleared = state == ContactTaskState.DONE,
+                            )
                         }
                     }
+
                     db.beginTransaction()
                     try {
                         var order = nextQueueOrderLocked(db)
-                        migrated.forEach { (legacyRow, memoryThreadId) ->
-                            val (key, name, detectedAt) = legacyRow
-                            val state = if (key in uncertain) ContactTaskState.VERIFY_SEND else ContactTaskState.PENDING
+                        migrated.forEach { task ->
                             db.insertWithOnConflict(
                                 "contact_tasks",
                                 null,
                                 ContentValues().apply {
-                                    put("contact_key", key)
-                                    put("display_name", name)
-                                    put("memory_thread_id", memoryThreadId)
+                                    put("contact_key", task.contactKey)
+                                    put("display_name", task.displayName)
+                                    put("memory_thread_id", task.memoryThreadId)
                                     put("queue_order", order++)
-                                    put("state", state.name)
-                                    put("created_at", detectedAt)
+                                    put("state", task.state.name)
+                                    put("outcome", task.outcome?.name.orEmpty())
+                                    put("unread_cleared", if (task.unreadCleared) 1 else 0)
+                                    put("created_at", task.detectedAt)
                                     put("updated_at", System.currentTimeMillis())
                                     put("last_error", "migrated_from_2_1_0")
                                 },
@@ -161,8 +196,11 @@ internal class ContactTaskQueue(context: Context) :
                         db.endTransaction()
                     }
                 }
-            }
+            }.isSuccess
         }
+        // Do not stamp migration complete after a schema/IO failure; the next queue open retries.
+        if (!migrationSucceeded) return
+
         db.insertWithOnConflict(
             "queue_meta",
             null,
