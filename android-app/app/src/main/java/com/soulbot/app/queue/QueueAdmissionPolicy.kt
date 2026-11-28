@@ -34,7 +34,10 @@ internal object QueueAdmissionPolicy {
         "你们已成为好友",
         "你们已经成为好友",
         "你们已成为好友，开始聊天吧",
+        "你们已经成为好友，开始聊天吧",
         "你们已经成为好友，可以开始聊天了",
+        "我通过了你的好友申请，现在可以开始聊天了",
+        "你通过了对方的好友申请",
     )
 
     fun filter(
@@ -76,15 +79,8 @@ internal object QueueAdmissionPolicy {
         if (text.isBlank()) return true
         if (systemMessages.any { normalize(it) == text }) return true
         return listOf(
-            Regex("^你们?(?:已|已经)成为好友.*$"),
+            Regex("^(?:系统消息|官方通知|平台通知|通知中心)[:：].*$"),
             Regex("^(?:你|对方)撤回了一条消息$"),
-            Regex("^系统消息[:：].*$"),
-            Regex("^官方通知[:：].*$"),
-            Regex("^平台通知[:：].*$"),
-            Regex("^通知中心[:：].*$"),
-            Regex("^对方开启了.*验证$"),
-            Regex("^你已添加.+为好友$"),
-            Regex("^.+已添加你为好友$"),
         ).any { it.matches(text) }
     }
 
