@@ -20,7 +20,7 @@ SoulBot 是一款 Android 端的 Soul 自动化辅助工具，帮助用户整理
 
 ## 安装与开始使用
 
-1. 前往 [GitHub Releases](https://github.com/zmsmao/soul-auto/releases) 下载最新正式版本 APK。
+1. 前往 [GitHub Releases](https://github.com/zmsmao/soul-pilot/releases) 下载最新正式版本 APK。
 2. 在 Android 设备上安装并打开 SoulBot。
 3. 配置模型服务地址、模型名称和 API Key，并测试连接。
 4. 按需填写个人资料和任务设置。
