@@ -57,6 +57,7 @@ internal class SoulAutomationCoordinator(
         var lastScreenName = ""
         var stuckCount = 0
         var unreadTopSearchComplete = false
+        var nextUnreadSweepAt = 0L
         var greetingRecheckAt = 0L
         var missingHeadKey = ""
         var wrappedForMissingHead = false
@@ -140,7 +141,10 @@ internal class SoulAutomationCoordinator(
                 legacyDeliveryQueue.recoverExpiredLeases()
                 contactQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
-                if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
+                if (!host.hasUnreadRedDot()) {
+                    unreadTopSearchComplete = false
+                    nextUnreadSweepAt = 0L
+                }
                 if (screen.name == lastScreenName) {
                     stuckCount++
                 } else {
@@ -237,6 +241,11 @@ internal class SoulAutomationCoordinator(
                         }
                     }
                     SoulScreen.LIST -> {
+                        if (host.hasUnreadRedDot() && unreadTopSearchComplete &&
+                            System.currentTimeMillis() >= nextUnreadSweepAt
+                        ) {
+                            unreadTopSearchComplete = false
+                        }
                         // Scan one viewport only. The list provides identity + unread state;
                         // actual chat content is fetched only after opening the contact.
                         val pageRows = host.scanConversationPage()
@@ -304,6 +313,7 @@ internal class SoulAutomationCoordinator(
                             host.setNextStep("已检查完当前私聊列表，回到顶部等待下一轮")
                             host.scrollConversationToTop()
                             unreadTopSearchComplete = true
+                            nextUnreadSweepAt = System.currentTimeMillis() + 30_000L
                             host.sleep(800)
                             continue@mainLoop
                         }
