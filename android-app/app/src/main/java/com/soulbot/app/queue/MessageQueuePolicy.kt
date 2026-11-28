@@ -15,13 +15,6 @@ internal object MessageQueuePolicy {
             .map { (text, key) -> ConversationIncomingEvent(key, text) }
     }
 
-    fun initialState(index: Int, pendingStart: Int, initialized: Boolean): MessageQueueState =
-        when {
-            index >= pendingStart -> MessageQueueState.PENDING
-            initialized -> MessageQueueState.HANDLED_MANUALLY
-            else -> MessageQueueState.BASELINE
-        }
-
     fun isReadyHead(state: String?, nextAttemptAt: Long, now: Long): Boolean =
         state in setOf(MessageQueueState.PENDING.name, MessageQueueState.RETRY_WAIT.name) &&
             nextAttemptAt <= now
