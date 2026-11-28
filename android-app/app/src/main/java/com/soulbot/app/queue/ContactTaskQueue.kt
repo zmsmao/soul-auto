@@ -412,6 +412,23 @@ internal class ContactTaskQueue(context: Context) :
     }
 
     @Synchronized
+    fun retryNow(contactKey: String) {
+        if (contactKey.isBlank()) return
+        writableDatabase.update(
+            "contact_tasks",
+            ContentValues().apply {
+                put("state", ContactTaskState.PENDING.name)
+                put("next_attempt_at", 0L)
+                put("lease_until", 0L)
+                put("last_error", "manual_retry_from_dashboard")
+                put("updated_at", System.currentTimeMillis())
+            },
+            "contact_key=? AND state IN ('RETRY_WAIT','PENDING')",
+            arrayOf(contactKey),
+        )
+    }
+
+    @Synchronized
     fun retryAfterSendConfirmedNotSent(contactKey: String) {
         if (contactKey.isBlank()) return
         writableDatabase.update(
@@ -438,7 +455,6 @@ internal class ContactTaskQueue(context: Context) :
                 put("outcome", outcome.name)
                 put("lease_until", 0L)
                 put("next_attempt_at", 0L)
-                put("unread_cleared", 0)
                 put("last_error", "")
                 put("updated_at", System.currentTimeMillis())
             },
