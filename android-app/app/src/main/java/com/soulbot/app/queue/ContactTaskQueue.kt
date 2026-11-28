@@ -466,7 +466,7 @@ internal class ContactTaskQueue(context: Context) :
     @Synchronized
     fun getTask(contactKey: String): ContactTask? =
         readableDatabase.rawQuery(
-            """SELECT contact_key, display_name, queue_order, state, outcome, attempt_count,
+            """SELECT contact_key, display_name, memory_thread_id, queue_order, state, outcome, attempt_count,
                       next_attempt_at, lease_until, unread_cleared, last_error, created_at, updated_at
                FROM contact_tasks WHERE contact_key=? LIMIT 1""".trimIndent(),
             arrayOf(contactKey),
@@ -551,7 +551,7 @@ internal class ContactTaskQueue(context: Context) :
 
     private fun readTaskLocked(db: SQLiteDatabase, key: String): ContactTask? =
         db.rawQuery(
-            """SELECT contact_key, display_name, queue_order, state, outcome, attempt_count,
+            """SELECT contact_key, display_name, memory_thread_id, queue_order, state, outcome, attempt_count,
                       next_attempt_at, lease_until, unread_cleared, last_error, created_at, updated_at
                FROM contact_tasks WHERE contact_key=? LIMIT 1""".trimIndent(),
             arrayOf(key),
