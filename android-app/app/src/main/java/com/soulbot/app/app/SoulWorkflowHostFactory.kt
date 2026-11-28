@@ -145,6 +145,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.learnFromManualReplies(name, thread)
                 override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
                     service.pendingIncomingVoiceBubbles()
+                override fun markPrivateContactOpened(name: String) = service.markPrivateContactOpened(name)
                 override fun hasUncertainSendAttempts(name: String): Boolean = service.hasUncertainSendAttempts(name)
                 override fun unseenIncomingEvents(
                     name: String,
