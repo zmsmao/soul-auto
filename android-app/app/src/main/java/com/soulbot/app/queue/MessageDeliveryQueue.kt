@@ -113,7 +113,6 @@ internal class MessageDeliveryQueue(context: Context) :
                     put("scene", scene)
                     put("initialized", 1)
                     put("last_detected_at", now)
-                    put("state", "OPEN")
                 },
                 "thread_id=?",
                 arrayOf(threadId),
@@ -138,6 +137,21 @@ internal class MessageDeliveryQueue(context: Context) :
                     SQLiteDatabase.CONFLICT_IGNORE,
                 )
             }
+            // Replaying an already SENT / NO_REPLY_REQUIRED event must not revive
+            // its conversation summary as OPEN when the unique event insert was ignored.
+            val openCount = db.rawQuery(
+                "SELECT COUNT(*) FROM conversation_events WHERE thread_id=? " +
+                    "AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
+                arrayOf(threadId),
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply {
+                    put("state", if (openCount > 0) "OPEN" else "DONE")
+                },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
