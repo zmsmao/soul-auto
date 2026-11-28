@@ -47,7 +47,7 @@ class UnreadConversationPolicyTest {
         )
 
         assertEquals(
-            listOf("普通旧消息", "联系方式", "情绪信号"),
+            listOf("联系方式", "情绪信号", "普通旧消息"),
             UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
         )
     }
