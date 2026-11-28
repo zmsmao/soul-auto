@@ -33,7 +33,7 @@ class ReplyLearningActivity : BaseSettingsActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_reply_learning)
-        setupToolbar("回复与学习")
+        setupToolbar("学习")
         setupPrimaryNavigation(R.id.nav_learning)
         learningDb = ChatLearningDatabase(applicationContext)
         tvStats = findViewById(R.id.tvLearningStats)

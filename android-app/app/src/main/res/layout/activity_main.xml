@@ -78,20 +78,10 @@
                 </LinearLayout>
 
                 <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="9dp"
-                    android:text="All Inboxes"
-                    android:textColor="@color/inbox_text"
-                    android:textSize="34sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="-0.03" />
-
-                <TextView
                     android:id="@+id/tvRuntimeDetail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:layout_marginTop="6dp"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:text="查看采集到的会话、待处理消息与发送状态"

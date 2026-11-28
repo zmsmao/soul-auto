@@ -127,6 +127,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        PrimaryNavigation.requestInsets(this)
         refreshHandler.removeCallbacks(refreshRunnable)
         refreshRunnable.run()
     }
