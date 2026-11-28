@@ -16,8 +16,9 @@
         android:layout_marginEnd="66dp"
         app:cardBackgroundColor="@color/inbox_nav"
         app:cardCornerRadius="26dp"
-        app:cardElevation="8dp"
-        app:strokeWidth="0dp">
+        app:cardElevation="4dp"
+        app:strokeColor="@color/surface_border"
+        app:strokeWidth="1dp">
 
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/bottomNavigation"
@@ -43,7 +44,7 @@
         android:contentDescription="打开 Soul"
         android:src="@drawable/ic_compose"
         app:backgroundTint="@color/inbox_nav"
-        app:elevation="8dp"
+        app:elevation="6dp"
         app:fabSize="normal"
         app:tint="@color/inbox_text" />
 </FrameLayout>

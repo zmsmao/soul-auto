@@ -13,21 +13,22 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="20dp">
+        android:paddingStart="@dimen/page_horizontal_padding"
+        android:paddingTop="@dimen/page_top_padding"
+        android:paddingEnd="@dimen/page_horizontal_padding"
+        android:paddingBottom="8dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="每个人都有独立的上下文"
+            android:text="联系人"
             android:textAppearance="@style/TextAppearance.SoulBot.PageTitle" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:text="记忆、历史和互动状态按联系人分别保存"
+            android:layout_marginTop="7dp"
+            android:text="每个人都有独立的记忆、历史和互动状态。"
             android:textAppearance="@style/TextAppearance.SoulBot.Supporting" />
 
         <com.google.android.material.textfield.TextInputLayout
@@ -51,42 +52,53 @@
             android:id="@+id/tvContactsCount"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="22dp"
             android:paddingStart="2dp"
             android:paddingBottom="10dp"
             android:text="最近互动"
             android:textAppearance="@style/TextAppearance.SoulBot.Section"
             android:textColor="?attr/colorOnSurface" />
 
-        <FrameLayout
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_weight="1"
+            app:cardBackgroundColor="?attr/colorSurfaceVariant"
+            app:cardCornerRadius="@dimen/page_card_radius"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:strokeWidth="1dp">
 
-            <ListView
-                android:id="@+id/listContacts"
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:cacheColorHint="@android:color/transparent"
-                android:clipToPadding="false"
-                android:divider="@android:color/transparent"
-                android:dividerHeight="0dp"
-                android:paddingBottom="12dp"
-                android:scrollbarStyle="outsideOverlay" />
+                android:layout_height="match_parent">
 
-            <TextView
-                android:id="@+id/tvEmptyContacts"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:padding="30dp"
-                android:text="这里还没有联系人记录
-开始聊天后，每个人的记忆和历史会独立出现在这里。"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone" />
-        </FrameLayout>
+                <ListView
+                    android:id="@+id/listContacts"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:cacheColorHint="@android:color/transparent"
+                    android:clipToPadding="false"
+                    android:divider="@android:color/transparent"
+                    android:dividerHeight="0dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="12dp"
+                    android:scrollbarStyle="outsideOverlay" />
+
+                <TextView
+                    android:id="@+id/tvEmptyContacts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:padding="30dp"
+                    android:text="这里还没有联系人记录\n开始聊天后，每个人的记忆和历史会独立出现在这里。"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 
     <include layout="@layout/view_bottom_navigation" />
