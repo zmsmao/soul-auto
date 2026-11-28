@@ -70,8 +70,8 @@ class AppUpdateActivity : BaseSettingsActivity() {
         super.onResume()
         val file = downloadedApk
         if (file != null && file.isFile) {
-            btnInstallUpdate.isEnabled = packageManager.canRequestPackageInstalls()
-            if (!btnInstallUpdate.isEnabled) {
+            btnInstallUpdate.isEnabled = true
+            if (!packageManager.canRequestPackageInstalls()) {
                 tvUpdateStatus.text = "APK 已校验。请允许 SoulBot 安装未知应用后继续。"
             }
         }
@@ -172,7 +172,7 @@ class AppUpdateActivity : BaseSettingsActivity() {
                     btnDownloadUpdate.isEnabled = true
                     btnDownloadUpdate.visibility = View.GONE
                     btnInstallUpdate.visibility = View.VISIBLE
-                    btnInstallUpdate.isEnabled = packageManager.canRequestPackageInstalls()
+                    btnInstallUpdate.isEnabled = true
                     progressDownload.progress = 100
                     tvDownloadProgress.text = "下载完成，SHA-256、包名、版本和签名均已验证。"
                     tvUpdateStatus.text = if (btnInstallUpdate.isEnabled) {
