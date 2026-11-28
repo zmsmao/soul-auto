@@ -164,7 +164,7 @@ internal class ContactTaskQueue(context: Context) :
                                 detectedAt = cursor.getLong(2),
                                 state = state,
                                 outcome = if (state == ContactTaskState.DONE) ContactTaskOutcome.NO_REPLY else null,
-                                unreadCleared = state == ContactTaskState.DONE,
+                                unreadCleared = false,
                             )
                         }
                     }
