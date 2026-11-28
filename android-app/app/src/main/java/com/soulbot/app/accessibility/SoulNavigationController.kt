@@ -180,11 +180,15 @@ internal class SoulNavigationController(
             IdleSurface.LOCAL_SQUARE -> gotoSquare()
         }
     fun backToSquare(): Boolean {
-        for (i in 0 until 4) {
+        // Live-room/player pages can retain the square pager underneath them in the
+        // accessibility tree. The screen detector gives the live surface priority;
+        // repeatedly back out until the actual local-square surface is confirmed.
+        for (i in 0 until 6) {
             if (!isSoulForegroundNow()) return false
             if (screenNow() == SoulScreen.QIYU_POPUP) return false
             if (isOnSquare()) return ensureLocalSquareChannel() != null
-            ui.pressBack(); pause(1000)
+            ui.pressBack()
+            pause(if (screenNow() == SoulScreen.LIVE_ROOM) 500 else 800)
         }
         return isOnSquare() && ensureLocalSquareChannel() != null
     }

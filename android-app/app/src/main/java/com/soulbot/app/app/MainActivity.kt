@@ -23,6 +23,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
 import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.update.UpdateRepository
 import com.soulbot.app.data.ConversationMemoryDatabase
 import com.soulbot.app.queue.ContactTaskQueue
 import com.soulbot.app.queue.ContactTaskState
@@ -134,6 +135,17 @@ class MainActivity : AppCompatActivity() {
         PrimaryNavigation.requestInsets(this)
         refreshHandler.removeCallbacks(refreshRunnable)
         refreshRunnable.run()
+        UpdateRepository.checkAutomatically(this) { version ->
+            if (!isFinishing && !isDestroyed) {
+                Snackbar.make(
+                    findViewById(android.R.id.content),
+                    "发现 SoulBot $version 新版本",
+                    Snackbar.LENGTH_LONG,
+                ).setAction("查看更新") {
+                    startActivity(Intent(this, AppUpdateActivity::class.java))
+                }.show()
+            }
+        }
     }
 
     override fun onPause() {

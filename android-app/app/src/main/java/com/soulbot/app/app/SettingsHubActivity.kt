@@ -22,6 +22,7 @@ class SettingsHubActivity : BaseSettingsActivity() {
         findViewById<View>(R.id.rowDataBackup).setOnClickListener { open(DataBackupActivity::class.java) }
         findViewById<View>(R.id.rowDeviceDiagnostics).setOnClickListener { open(DeviceDiagnosticsActivity::class.java) }
         findViewById<View>(R.id.rowRuntimeLog).setOnClickListener { open(RuntimeLogActivity::class.java) }
+        findViewById<View>(R.id.rowAppUpdate).setOnClickListener { open(AppUpdateActivity::class.java) }
     }
 
     private fun <T> open(activity: Class<T>) {

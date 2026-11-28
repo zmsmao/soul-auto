@@ -11,13 +11,16 @@ import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 
 import android.view.accessibility.AccessibilityNodeInfo
+import android.graphics.Rect
 
 /** Owns the Square browse/inspect/open-chat loop; Android access stays behind SoulSquareHost. */
 internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
     private data class SquarePostCandidate(
         val text: String,
+        val card: AccessibilityNodeInfo,
         val avatar: AccessibilityNodeInfo,
         val viewportKey: String,
+        val skipReason: String?,
     )
 
     fun browseOnce(
@@ -47,10 +50,35 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             val avatar = host.descendantsById(card, SoulAccessibilityIds.ID_SQUARE_AVATAR)
                 .firstOrNull(host::isVisibleOnScreen)
             if (text.isNotBlank() && avatar != null) {
+                val avatarBounds = host.rect(avatar)
+                val nearbyRegion = Rect(
+                    avatarBounds.left - host.dp(12),
+                    avatarBounds.top - host.dp(8),
+                    avatarBounds.right + host.dp(24),
+                    avatarBounds.bottom + host.dp(40),
+                )
+                val cardNodes = host.descendants(card).filter { node ->
+                    runCatching { node.isVisibleToUser }.getOrDefault(false)
+                }
+                fun labelsOf(node: AccessibilityNodeInfo): List<String> =
+                    listOf(host.textOf(node), host.contentDescriptionOf(node)).filter(String::isNotBlank)
+                val allLabels = cardNodes.flatMap(::labelsOf)
+                val nearbyLabels = cardNodes
+                    .filter { node ->
+                        val bounds = host.rect(node)
+                        val compactLabel = bounds.width() <= maxOf(host.dp(100), avatarBounds.width() * 3) &&
+                            bounds.height() <= maxOf(host.dp(60), avatarBounds.height() * 2)
+                        compactLabel && bounds.width() > 0 && bounds.height() > 0 &&
+                            Rect.intersects(bounds, nearbyRegion)
+                    }
+                    .flatMap(::labelsOf)
+                val skipReason = SquareBrowsePolicy.liveActivitySkipReason(nearbyLabels, allLabels)
                 result += SquarePostCandidate(
                     text = text,
+                    card = card,
                     avatar = avatar,
                     viewportKey = SquareBrowsePolicy.viewportKey(text, cb.top, host.dp(48)),
+                    skipReason = skipReason,
                 )
             }
         }
@@ -92,25 +120,28 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
     private fun getProfileName(): String =
         if (host.isOnProfile()) host.textOf(host.findById(SoulAccessibilityIds.ID_PROFILE_NAME)) else ""
 
-    private fun openProfile(avatar: AccessibilityNodeInfo): Boolean {
-        val bounds = host.rect(avatar)
-        host.setNextStep("打开同城用户主页")
-        for (attempt in 0 until 2) {
-            if (attempt == 0) {
-                host.tapNode(avatar)
-            } else {
-                RuntimeLog.record(host.context, "square profile open retry; attempt=2")
-                host.tap(bounds.exactCenterX().toFloat(), bounds.exactCenterY().toFloat())
-            }
-            for (wait in 0 until 8) {
-                host.sleep(250)
-                if (host.isOnProfile()) return true
-                if (!host.isSoulForeground()) return false
-            }
-            if (!host.isOnSquare()) return false
+    private enum class ProfileOpenResult {
+        OPENED,
+        UNSAFE_TARGET,
+        LIVE_ROOM,
+        OTHER_SCREEN,
+        TIMEOUT,
+    }
+
+    private fun openProfile(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): ProfileOpenResult {
+        host.setNextStep("安全打开同城用户主页")
+        if (!host.tapSquareAvatarSafely(card, avatar)) {
+            RuntimeLog.record(host.context, "square profile click rejected; reason=unsafe_avatar_target")
+            return ProfileOpenResult.UNSAFE_TARGET
         }
-        RuntimeLog.record(host.context, "square profile open failed; attempts=2")
-        return false
+        repeat(8) {
+            host.sleep(250)
+            if (host.isOnProfile()) return ProfileOpenResult.OPENED
+            if (host.isLikelyLiveRoom()) return ProfileOpenResult.LIVE_ROOM
+            if (!host.isSoulForeground()) return ProfileOpenResult.OTHER_SCREEN
+            if (!host.isOnSquare()) return ProfileOpenResult.OTHER_SCREEN
+        }
+        return ProfileOpenResult.TIMEOUT
     }
 
     private fun browseSquareOnce(
@@ -141,8 +172,17 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 host.context,
                 "square viewport scanned; viewport=${viewportCount + 1}; posts=${posts.size}; handled=${handledInViewport.size}",
             )
+            posts.filter { it.skipReason != null && it.viewportKey !in handledInViewport }
+                .forEach { liveCard ->
+                    handledInViewport += liveCard.viewportKey
+                    RuntimeLog.record(
+                        host.context,
+                        "square card skipped; reason=${liveCard.skipReason}; key=${liveCard.viewportKey.hashCode().toUInt().toString(16)}",
+                    )
+                }
             val candidate = posts.firstOrNull { post ->
-                post.viewportKey !in handledInViewport &&
+                post.skipReason == null &&
+                    post.viewportKey !in handledInViewport &&
                     SquareBrowsePolicy.shouldRetryTransientFailure(
                         transientFailures[post.viewportKey] ?: 0,
                     )
@@ -152,8 +192,14 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 // Re-read once after the list has settled. Only advance when every
                 // currently visible candidate is handled or has exhausted retries.
                 val confirmedPosts = waitForStableSquarePosts(channel)
+                confirmedPosts.filter { it.skipReason != null && it.viewportKey !in handledInViewport }
+                    .forEach { liveCard ->
+                        handledInViewport += liveCard.viewportKey
+                        RuntimeLog.record(host.context, "square card skipped; reason=${liveCard.skipReason}")
+                    }
                 val remaining = confirmedPosts.firstOrNull { post ->
-                    post.viewportKey !in handledInViewport &&
+                    post.skipReason == null &&
+                        post.viewportKey !in handledInViewport &&
                         SquareBrowsePolicy.shouldRetryTransientFailure(
                             transientFailures[post.viewportKey] ?: 0,
                         )
@@ -188,17 +234,36 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
             }
 
             host.setNextStep("检查当前同城动态")
-            if (!openProfile(avatar)) {
-                val attempts = (transientFailures[viewportKey] ?: 0) + 1
-                transientFailures[viewportKey] = attempts
-                if (!host.backToSquare()) return false
-                if (SquareBrowsePolicy.shouldRetryTransientFailure(attempts)) {
-                    host.setNextStep("头像打开失败，重新扫描本屏", 1200)
-                    host.sleep(1200)
-                } else {
+            when (openProfile(candidate.card, avatar)) {
+                ProfileOpenResult.UNSAFE_TARGET -> {
                     handledInViewport += viewportKey
+                    RuntimeLog.record(host.context, "square card skipped; reason=unsafe_click_target")
+                    continue
                 }
-                continue
+                ProfileOpenResult.LIVE_ROOM -> {
+                    RuntimeLog.record(host.context, "square live room intercepted; action=back_and_skip")
+                    if (!host.backToSquare()) return false
+                    handledInViewport += viewportKey
+                    continue
+                }
+                ProfileOpenResult.OTHER_SCREEN -> {
+                    RuntimeLog.record(host.context, "square profile navigation changed unexpectedly; action=recover")
+                    if (!host.backToSquare()) return false
+                    handledInViewport += viewportKey
+                    continue
+                }
+                ProfileOpenResult.TIMEOUT -> {
+                    // The underlying pager can remain visible while a live layer is on top.
+                    // Force one Back action even if the page detector still reports SQUARE.
+                    host.setNextStep("主页未确认，退出当前页面并恢复同城")
+                    host.pressBack()
+                    host.sleep(600)
+                    if (!host.backToSquare()) return false
+                    handledInViewport += viewportKey
+                    RuntimeLog.record(host.context, "square card skipped; reason=profile_destination_unconfirmed")
+                    continue
+                }
+                ProfileOpenResult.OPENED -> Unit
             }
 
             val name = getProfileName()

@@ -261,6 +261,11 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun findByIds(id: String): List<AccessibilityNodeInfo> = service.findByIds(id)
                 override fun descendantsById(node: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo> =
                     service.descendantsById(node, id)
+                override fun descendants(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = service.descendants(node)
+                override fun contentDescriptionOf(node: AccessibilityNodeInfo?): String = service.contentDescriptionOf(node)
+                override fun tapSquareAvatarSafely(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): Boolean =
+                    service.tapSquareAvatarSafely(card, avatar)
+                override fun isLikelyLiveRoom(): Boolean = service.currentScreen() == SoulScreen.LIVE_ROOM
                 override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean = service.isVisibleOnScreen(node)
                 override fun rect(node: AccessibilityNodeInfo): Rect = service.rect(node)
                 override fun textOf(node: AccessibilityNodeInfo?): String = service.textOf(node)
@@ -271,6 +276,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.swipeVertically(containerId, startRatio, endRatio, duration)
                 override fun isOnProfile(): Boolean = service.isOnProfile()
                 override fun isSoulForeground(): Boolean = service.isSoulForeground()
+                override fun pressBack() = service.pressBack()
                 override fun backToSquare(): Boolean = service.backToSquare()
                 override fun isOnNoSend(): Boolean = service.isOnNoSend()
                 override fun skipNoSend() = service.skipNoSend()
