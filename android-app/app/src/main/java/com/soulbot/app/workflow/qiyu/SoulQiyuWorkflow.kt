@@ -151,6 +151,16 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
                 null -> null
                 is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
                 is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.readThread() != thread ||
+                        host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+                    ) {
+                        return deferQiyu(
+                            session,
+                            "incoming_changed_after_no_reply_review",
+                            "奇遇铃收到新消息，已放弃旧的无需回复判断，稍后重新检查",
+                        )
+                    }
                     host.updateQueueEvents(
                         contactName,
                         pendingEvents.map { it.key },
