@@ -10,6 +10,8 @@ import com.soulbot.app.conversation.runtime.SoulReplyGenerationHost
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.logging.DiagnosticIdentity
+import com.soulbot.app.queue.ContactTaskQueue
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 import com.soulbot.app.queue.MessageQueueState
@@ -30,6 +32,7 @@ import com.soulbot.app.workflow.match.SoulMatchHost
 import com.soulbot.app.workflow.match.SoulMatchWorkflow
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
+import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
 import com.soulbot.app.workflow.qiyu.SoulQiyuHost
 import com.soulbot.app.workflow.qiyu.SoulQiyuWorkflow
 import com.soulbot.app.workflow.square.SoulSquareHost
@@ -541,10 +544,12 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 扫未读（仅会话列表） =====
 
+    internal fun scanConversationPage(): List<ConversationListEntry> = conversationListScanner.scanCurrentPage()
+
     internal fun scanUnread(): List<UnreadConversationCandidate> = conversationListScanner.scanUnread()
 
-    internal fun findConversation(name: String): AccessibilityNodeInfo? =
-        conversationListScanner.findConversation(name)
+    internal fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo? =
+        conversationListScanner.findConversation(name, contactKey)
 
     internal fun normalizeReply(text: String): String =
         text.trim().replace(Regex("""[\s，。！？!?、~～]+"""), "")
@@ -563,6 +568,25 @@ class SoulBotService : AccessibilityService() {
 
     internal fun memoryThreadId(contactName: String): String =
         conversationContextManager.memoryThreadId(contactName)
+
+    internal fun hasUncertainSendAttempts(contactName: String): Boolean =
+        conversationMemoryDb?.hasUncertainSendAttempts(memoryThreadId(contactName)) == true
+
+    internal fun markPrivateContactOpened(contactKey: String, contactName: String) {
+        if (contactKey.isBlank() || contactName.isBlank()) return
+        val queue = ContactTaskQueue(applicationContext)
+        try {
+            queue.attachMemoryThreadId(contactKey, memoryThreadId(contactName))
+            queue.markOpened(contactKey)
+        } finally {
+            queue.close()
+        }
+    }
+
+    internal fun isExpectedContact(contactName: String, contactKey: String): Boolean {
+        if (!isExpectedConversation(contactName)) return false
+        return contactKey == DiagnosticIdentity.contactId(applicationContext, contactName)
+    }
 
     internal fun personalizationContext(
         contactName: String,
@@ -616,8 +640,8 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 回复会话（仅会话列表起点） =====
 
-    internal fun replyTo(name: String, seen: ConversationSeenTracker): Boolean =
-        privateChatWorkflow.replyTo(name, seen)
+    internal fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult =
+        privateChatWorkflow.replyTo(contactKey, name, seen)
 
     internal fun displayedConversationName(): String {
         val primary = findByIds(ID_PROFILE_NAME).filter(::isVisibleOnScreen).map(::textOf)

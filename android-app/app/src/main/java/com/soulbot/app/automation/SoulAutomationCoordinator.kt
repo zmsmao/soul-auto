@@ -8,18 +8,20 @@ import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.GreetingSessionPolicy
-import com.soulbot.app.conversation.UnreadConversationCandidate
-import com.soulbot.app.conversation.UnreadConversationPolicy
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
+import com.soulbot.app.queue.ContactTask
+import com.soulbot.app.queue.ContactTaskOutcome
+import com.soulbot.app.queue.ContactTaskQueue
+import com.soulbot.app.queue.ContactTaskState
+import com.soulbot.app.queue.ContactTaskPolicy
 import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueueState
+import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
 import android.content.Context
 
 /**
- * Owns task scheduling and page-priority decisions. It deliberately delegates
- * page interactions and scene-specific workflows to SoulAutomationHost.
- * The branch order below mirrors the previous SoulBotService loop.
+ * Owns task scheduling and page-priority decisions.
+ * Ordinary private chats are scheduled by contact; legacy event tracking remains
+ * available to match/greeting workflows only.
  */
 internal class SoulAutomationCoordinator(
     private val context: Context,
@@ -29,51 +31,81 @@ internal class SoulAutomationCoordinator(
     private val host: SoulAutomationHost,
 ) {
     fun run() {
-        val deliveryQueue = MessageDeliveryQueue(context)
-        deliveryQueue.recoverProcessingAtWorkerStart()
+        val legacyDeliveryQueue = MessageDeliveryQueue(context)
+        legacyDeliveryQueue.recoverProcessingAtWorkerStart()
+
+        val contactQueue = ContactTaskQueue(context)
+        contactQueue.recoverProcessingAtWorkerStart()
+
         val seen = ConversationSeenTracker { threadId, keys, state ->
             when {
-                state == "SENT" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SENT)
-                state == "SUPPRESSED_POLICY" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SUPPRESSED_POLICY)
-                state.startsWith("NO_REPLY_REQUIRED:") -> deliveryQueue.updateEvents(
+                state == "SENT" -> legacyDeliveryQueue.updateEvents(threadId, keys, MessageQueueState.SENT)
+                state == "SUPPRESSED_POLICY" -> legacyDeliveryQueue.updateEvents(threadId, keys, MessageQueueState.SUPPRESSED_POLICY)
+                state.startsWith("NO_REPLY_REQUIRED:") -> legacyDeliveryQueue.updateEvents(
                     threadId, keys, MessageQueueState.NO_REPLY_REQUIRED, state.substringAfter(':'),
                 )
-                state.startsWith("SEND_UNCERTAIN:") -> deliveryQueue.markSendUncertain(threadId, keys, state.substringAfter(':'))
-                state.startsWith("RETRY_WAIT:") -> deliveryQueue.retryEvents(threadId, keys, state.substringAfter(':'))
+                state.startsWith("SEND_UNCERTAIN:") -> legacyDeliveryQueue.markSendUncertain(threadId, keys, state.substringAfter(':'))
+                state.startsWith("RETRY_WAIT:") -> legacyDeliveryQueue.retryEvents(threadId, keys, state.substringAfter(':'))
             }
         }
+
         val seenDm = mutableSetOf<String>()
         val attemptedDmProfiles = mutableSetOf<String>()
-
+        val handledSoulMatches = mutableSetOf<String>()
+        val handledGreetingUsers = mutableSetOf<String>()
 
         var lastDm = 0L
         var lastScreenName = ""
         var stuckCount = 0
         var unreadTopSearchComplete = false
-        val handledSoulMatches = mutableSetOf<String>()
-        val handledGreetingUsers = mutableSetOf<String>()
+        var nextUnreadSweepAt = 0L
+        var inboxPositionInitialized = false
+        var lastUnreadRedDot = false
         var greetingRecheckAt = 0L
+        var missingHeadKey = ""
+        var wrappedForMissingHead = false
 
-        fun queueAgeLabel(timestamp: Long): String {
-            val ageMinutes = ChronoUnit.MINUTES.between(
-                java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime(),
-                LocalDateTime.now(),
-            ).coerceAtLeast(0L)
-            return when {
-                ageMinutes < 1L -> "刚刚"
-                ageMinutes < 60L -> ageMinutes.toString() + "分钟前"
-                ageMinutes < 24L * 60L -> (ageMinutes / 60L).toString() + "小时前"
-                else -> (ageMinutes / (24L * 60L)).toString() + "天前"
+        fun applyTaskResult(task: ContactTask, result: PrivateChatTaskResult) {
+            when (result) {
+                PrivateChatTaskResult.COMPLETED_SENT ->
+                    contactQueue.complete(task.contactKey, ContactTaskOutcome.SENT)
+                PrivateChatTaskResult.COMPLETED_NO_REPLY ->
+                    contactQueue.complete(task.contactKey, ContactTaskOutcome.NO_REPLY)
+                PrivateChatTaskResult.RETRY ->
+                    contactQueue.retry(task.contactKey, "private_chat_processing_failed")
+                PrivateChatTaskResult.VERIFY_SEND ->
+                    contactQueue.markSendUncertain(task.contactKey, "send_result_requires_confirmation")
             }
+            RuntimeLog.record(
+                context,
+                "contact task state changed; contactId=" + task.contactKey + "; result=" + result,
+            )
+        }
+
+        fun processQueueHead(head: ContactTask, alreadyClaimed: Boolean = false) {
+            val task = if (alreadyClaimed) head else contactQueue.claimHead()
+            if (task == null) {
+                val refreshed = contactQueue.peekHead()
+                when (refreshed?.state) {
+                    ContactTaskState.VERIFY_SEND ->
+                        host.setNextStep(refreshed.displayName + " 发送结果待确认，队列暂停", 10_000)
+                    ContactTaskState.RETRY_WAIT ->
+                        host.setNextStep(refreshed.displayName + " 等待重试", 3_000)
+                    ContactTaskState.PROCESSING ->
+                        host.setNextStep(refreshed.displayName + " 正在处理中", 1_000)
+                    else -> host.setNextStep("等待联系人任务")
+                }
+                host.sleep(1_000)
+                return
+            }
+            host.setNextStep("处理私聊联系人 " + task.displayName)
+            val result = host.replyTo(task.contactKey, task.displayName, seen)
+            applyTaskResult(task, result)
         }
 
         fun handleIdleWork() {
             if (automationMode.handlesSoulMatch) {
-                host.handlePlanetChatIdle(
-                    handledSoulMatches,
-                    greetDb,
-                    seen,
-                )
+                host.handlePlanetChatIdle(handledSoulMatches, greetDb, seen)
                 return
             }
 
@@ -109,21 +141,36 @@ internal class SoulAutomationCoordinator(
 
         mainLoop@ while (host.isRunning) {
             try {
-                deliveryQueue.recoverExpiredLeases()
+                legacyDeliveryQueue.recoverExpiredLeases()
+                contactQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
-                if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
-                if (screen.name == lastScreenName) stuckCount++ else {
+                val hasUnreadRedDot = host.hasUnreadRedDot()
+                if (!hasUnreadRedDot) {
+                    unreadTopSearchComplete = false
+                    nextUnreadSweepAt = 0L
+                }
+                if (hasUnreadRedDot != lastUnreadRedDot) {
+                    inboxPositionInitialized = false
+                }
+                lastUnreadRedDot = hasUnreadRedDot
+                if (screen.name == lastScreenName) {
+                    stuckCount++
+                } else {
                     lastScreenName = screen.name
                     stuckCount = 0
                     RuntimeLog.record(
                         context,
-                        "screen=${screen.name} pager=${host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_PAGER) != null} avatar=${host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_AVATAR) != null} name=${host.findVisibleById(SoulAccessibilityIds.ID_CONV_NAME) != null} input=${host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX) != null}"
+                        "screen=" + screen.name +
+                            " pager=" + (host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_PAGER) != null) +
+                            " avatar=" + (host.findVisibleById(SoulAccessibilityIds.ID_SQUARE_AVATAR) != null) +
+                            " name=" + (host.findVisibleById(SoulAccessibilityIds.ID_CONV_NAME) != null) +
+                            " input=" + (host.findVisibleById(SoulAccessibilityIds.ID_INPUT_BOX) != null),
                     )
                 }
                 if (stuckCount > 8 && !host.hasPendingQiyu()) {
                     RuntimeLog.record(
                         context,
-                        "screen state stalled; screen=${screen.name}; consecutiveChecks=$stuckCount",
+                        "screen state stalled; screen=" + screen.name + "; consecutiveChecks=" + stuckCount,
                     )
                     host.setNextStep("重新检测当前页面", 5000)
                     host.sleep(5000)
@@ -131,23 +178,41 @@ internal class SoulAutomationCoordinator(
                     continue
                 }
 
-                // 奇遇铃高于匹配、广场和普通聊天，在两个工作模式中都立即处理。
                 if (screen == SoulScreen.QIYU_POPUP) {
                     host.handleQiyu()
                     continue
                 }
 
-                // A transient title/read/send failure must not fall through to the
-                // ordinary CHAT -> idle navigation and silently abandon an encounter.
                 if (host.hasPendingQiyu()) {
                     if (screen == SoulScreen.CHAT || screen == SoulScreen.SOUL_MATCH_CHAT || screen == SoulScreen.OTHER) {
                         host.resumePendingQiyu()
                         continue
                     }
                     if (screen != SoulScreen.OUTSIDE) {
-                        RuntimeLog.record(context, "qiyu cancelled; reason=left_chat; screen=${screen.name}")
+                        RuntimeLog.record(context, "qiyu cancelled; reason=left_chat; screen=" + screen.name)
                         host.clearPendingQiyu()
                     }
+                }
+
+                // Crash recovery: if the worker restarted while the queue head's chat was
+                // already open, resume that exact contact before the normal red-dot navigation.
+                val queuedHead = contactQueue.peekHead()
+                if (screen == SoulScreen.CHAT && queuedHead != null) {
+                    val visibleName = host.displayedConversationName()
+                    if (ContactTaskPolicy.shouldResumeCurrentChat(
+                            queuedHead.state,
+                            sameContact = visibleName == queuedHead.displayName,
+                        )
+                    ) {
+                        processQueueHead(queuedHead)
+                    } else if (visibleName != queuedHead.displayName) {
+                        host.setNextStep("检测到待处理联系人，返回列表恢复队列")
+                        host.gotoChatList()
+                    } else {
+                        host.setNextStep(queuedHead.displayName + " 等待发送状态恢复", 1500)
+                        host.sleep(1500)
+                    }
+                    continue
                 }
 
                 if (screen != SoulScreen.LIST &&
@@ -160,7 +225,6 @@ internal class SoulAutomationCoordinator(
                     continue
                 }
 
-                // 两个模式都先处理招呼和未读聊天；空闲时才执行各自的主动找人方式。
                 when (screen) {
                     SoulScreen.NO_SEND -> {
                         host.skipNoSend()
@@ -180,68 +244,115 @@ internal class SoulAutomationCoordinator(
                     }
                     SoulScreen.SOUL_PLANET -> {
                         if (automationMode.handlesSoulMatch) {
-                            host.handlePlanetChatIdle(
-                                handledSoulMatches,
-                                greetDb,
-                                seen,
-                            )
+                            host.handlePlanetChatIdle(handledSoulMatches, greetDb, seen)
                         } else {
                             host.gotoSquare()
                         }
                     }
                     SoulScreen.LIST -> {
-                        // Private unread messages outrank greetings and all idle outbound work.
-                        // The unread list itself is ordered by high-intent preview, then message age.
-                        val discoveredUnread = if (host.hasUnreadRedDot() && !unreadTopSearchComplete) {
-                            host.scanUnread()
-                        } else {
-                            emptyList()
+                        if (!inboxPositionInitialized && contactQueue.peekHead() == null) {
+                            host.setNextStep("定位私聊列表顶部")
+                            host.scrollConversationToTop()
+                            inboxPositionInitialized = true
+                            continue@mainLoop
                         }
-                        val queuedUnread = deliveryQueue.readyConversations().mapIndexed { index, item ->
-                            UnreadConversationCandidate(
-                                name = item.displayName,
-                                timeText = queueAgeLabel(item.updatedAt),
-                                displayOrder = index,
-                                previewText = item.preview,
-                            )
+                        if (host.hasUnreadRedDot() && unreadTopSearchComplete &&
+                            System.currentTimeMillis() >= nextUnreadSweepAt
+                        ) {
+                            unreadTopSearchComplete = false
                         }
-                        val unread = UnreadConversationPolicy.oldestFirst(
-                            (discoveredUnread + queuedUnread).distinctBy { it.name },
-                        )
-                        if (unread.isNotEmpty()) {
-                            if (discoveredUnread.isNotEmpty()) unreadTopSearchComplete = false
-                            val nextUnread = unread.first()
-                            val name = nextUnread.name
-                            val timeStr = nextUnread.timeText
-                            val delay = host.replyDelay(timeStr)
-                            if (delay > 0) {
-                                host.setNextStep("回复 $name", delay)
-                                if (!host.waitUnlessQiyu(delay)) continue@mainLoop
+                        // Scan one viewport only. The list provides identity + unread state;
+                        // actual chat content is fetched only after opening the contact.
+                        val pageRows = host.scanConversationPage()
+                        pageRows.forEach { row ->
+                            if (row.hasUnread) {
+                                contactQueue.enqueueUnread(row.contactKey, row.name)
+                            } else {
+                                contactQueue.markUnreadCleared(row.contactKey)
                             }
-                            host.setNextStep(
-                                if (unread.size > 1) {
-                                    "共 ${unread.size} 条未读，优先回复 $name"
-                                } else {
-                                    "回复 $name"
-                                },
-                            )
-                            host.replyTo(name, seen)
-                        } else if (host.hasUnreadRedDot() && !unreadTopSearchComplete) {
-                            // Scan from the top once before accepting that the private inbox is empty.
-                            // This prevents a greeting task from hiding unread rows above the current viewport.
-                            host.setNextStep("回到会话顶部，优先检查私聊未读")
+                        }
+
+                        val head = contactQueue.peekHead()
+                        if (head != null) {
+                            when (head.state) {
+                                ContactTaskState.VERIFY_SEND -> {
+                                    host.setNextStep(head.displayName + " 发送结果待确认，等待人工确认", 10_000)
+                                    host.sleep(2_000)
+                                }
+                                ContactTaskState.PROCESSING -> {
+                                    host.setNextStep(head.displayName + " 任务正在处理", 1_000)
+                                    host.sleep(1_000)
+                                }
+                                ContactTaskState.RETRY_WAIT -> {
+                                    val remaining = (head.nextAttemptAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                                    if (remaining > 0L) {
+                                        host.setNextStep(head.displayName + " 处理失败，等待重试", remaining)
+                                        host.sleep(minOf(3_000L, remaining))
+                                    } else if (pageRows.none { it.contactKey == head.contactKey }) {
+                                        if (head.contactKey != missingHeadKey) {
+                                            missingHeadKey = head.contactKey
+                                            wrappedForMissingHead = false
+                                        }
+                                        if (host.scrollConversationPageDown()) {
+                                            continue@mainLoop
+                                        }
+                                        if (!wrappedForMissingHead) {
+                                            wrappedForMissingHead = true
+                                            host.scrollConversationToTop()
+                                            continue@mainLoop
+                                        }
+                                        contactQueue.retry(head.contactKey, "contact_not_found_in_inbox")
+                                    } else {
+                                        missingHeadKey = ""
+                                        wrappedForMissingHead = false
+                                        processQueueHead(head)
+                                    }
+                                }
+                                ContactTaskState.PENDING -> {
+                                    // Tasks normally belong to the current page. Legacy migrated
+                                    // tasks may be elsewhere; page forward rather than scanning the
+                                    // whole inbox again for every contact.
+                                    if (pageRows.none { it.contactKey == head.contactKey }) {
+                                        if (head.contactKey != missingHeadKey) {
+                                            missingHeadKey = head.contactKey
+                                            wrappedForMissingHead = false
+                                        }
+                                        if (host.scrollConversationPageDown()) {
+                                            continue@mainLoop
+                                        }
+                                        if (!wrappedForMissingHead) {
+                                            wrappedForMissingHead = true
+                                            host.scrollConversationToTop()
+                                            continue@mainLoop
+                                        }
+                                        contactQueue.retry(head.contactKey, "contact_not_found_in_inbox")
+                                    } else {
+                                        missingHeadKey = ""
+                                        wrappedForMissingHead = false
+                                        processQueueHead(head)
+                                    }
+                                }
+                                ContactTaskState.DONE -> Unit
+                            }
+                            continue@mainLoop
+                        }
+
+                        if (host.hasUnreadRedDot() && !unreadTopSearchComplete) {
+                            if (host.scrollConversationPageDown()) {
+                                continue@mainLoop
+                            }
+                            host.setNextStep("已检查完当前私聊列表，回到顶部等待下一轮")
                             host.scrollConversationToTop()
                             unreadTopSearchComplete = true
-                            host.setNextStep("重新检查未读消息", 800)
+                            nextUnreadSweepAt = System.currentTimeMillis() + 30_000L
                             host.sleep(800)
-                        } else if (host.hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
-                            // Only handle greetings after the private inbox has been scanned and has no unread row.
+                            continue@mainLoop
+                        }
+
+                        if (host.hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
                             host.setNextStep("私聊未读已处理，开始处理新招呼")
                             host.openGreetingList()
                         } else {
-                            if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
-                            // With no private unread rows (or a stale, fully scanned dot),
-                            // normal greeting and idle work can proceed.
                             handleIdleWork()
                         }
                     }
@@ -268,18 +379,22 @@ internal class SoulAutomationCoordinator(
                     SoulScreen.SQUARE -> {
                         if (automationMode.handlesSquareDm) handleIdleWork() else host.gotoSoulPlanet()
                     }
-                    SoulScreen.PROFILE -> {
-                        host.gotoModeIdleSurface(automationMode)
+                    SoulScreen.PROFILE -> host.gotoModeIdleSurface(automationMode)
+                    SoulScreen.CHAT -> {
+                        if (contactQueue.peekHead() != null) {
+                            host.gotoChatList()
+                        } else {
+                            host.gotoModeIdleSurface(automationMode)
+                        }
                     }
-                    SoulScreen.CHAT -> host.gotoModeIdleSurface(automationMode)
                     else -> host.gotoModeIdleSurface(automationMode)
                 }
             } catch (e: StoppedException) {
                 break
             } catch (e: Exception) {
-                val detail = "${e.javaClass.simpleName}：${e.message.orEmpty()}".take(48)
-                RuntimeLog.record(context, "page flow error: $detail", e)
-                host.setNextStep("页面读取异常：$detail，重新检测", 2000)
+                val detail = e.javaClass.simpleName + "：" + e.message.orEmpty()
+                RuntimeLog.record(context, "page flow error: " + detail.take(48), e)
+                host.setNextStep("页面读取异常：" + detail.take(36) + "，重新检测", 2000)
                 host.sleep(2000)
             }
         }

@@ -23,6 +23,7 @@ import com.soulbot.app.workflow.match.SoulMatchHost
 import com.soulbot.app.workflow.match.SoulMatchWorkflow
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
+import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
 import com.soulbot.app.workflow.qiyu.SoulQiyuHost
 import com.soulbot.app.workflow.qiyu.SoulQiyuWorkflow
 import com.soulbot.app.workflow.square.SoulSquareHost
@@ -53,10 +54,13 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun gotoSquare(): Boolean = service.gotoSquare()
                 override fun browseSquareOnce(seenDm: MutableSet<String>, attemptedDmProfiles: MutableSet<String>, greetDb: GreetDatabase): Boolean =
                     service.browseSquareOnce(seenDm, attemptedDmProfiles, greetDb)
+                override fun scanConversationPage(): List<ConversationListEntry> = service.scanConversationPage()
+                override fun scrollConversationPageDown(): Boolean = service.scrollConversationPageDown()
+                override fun displayedConversationName(): String = service.displayedConversationName()
                 override fun scanUnread(): List<UnreadConversationCandidate> = service.scanUnread()
                 override fun replyDelay(timeStr: String): Long = service.replyDelay(timeStr)
                 override fun waitUnlessQiyu(delayMs: Long): Boolean = service.waitUnlessQiyu(delayMs)
-                override fun replyTo(name: String, seen: ConversationSeenTracker): Boolean = service.replyTo(name, seen)
+                override fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult = service.replyTo(contactKey, name, seen)
                 override fun scrollConversationToTop() = service.scrollConversationToTop()
                 override fun hasGreeting(): Boolean = service.hasGreeting()
                 override fun openGreetingList(): Boolean = service.openGreetingList()
@@ -125,8 +129,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun isOnList(): Boolean = service.isOnList()
                 override fun isOnChat(): Boolean = service.isOnChat()
-                override fun findConversation(name: String): AccessibilityNodeInfo? =
-                    service.findConversation(name)
+                override fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo? =
+                    service.findConversation(name, contactKey)
                 override fun setNextStep(action: String, delayMs: Long) =
                     service.setNextStep(action, delayMs)
                 override fun sleep(ms: Long) = service.sleep(ms)
@@ -134,6 +138,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun gotoChatList(): Boolean = service.gotoChatList()
                 override fun isExpectedConversation(name: String): Boolean =
                     service.isExpectedConversation(name)
+                override fun isExpectedContact(name: String, contactKey: String): Boolean =
+                    service.isExpectedContact(name, contactKey)
                 override fun waitForStableThread(name: String): List<Pair<String, String>> =
                     service.waitForStableThread(name)
                 override fun readThread(): List<Pair<String, String>> = service.readThread()
@@ -141,6 +147,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.learnFromManualReplies(name, thread)
                 override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
                     service.pendingIncomingVoiceBubbles()
+                override fun markPrivateContactOpened(contactKey: String, name: String) = service.markPrivateContactOpened(contactKey, name)
+                override fun hasUncertainSendAttempts(name: String): Boolean = service.hasUncertainSendAttempts(name)
                 override fun unseenIncomingEvents(
                     name: String,
                     thread: List<Pair<String, String>>,

@@ -6,12 +6,21 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 
+internal data class ConversationListEntry(
+    val name: String,
+    val contactKey: String,
+    /** Zero-based top-to-bottom position in the current viewport. */
+    val displayOrder: Int,
+    val hasUnread: Boolean,
+)
+
 internal data class UnreadConversationCandidate(
     val name: String,
     val timeText: String,
     /** Zero-based top-to-bottom position in Soul's conversation list. */
     val displayOrder: Int,
     val previewText: String = "",
+    val contactKey: String = "",
 )
 
 /** Prioritizes high-intent/emotional previews, then orders equal-priority unread rows by age. */
@@ -19,16 +28,11 @@ internal object UnreadConversationPolicy {
     private const val MINUTES_PER_DAY = 24L * 60L
     private const val UNKNOWN_AGE_MINUTES = MINUTES_PER_DAY
 
+    /** Ordinary private-chat contacts keep the exact top-to-bottom discovery order. */
     fun oldestFirst(
         conversations: List<UnreadConversationCandidate>,
         now: LocalDateTime = LocalDateTime.now(),
-    ): List<UnreadConversationCandidate> = conversations
-        .sortedWith(
-            compareByDescending<UnreadConversationCandidate> { priorityScore(it.previewText) }
-                .thenBy { parsedAgeMinutes(it.timeText, now) == null }
-                .thenByDescending { parsedAgeMinutes(it.timeText, now) ?: Long.MIN_VALUE }
-                .thenBy { it.displayOrder },
-        )
+    ): List<UnreadConversationCandidate> = conversations.sortedBy { it.displayOrder }
 
     /** Merge overlapping viewport results without losing the first observed row order. */
     fun mergeVisiblePages(
@@ -37,7 +41,8 @@ internal object UnreadConversationPolicy {
         val byName = linkedMapOf<String, UnreadConversationCandidate>()
         pages.forEach { page ->
             page.forEach { candidate ->
-                if (candidate.name.isNotBlank()) byName.putIfAbsent(candidate.name, candidate)
+                val key = candidate.contactKey.ifBlank { candidate.name }
+                if (candidate.name.isNotBlank()) byName.putIfAbsent(key, candidate)
             }
         }
         return byName.values.mapIndexed { index, candidate ->

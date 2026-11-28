@@ -5,6 +5,8 @@ import com.soulbot.app.conversation.ConversationSeenTracker
 import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
 import com.soulbot.app.conversation.UnreadConversationCandidate
+import com.soulbot.app.conversation.ConversationListEntry
+import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Operations the scheduler may request from the Android page agent. */
@@ -28,10 +30,13 @@ internal interface SoulAutomationHost {
     fun isOnSquare(): Boolean
     fun gotoSquare(): Boolean
     fun browseSquareOnce(seenDm: MutableSet<String>, attemptedDmProfiles: MutableSet<String>, greetDb: GreetDatabase): Boolean
+    fun scanConversationPage(): List<ConversationListEntry>
+    fun scrollConversationPageDown(): Boolean
+    fun displayedConversationName(): String
     fun scanUnread(): List<UnreadConversationCandidate>
     fun replyDelay(timeStr: String): Long
     fun waitUnlessQiyu(delayMs: Long): Boolean
-    fun replyTo(name: String, seen: ConversationSeenTracker): Boolean
+    fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult
     fun scrollConversationToTop()
     fun hasGreeting(): Boolean
     fun openGreetingList(): Boolean

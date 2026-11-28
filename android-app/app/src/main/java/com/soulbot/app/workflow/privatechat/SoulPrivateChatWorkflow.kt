@@ -14,41 +14,41 @@ import com.soulbot.app.policy.*
 
 
 
+/** Result of one contact-level private-chat task. */
+internal enum class PrivateChatTaskResult {
+    COMPLETED_SENT,
+    COMPLETED_NO_REPLY,
+    RETRY,
+    VERIFY_SEND,
+}
+
 /** Owns ordinary private-chat entry, reservation and reply processing. */
 internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
     @Volatile private var activeReplyName: String? = null
-
-    fun replyTo(name: String, seen: ConversationSeenTracker): Boolean {
+    fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
-        if (name.isBlank()) {
-            RuntimeLog.record(host.context, "conversation reply skipped; reason=blank_name")
-            return false
-        }
-        if (!reserveReply(name)) {
-            RuntimeLog.record(host.context, "conversation reply skipped; reason=reply_busy; contactId=$contactId")
-            return false
-        }
-        RuntimeLog.record(host.context, "conversation reply started; contactId=$contactId")
+        if (name.isBlank()) return PrivateChatTaskResult.RETRY
+        if (!reserveReply(name)) return PrivateChatTaskResult.RETRY
+        RuntimeLog.record(host.context, "contact task started; contactId=$contactId")
         return try {
-            replyToReserved(name, seen).also { sent ->
-                RuntimeLog.record(
-                    host.context,
-                    "conversation reply ended; contactId=$contactId; sent=$sent",
-                )
+            val result = when {
+                host.isOnChat() && host.isExpectedContact(name, contactKey) ->
+                    processContactTaskInCurrentChat(name, contactKey)
+                host.isOnList() && openConversationForReply(name, contactKey) ->
+                    processContactTaskInCurrentChat(name, contactKey)
+                else -> PrivateChatTaskResult.RETRY
             }
+            RuntimeLog.record(host.context, "contact task ended; contactId=$contactId; result=$result")
+            result
         } catch (stopped: StoppedException) {
             throw stopped
         } catch (error: Throwable) {
-            RuntimeLog.record(
-                host.context,
-                "conversation reply crashed; contactId=${DiagnosticIdentity.contactId(host.context, name)}",
-                error,
-            )
-            host.setNextStep("$name 的会话发生变化，返回列表重试", 1200)
+            RuntimeLog.record(host.context, "contact task crashed; contactId=$contactId", error)
+            host.setNextStep("$name 的会话发生异常，保留队列等待重试", 1200)
             if (host.isRunning && host.currentScreen() != SoulScreen.QIYU_POPUP) {
                 runCatching { host.gotoChatList() }
             }
-            false
+            PrivateChatTaskResult.RETRY
         } finally {
             releaseReply(name)
         }
@@ -66,11 +66,11 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
         if (activeReplyName == name) activeReplyName = null
     }
 
-    private fun openConversationForReply(name: String): Boolean {
+    private fun openConversationForReply(name: String, contactKey: String): Boolean {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
         repeat(2) { attempt ->
             if (!host.isRunning || !host.isOnList()) return false
-            val item = host.findConversation(name) ?: return false
+            val item = host.findConversation(name, contactKey) ?: return false
             host.setNextStep(if (attempt == 0) "打开 $name 的会话" else "重新定位 $name 的会话")
             if (!host.tapNode(item)) {
                 host.sleep(500)
@@ -78,7 +78,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             }
             host.sleep(1500)
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) return false
-            if (host.isOnChat() && host.isExpectedConversation(name)) {
+            if (host.isOnChat() && host.isExpectedContact(name, contactKey)) {
                 RuntimeLog.record(
                     host.context,
                     "conversation opened; contactId=$contactId; attempt=${attempt + 1}",
@@ -94,9 +94,150 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
         return false
     }
 
-    private fun replyToReserved(name: String, seen: ConversationSeenTracker): Boolean {
-        if (!host.isOnList() || !openConversationForReply(name)) return false
-        return replyToCurrentConversation(name, seen)
+    /**
+     * The queue selected the contact; the live transcript is the only source of reply context.
+     * No message events or message bodies are written to the contact task queue.
+     */
+    private fun processContactTaskInCurrentChat(name: String, contactKey: String): PrivateChatTaskResult {
+        val contactId = DiagnosticIdentity.contactId(host.context, name)
+        if (!host.isRunning || !host.isOnChat() || !host.isExpectedContact(name, contactKey)) {
+            return PrivateChatTaskResult.RETRY
+        }
+        host.markPrivateContactOpened(contactKey, name)
+        if (host.hasUncertainSendAttempts(name)) {
+            host.setNextStep("$name 存在发送结果待确认，暂停自动重发")
+            host.gotoChatList()
+            return PrivateChatTaskResult.VERIFY_SEND
+        }
+
+        replyCycle@ while (host.isRunning && host.isOnChat()) {
+            val thread = host.waitForStableThread(name)
+            if (!host.isRunning || !host.isOnChat() || !host.isExpectedContact(name, contactKey)) {
+                host.gotoChatList()
+                return PrivateChatTaskResult.RETRY
+            }
+            host.learnFromManualReplies(name, thread)
+            if (thread.isEmpty()) {
+                host.setNextStep("$name 的对话暂时无法读取，保留任务重试", 1500)
+                host.gotoChatList()
+                return PrivateChatTaskResult.RETRY
+            }
+
+            val lastOutgoingIndex = thread.indexOfLast { it.first == "out" }
+            val focusIncoming = thread.drop(lastOutgoingIndex + 1)
+                .filter { it.first == "in" }
+                .map { it.second.trim() }
+                .filter(String::isNotBlank)
+
+            if (focusIncoming.isEmpty()) {
+                RuntimeLog.record(host.context, "contact task completed without reply; reason=no_unanswered_tail; contactId=$contactId")
+                host.setNextStep("$name 当前没有待回复内容，完成本轮处理", 800)
+                host.gotoChatList()
+                return PrivateChatTaskResult.COMPLETED_NO_REPLY
+            }
+
+            if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, focusIncoming)) {
+                RuntimeLog.record(host.context, "contact task completed without reply; reason=low_information_rhythm; contactId=$contactId")
+                host.setNextStep("$name 连续简短回应，本轮自然停顿")
+                host.gotoChatList()
+                return PrivateChatTaskResult.COMPLETED_NO_REPLY
+            }
+
+            // This anchor is used only by the existing send idempotency guard; it is not queued.
+            val eventAnchor = host.currentIncomingMessageKeys(name).joinToString(",")
+            val generationResult = host.generateValidatedChatReply(name, thread, focusIncoming)
+            when (generationResult) {
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(host.context, "contact no-reply decision discarded; reason=incoming_changed")
+                        continue@replyCycle
+                    }
+                    RuntimeLog.record(
+                        host.context,
+                        "contact task completed without reply; reason=" + generationResult.reason + "; contactId=" + contactId,
+                    )
+                    host.setNextStep("$name 本轮无需回复，已完成处理", 800)
+                    host.gotoChatList()
+                    return PrivateChatTaskResult.COMPLETED_NO_REPLY
+                }
+                null -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                    ) {
+                        host.setNextStep("收到新消息，重新读取最新对话", ConversationTiming.MESSAGE_SETTLE_MS)
+                        continue@replyCycle
+                    }
+                    val reason = ModelRouter.lastError.ifBlank { "模型生成失败" }.take(36)
+                    RuntimeLog.record(host.context, "contact task retry; reason=generation_failed; detail=$reason")
+                    host.setNextStep("$name 回复生成失败，保留任务重试：$reason", 2000)
+                    host.gotoChatList()
+                    return PrivateChatTaskResult.RETRY
+                }
+                is ChatReplyGenerationResult.ReadyToSend -> {
+                    val reply = generationResult.text
+                    if (reply.isBlank()) {
+                        host.gotoChatList()
+                        return PrivateChatTaskResult.RETRY
+                    }
+
+                    val normalized = host.normalizeReply(reply)
+                    val repeated = thread.filter { it.first == "out" }
+                        .map { host.normalizeReply(it.second) }
+                        .any { it.isNotEmpty() && it == normalized }
+                    if (repeated) {
+                        RuntimeLog.record(host.context, "contact task completed without reply; reason=duplicate_output")
+                        host.setNextStep("回复内容与历史重复，本轮不再发送")
+                        host.gotoChatList()
+                        return PrivateChatTaskResult.COMPLETED_NO_REPLY
+                    }
+
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(host.context, "contact reply regenerated; reason=incoming_changed")
+                        host.setNextStep("收到更新消息，重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
+                        host.sleep(500)
+                        continue@replyCycle
+                    }
+                    if (!host.isExpectedContact(name, contactKey)) {
+                        host.gotoChatList()
+                        return PrivateChatTaskResult.RETRY
+                    }
+
+                    val sent = host.send(reply, expectedContact = name, expectedEventAnchor = eventAnchor)
+                    if (sent) {
+                        RuntimeLog.record(host.context, "contact reply confirmed; contactId=$contactId")
+                        host.recordAutomatedInteraction(name, focusIncoming, reply)
+                        host.recordHistory(name, focusIncoming.last(), reply)
+                        host.gotoChatList()
+                        return PrivateChatTaskResult.COMPLETED_SENT
+                    }
+
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(host.context, "contact reply regenerated; reason=incoming_changed_before_send")
+                        host.setNextStep("发送前收到新消息，使用最新上下文重新准备回复", ConversationTiming.MESSAGE_SETTLE_MS)
+                        continue@replyCycle
+                    }
+
+                    val result = if (host.hasUncertainSendAttempts(name)) {
+                        PrivateChatTaskResult.VERIFY_SEND
+                    } else {
+                        PrivateChatTaskResult.RETRY
+                    }
+                    host.setNextStep(
+                        if (result == PrivateChatTaskResult.VERIFY_SEND) "$name 发送结果不明确，等待确认"
+                        else "$name 发送操作失败，保留任务重试",
+                    )
+                    host.gotoChatList()
+                    return result
+                }
+            }
+        }
+        return PrivateChatTaskResult.RETRY
     }
 
     /** Continue in place: messages received in an open chat may no longer have a list badge. */

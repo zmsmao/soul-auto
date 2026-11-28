@@ -337,6 +337,28 @@ class ConversationMemoryDatabase(context: Context) :
         }
     }
 
+    fun hasUncertainSendAttempts(threadId: String): Boolean {
+        if (threadId.isBlank()) return false
+        readableDatabase.rawQuery(
+            "SELECT 1 FROM send_attempts WHERE thread_id=? AND state IN ('CLICKED','UNCERTAIN') LIMIT 1",
+            arrayOf(threadId),
+        ).use { return it.moveToFirst() }
+    }
+
+    fun resolveUncertainSendAttempts(threadId: String, wasSent: Boolean) {
+        if (threadId.isBlank()) return
+        val targetState = if (wasSent) "CONFIRMED" else "PREPARED"
+        writableDatabase.update(
+            "send_attempts",
+            ContentValues().apply {
+                put("state", targetState)
+                put("updated_at", System.currentTimeMillis())
+            },
+            "thread_id=? AND state IN ('CLICKED','UNCERTAIN')",
+            arrayOf(threadId),
+        )
+    }
+
     fun markSendAttemptClicked(sendKey: String) = updateSendAttemptState(sendKey, "CLICKED")
     fun markSendAttemptPrepared(sendKey: String) = updateSendAttemptState(sendKey, "PREPARED")
     fun markSendAttemptUncertain(sendKey: String) = updateSendAttemptState(sendKey, "UNCERTAIN")

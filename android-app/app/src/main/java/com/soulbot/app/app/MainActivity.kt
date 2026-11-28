@@ -23,9 +23,13 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
 import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.data.ConversationMemoryDatabase
+import com.soulbot.app.queue.ContactTaskQueue
+import com.soulbot.app.queue.ContactTaskState
+import com.soulbot.app.queue.ContactTaskOutcome
+import com.soulbot.app.queue.ContactTaskSummary
 import com.soulbot.app.queue.InboxConversationSummary
 import com.soulbot.app.queue.InboxFilter
-import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueueState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,7 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lineOpen: View
     private lateinit var lineSnoozed: View
     private lateinit var lineDone: View
-    private lateinit var deliveryQueue: MessageDeliveryQueue
+    private lateinit var contactTaskQueue: ContactTaskQueue
 
     private var selectedFilter = InboxFilter.OPEN
     private val refreshHandler = Handler(Looper.getMainLooper())
@@ -64,7 +68,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        deliveryQueue = MessageDeliveryQueue(applicationContext)
+        contactTaskQueue = ContactTaskQueue(applicationContext)
 
         tvRuntimeTitle = findViewById(R.id.tvRuntimeTitle)
         tvRuntimeDetail = findViewById(R.id.tvRuntimeDetail)
@@ -139,7 +143,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         refreshHandler.removeCallbacks(refreshRunnable)
-        deliveryQueue.close()
+        contactTaskQueue.close()
         super.onDestroy()
     }
 
@@ -166,7 +170,7 @@ class MainActivity : AppCompatActivity() {
             !readiness.overlayGranted -> "悬浮窗权限未开启 · 点击查看运行准备"
             readiness.runnableModelCount == 0 -> "没有可用模型通道 · 点击查看运行准备"
             rawStatus.isNotBlank() && rawStatus != "用户手动停止" -> rawStatus
-            else -> "自动任务尚未运行 · 已采集的消息仍保留在队列中"
+            else -> "自动任务尚未运行 · 未处理的联系人任务会保留"
         }
         tvReadinessSummary.text = "运行准备 · " + readiness.checklistCompletedCount + " / 4 项完成"
         tvReadinessDetails.text = listOf(
@@ -208,8 +212,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTabs() {
-        if (!::deliveryQueue.isInitialized) return
-        val counts = deliveryQueue.counts()
+        if (!::contactTaskQueue.isInitialized) return
+        val counts = contactTaskQueue.counts()
         tvTabOpen.text = "Open  " + (counts[InboxFilter.OPEN] ?: 0)
         tvTabSnoozed.text = "Snoozed  " + (counts[InboxFilter.SNOOZED] ?: 0)
         tvTabDone.text = "Done  " + (counts[InboxFilter.DONE] ?: 0)
@@ -224,16 +228,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderInbox() {
-        if (!::queueList.isInitialized || !::deliveryQueue.isInitialized) return
+        if (!::queueList.isInitialized || !::contactTaskQueue.isInitialized) return
         queueList.removeAllViews()
         val rows = runCatching {
-            deliveryQueue.summaries(selectedFilter, etSearch.text?.toString().orEmpty())
+            contactTaskQueue.summaries(selectedFilter, etSearch.text?.toString().orEmpty())
+                .map(::toInboxConversationSummary)
         }.getOrDefault(emptyList())
         tvEmpty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         tvEmpty.text = when {
             etSearch.text?.isNotBlank() == true -> "没有找到匹配的会话"
-            selectedFilter == InboxFilter.OPEN -> "没有待处理消息\n采集到新的未读会话后会显示在这里"
-            selectedFilter == InboxFilter.SNOOZED -> "暂时没有被暂缓的会话"
+            selectedFilter == InboxFilter.OPEN -> "没有待处理联系人\n发现私聊未读后会按顺序加入队列"
+            selectedFilter == InboxFilter.SNOOZED -> "联系人队列没有暂缓任务"
             else -> "已处理的会话会显示在这里"
         }
         rows.forEachIndexed { index, row ->
@@ -361,82 +366,119 @@ class MainActivity : AppCompatActivity() {
         return root
     }
 
+    private fun toInboxConversationSummary(task: ContactTaskSummary): InboxConversationSummary {
+        val state = when (task.state) {
+            ContactTaskState.PENDING -> MessageQueueState.PENDING
+            ContactTaskState.PROCESSING -> MessageQueueState.PROCESSING
+            ContactTaskState.RETRY_WAIT -> MessageQueueState.RETRY_WAIT
+            ContactTaskState.VERIFY_SEND -> MessageQueueState.SEND_UNCERTAIN
+            ContactTaskState.DONE -> when (task.outcome) {
+                ContactTaskOutcome.SENT -> MessageQueueState.SENT
+                ContactTaskOutcome.NO_REPLY -> MessageQueueState.NO_REPLY_REQUIRED
+                ContactTaskOutcome.MANUAL -> MessageQueueState.HANDLED_MANUALLY
+                null -> MessageQueueState.HANDLED_MANUALLY
+            }
+        }
+        val subtitle = when (task.state) {
+            ContactTaskState.PENDING -> "私聊联系人 · 等待按序处理"
+            ContactTaskState.PROCESSING -> "私聊联系人 · 正在处理"
+            ContactTaskState.RETRY_WAIT -> "私聊联系人 · 等待重试"
+            ContactTaskState.VERIFY_SEND -> "私聊联系人 · 发送结果待确认"
+            ContactTaskState.DONE -> when (task.outcome) {
+                ContactTaskOutcome.SENT -> "本轮已成功回复"
+                ContactTaskOutcome.NO_REPLY -> "AI 判断本轮无需回复"
+                ContactTaskOutcome.MANUAL -> "已人工标记处理"
+                null -> "本轮已处理"
+            }
+        }
+        return InboxConversationSummary(
+            threadId = task.contactKey,
+            displayName = task.displayName,
+            preview = subtitle,
+            updatedAt = task.updatedAt,
+            openCount = 0,
+            state = state,
+        )
+    }
     private fun showConversationDetails(item: InboxConversationSummary) {
-        val events = deliveryQueue.eventsForThread(item.threadId)
-        if (events.isEmpty()) {
-            Snackbar.make(queueList, "该会话暂无已采集的消息事件", Snackbar.LENGTH_SHORT).show()
+        val task = contactTaskQueue.getTask(item.threadId)
+        if (task == null) {
+            Snackbar.make(queueList, "该联系人任务已更新", Snackbar.LENGTH_SHORT).show()
+            renderInbox()
             return
         }
-        val details = events.take(24).joinToString("\n\n") { event ->
-            buildString {
-                append("[")
-                append(queueStateLabel(event.state))
-                append("] ")
-                append(formatTime(event.observedAt))
-                append("\n")
-                append(event.text)
-                if (event.attemptCount > 0) {
-                    append("\n重试次数：")
-                    append(event.attemptCount)
-                }
-                if (event.lastError.isNotBlank()) {
-                    append("\n记录：")
-                    append(event.lastError)
-                }
+        val status = when (task.state) {
+            ContactTaskState.PENDING -> "等待按 FIFO 顺序处理"
+            ContactTaskState.PROCESSING -> "正在进入私聊并读取当前对话"
+            ContactTaskState.RETRY_WAIT -> "上次处理失败，等待自动重试"
+            ContactTaskState.VERIFY_SEND -> "发送操作已经执行，但无法确认消息是否成功发出。为避免重复发送，队列暂时暂停在此联系人。"
+            ContactTaskState.DONE -> when (task.outcome) {
+                ContactTaskOutcome.SENT -> "本轮回复已确认发送"
+                ContactTaskOutcome.NO_REPLY -> "AI 判断本轮无需回复"
+                ContactTaskOutcome.MANUAL -> "已人工标记处理"
+                null -> "本轮已处理"
             }
         }
-        val uncertain = events.filter { it.state == MessageQueueState.SEND_UNCERTAIN }
-            .map { it.key }
-        val retryable = events.filter {
-            it.state == MessageQueueState.RETRY_WAIT || it.state == MessageQueueState.DEAD_LETTER
-        }.map { it.key }
-        val manuallyResolvable = events.filter {
-            it.state == MessageQueueState.PENDING ||
-                it.state == MessageQueueState.RETRY_WAIT ||
-                it.state == MessageQueueState.SEND_UNCERTAIN ||
-                it.state == MessageQueueState.DEAD_LETTER
-        }.map { it.key }
-        val snoozed = events.filter { it.state == MessageQueueState.SUPPRESSED_POLICY }.map { it.key }
-
+        val detail = buildString {
+            append(status)
+            if (task.attemptCount > 0) append("\n处理尝试次数：").append(task.attemptCount)
+            if (task.lastError.isNotBlank()) append("\n最近记录：").append(task.lastError)
+        }
         val dialog = AlertDialog.Builder(this)
-            .setTitle(item.displayName)
-            .setMessage(details)
+            .setTitle(task.displayName)
+            .setMessage(detail)
             .setCancelable(true)
-        if (selectedFilter == InboxFilter.SNOOZED && snoozed.isNotEmpty()) {
-            dialog.setPositiveButton("恢复到 Open") { _, _ ->
-                deliveryQueue.unsnooze(item.threadId, snoozed)
-                renderInbox()
+        when (task.state) {
+            ContactTaskState.VERIFY_SEND -> {
+                dialog.setPositiveButton("已确认发送") { _, _ ->
+                    if (task.memoryThreadId.isNotBlank()) {
+                        val memory = ConversationMemoryDatabase(applicationContext)
+                        try {
+                            memory.resolveUncertainSendAttempts(task.memoryThreadId, wasSent = true)
+                            contactTaskQueue.confirmSent(task.contactKey)
+                        } finally {
+                            memory.close()
+                        }
+                    } else {
+                        Snackbar.make(queueList, "缺少发送记录身份，不能安全确认", Snackbar.LENGTH_LONG).show()
+                    }
+                    renderInbox()
+                }
+                dialog.setNegativeButton("确认未发送，重新处理") { _, _ ->
+                    if (task.memoryThreadId.isNotBlank()) {
+                        val memory = ConversationMemoryDatabase(applicationContext)
+                        try {
+                            memory.resolveUncertainSendAttempts(task.memoryThreadId, wasSent = false)
+                            contactTaskQueue.retryAfterSendConfirmedNotSent(task.contactKey)
+                        } finally {
+                            memory.close()
+                        }
+                    } else {
+                        Snackbar.make(queueList, "缺少发送记录身份，不能安全重试", Snackbar.LENGTH_LONG).show()
+                    }
+                    renderInbox()
+                }
             }
-            dialog.setNegativeButton("关闭", null)
-        } else if (uncertain.isNotEmpty()) {
-            dialog.setPositiveButton("已确认发送") { _, _ ->
-                deliveryQueue.updateEvents(item.threadId, uncertain, MessageQueueState.SENT)
-                renderInbox()
+            ContactTaskState.RETRY_WAIT -> {
+                dialog.setPositiveButton("立即重试") { _, _ ->
+                    contactTaskQueue.retryNow(task.contactKey)
+                    renderInbox()
+                }
+                dialog.setNegativeButton("关闭", null)
             }
-            dialog.setNegativeButton("确认未发送后重试") { _, _ ->
-                deliveryQueue.retryNow(item.threadId, uncertain)
-                renderInbox()
+            ContactTaskState.PENDING -> {
+                dialog.setPositiveButton("标记人工已处理") { _, _ ->
+                    contactTaskQueue.markManuallyDone(task.contactKey)
+                    renderInbox()
+                }
+                dialog.setNegativeButton("关闭", null)
             }
-        } else if (retryable.isNotEmpty()) {
-            dialog.setPositiveButton("关闭", null)
-            dialog.setNegativeButton("立即重试") { _, _ ->
-                deliveryQueue.retryNow(item.threadId, retryable)
-                renderInbox()
-            }
-        } else {
-            dialog.setPositiveButton("关闭", null)
-        }
-        if (manuallyResolvable.isNotEmpty()) {
-            dialog.setNeutralButton("标记人工已处理") { _, _ ->
-                deliveryQueue.resolveAsManual(item.threadId, manuallyResolvable)
-                renderInbox()
-            }
+            else -> dialog.setPositiveButton("关闭", null)
         }
         dialog.show()
     }
-
     private fun rowTag(item: InboxConversationSummary): String = when (item.state) {
-        MessageQueueState.PENDING -> "待回复 · ${item.openCount} 条"
+        MessageQueueState.PENDING -> "待处理"
         MessageQueueState.PROCESSING -> "正在处理"
         MessageQueueState.RETRY_WAIT -> "等待重试"
         MessageQueueState.SEND_UNCERTAIN -> "发送待确认"
