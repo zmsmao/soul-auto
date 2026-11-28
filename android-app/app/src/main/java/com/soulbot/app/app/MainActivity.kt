@@ -109,9 +109,7 @@ class MainActivity : AppCompatActivity() {
         btnReadinessDetails.setOnClickListener { openRuntimeEnvironment() }
         btnPrimary.setOnClickListener {
             val readiness = RuntimeReadinessProvider.snapshot(this)
-            val mayOpenController = readiness.overlayGranted &&
-                (readiness.isReadyForManualStart || readiness.automationRunning)
-            if (!mayOpenController) {
+            if (!readiness.canOpenFloatingController) {
                 openRuntimeEnvironment()
                 return@setOnClickListener
             }
@@ -178,9 +176,7 @@ class MainActivity : AppCompatActivity() {
             if (readiness.runnableModelCount > 0) "模型可用 " + readiness.runnableModelCount + " 个"
                 else "模型未就绪",
         ).joinToString("  ·  ")
-        btnPrimary.text = if (readiness.overlayGranted &&
-            (readiness.isReadyForManualStart || readiness.automationRunning)
-        ) "打开控制" else "运行准备"
+        btnPrimary.text = if (readiness.canOpenFloatingController) "打开控制" else "运行准备"
         renderInbox()
     }
 
