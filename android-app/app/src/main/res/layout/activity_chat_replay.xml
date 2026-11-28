@@ -4,8 +4,7 @@
     android:id="@+id/replayListRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="?attr/colorSurface">
+    android:orientation="vertical" android:background="@drawable/bg_page_canvas">
 
     <include layout="@layout/view_toolbar" />
 
@@ -24,7 +23,7 @@
             android:layout_height="wrap_content"
             app:cardBackgroundColor="?attr/colorPrimaryContainer"
             app:cardCornerRadius="@dimen/page_card_radius"
-            app:cardElevation="0dp"
+            app:cardElevation="1dp"
             app:strokeColor="?attr/colorPrimaryContainer"
             app:strokeWidth="1dp">
 
@@ -93,7 +92,7 @@
             android:layout_weight="1"
             app:cardBackgroundColor="?attr/colorSurfaceVariant"
             app:cardCornerRadius="@dimen/page_card_radius"
-            app:cardElevation="0dp"
+            app:cardElevation="1dp"
             app:strokeColor="?attr/colorOutlineVariant"
             app:strokeWidth="1dp">
 

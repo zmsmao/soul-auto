@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
-    android:orientation="vertical">
+    android:orientation="vertical" android:background="@drawable/bg_page_canvas">
 
     <include layout="@layout/view_toolbar" />
 
@@ -28,7 +27,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="让运行状态一目了然"
-                android:textAppearance="@style/TextAppearance.SoulBot.PageTitle" />
+                android:textAppearance="@style/TextAppearance.SoulBot.PageTitle"
+                android:background="@drawable/bg_page_title_mark"
+                android:paddingStart="12dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -44,7 +47,7 @@
                 android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?attr/colorPrimaryContainer"
                 app:cardCornerRadius="@dimen/page_card_radius"
-                app:cardElevation="0dp"
+                app:cardElevation="1dp"
                 app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
 
                 <LinearLayout
@@ -87,7 +90,7 @@
                 android:layout_marginTop="10dp"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
                 app:cardCornerRadius="@dimen/page_card_radius"
-                app:cardElevation="0dp"
+                app:cardElevation="1dp"
                 app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
 
                 <LinearLayout
@@ -275,7 +278,7 @@
                 android:layout_marginTop="10dp"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
                 app:cardCornerRadius="@dimen/page_card_radius"
-                app:cardElevation="0dp"
+                app:cardElevation="1dp"
                 app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
 
                 <LinearLayout
