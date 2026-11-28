@@ -20,18 +20,18 @@
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
-        <item name="android:statusBarColor">@color/surface_page</item>
+        <item name="android:statusBarColor">@color/page_canvas_top</item>
         <item name="android:navigationBarColor">@color/surface_page</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="materialButtonStyle">@style/Widget.SoulBot.Button</item>
     </style>
 
     <style name="TextAppearance.SoulBot.PageTitle" parent="TextAppearance.Material3.HeadlineSmall">
-        <item name="android:textSize">26sp</item>
+        <item name="android:textSize">28sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textColor">?attr/colorOnSurface</item>
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:letterSpacing">-0.02</item>
+        <item name="android:letterSpacing">-0.025</item>
         <item name="android:includeFontPadding">false</item>
     </style>
 
