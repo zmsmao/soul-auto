@@ -151,6 +151,15 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
                 null -> null
                 is ChatReplyGenerationResult.ReadyToSend -> result.text
                 is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(
+                            host.context,
+                            "soul-match no-reply decision discarded; reason=incoming_changed_after_review",
+                        )
+                        return host.replyToCurrentConversation(contactName, seen)
+                    }
                     seen.markNoReplyRequiredEvents(
                         host.memoryThreadId(contactName),
                         newIncomingEvents,
