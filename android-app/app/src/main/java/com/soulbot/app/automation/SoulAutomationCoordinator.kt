@@ -127,10 +127,9 @@ internal class SoulAutomationCoordinator(
                 if (sent) lastDm = System.currentTimeMillis()
             }
             if (!sent && host.isRunning) {
-                if (host.hasUnreadRedDot()) {
-                    host.gotoChatList()
-                    return
-                }
+                // Inbox entry is queue/badge-cycle driven by the main loop. A failed
+                // square round must not re-open the inbox just because the global badge
+                // is still visible after the initial viewport was handled.
                 if (!host.isOnSquare()) host.gotoSquare()
                 RuntimeLog.record(context, "square round ended; sent=false; cooldown=false")
                 host.setNextStep("继续寻找可私聊用户", SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
