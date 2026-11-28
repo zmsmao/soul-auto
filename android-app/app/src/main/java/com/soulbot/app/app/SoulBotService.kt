@@ -585,8 +585,7 @@ class SoulBotService : AccessibilityService() {
 
     internal fun isExpectedContact(contactName: String, contactKey: String): Boolean {
         if (!isExpectedConversation(contactName)) return false
-        val fallbackKey = DiagnosticIdentity.contactId(applicationContext, contactName)
-        return contactKey == fallbackKey || contactKey == memoryThreadId(contactName)
+        return contactKey == DiagnosticIdentity.contactId(applicationContext, contactName)
     }
 
     internal fun personalizationContext(
