@@ -25,10 +25,6 @@ internal data class QueueAdmissionResult(
  */
 internal object QueueAdmissionPolicy {
     private val systemMessages = setOf(
-        "系统消息",
-        "官方通知",
-        "平台通知",
-        "通知中心",
         "你撤回了一条消息",
         "对方撤回了一条消息",
         "你们已成为好友",
@@ -78,10 +74,7 @@ internal object QueueAdmissionPolicy {
         val text = normalize(raw)
         if (text.isBlank()) return true
         if (systemMessages.any { normalize(it) == text }) return true
-        return listOf(
-            Regex("^(?:系统消息|官方通知|平台通知|通知中心)[:：].*$"),
-            Regex("^(?:你|对方)撤回了一条消息$"),
-        ).any { it.matches(text) }
+        return Regex("^(?:你|对方)撤回了一条消息$").matches(text)
     }
 
     private fun normalize(value: String): String = value.trim()
