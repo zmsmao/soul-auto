@@ -29,6 +29,10 @@
                 android:text="联系人"
                 android:textColor="@color/apple_text"
                 android:textSize="32sp"
+                android:background="@drawable/bg_page_title_mark"
+                android:paddingStart="12dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif" />
 
