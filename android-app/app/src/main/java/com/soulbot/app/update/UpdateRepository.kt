@@ -36,7 +36,7 @@ data class UpdateCheckResult(
 )
 
 object UpdateVersionPolicy {
-    private val versionPattern = Regex("""^\\d+(?:\\.\\d+){1,3}$""")
+    private val versionPattern = Regex("""^\d+(?:\.\d+){1,3}$""")
 
     fun isValidVersion(value: String): Boolean = versionPattern.matches(value)
 
