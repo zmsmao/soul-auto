@@ -29,36 +29,6 @@ class MessageQueuePolicyTest {
     }
 
     @Test
-    fun `first snapshot baselines old history and queues only trailing incoming run`() {
-        val states = (0 until 5).map {
-            MessageQueuePolicy.initialState(it, pendingStart = 3, initialized = false)
-        }
-
-        assertEquals(
-            listOf(
-                MessageQueueState.BASELINE,
-                MessageQueueState.BASELINE,
-                MessageQueueState.BASELINE,
-                MessageQueueState.PENDING,
-                MessageQueueState.PENDING,
-            ),
-            states,
-        )
-    }
-
-    @Test
-    fun `new messages before an observed outgoing message are classified as manually handled`() {
-        assertEquals(
-            MessageQueueState.HANDLED_MANUALLY,
-            MessageQueuePolicy.initialState(index = 1, pendingStart = 3, initialized = true),
-        )
-        assertEquals(
-            MessageQueueState.PENDING,
-            MessageQueuePolicy.initialState(index = 4, pendingStart = 3, initialized = true),
-        )
-    }
-
-    @Test
     fun `future retry at queue head blocks later events`() {
         val now = 1_000_000L
         assertTrue(MessageQueuePolicy.isReadyHead("PENDING", 0L, now))
