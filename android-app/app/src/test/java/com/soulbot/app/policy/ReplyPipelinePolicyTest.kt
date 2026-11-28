@@ -54,6 +54,26 @@ class ReplyPipelinePolicyTest {
     }
 
     @Test
+    fun explicitStopContactMessagesUseAnalyzerAndReviewer() {
+        for (message in listOf(
+            "别再联系我了",
+            "以后不要再给我发消息",
+            "我不想继续聊了",
+            "请不要再打扰我",
+            "到此为止吧",
+        )) {
+            assertEquals(
+                ReplyGenerationDepth.ANALYZE_AND_REVIEW,
+                ReplyPipelinePolicy.classify(
+                    listOf("in" to message),
+                    listOf(message),
+                    false,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun emotionalAndRelationshipTurnsUseAnalyzerAndReviewer() {
         for (message in listOf("我有点委屈，不知道怎么说", "其实我有点想见你")) {
             assertEquals(
