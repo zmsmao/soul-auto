@@ -17,6 +17,7 @@ internal enum class ContactTaskOutcome {
 internal data class ContactTask(
     val contactKey: String,
     val displayName: String,
+    val memoryThreadId: String,
     val queueOrder: Long,
     val state: ContactTaskState,
     val outcome: ContactTaskOutcome?,
@@ -32,6 +33,7 @@ internal data class ContactTask(
 internal data class ContactTaskSummary(
     val contactKey: String,
     val displayName: String,
+    val memoryThreadId: String,
     val state: ContactTaskState,
     val outcome: ContactTaskOutcome?,
     val attemptCount: Int,
@@ -64,6 +66,7 @@ internal class ContactTaskQueue(context: Context) :
                 task_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 contact_key TEXT NOT NULL UNIQUE,
                 display_name TEXT NOT NULL,
+                memory_thread_id TEXT NOT NULL DEFAULT '',
                 queue_order INTEGER NOT NULL,
                 state TEXT NOT NULL,
                 outcome TEXT NOT NULL DEFAULT '',
@@ -104,7 +107,7 @@ internal class ContactTaskQueue(context: Context) :
                     null,
                     SQLiteDatabase.OPEN_READONLY,
                 ).use { legacy ->
-                    val migrated = mutableListOf<Triple<String, String, Long>>()
+                    val migrated = mutableListOf<Pair<Triple<String, String, Long>, String>>()
                     val uncertain = mutableSetOf<String>()
                     legacy.rawQuery(
                         """SELECT c.contact_id, c.display_name, c.first_detected_at, c.thread_id
@@ -122,8 +125,8 @@ internal class ContactTaskQueue(context: Context) :
                             val contactId = cursor.getString(0).orEmpty().ifBlank { cursor.getString(3).orEmpty() }
                             val name = cursor.getString(1).orEmpty()
                             if (contactId.isBlank() || name.isBlank() || ConversationRowPolicy.isPlatformNotice(name)) continue
-                            migrated += Triple(contactId, name, cursor.getLong(2))
                             val threadId = cursor.getString(3).orEmpty()
+                            migrated += Triple(contactId, name, cursor.getLong(2)) to threadId
                             val hasUncertain = legacy.rawQuery(
                                 "SELECT 1 FROM conversation_events WHERE thread_id=? AND queue_state='SEND_UNCERTAIN' LIMIT 1",
                                 arrayOf(threadId),
@@ -134,7 +137,8 @@ internal class ContactTaskQueue(context: Context) :
                     db.beginTransaction()
                     try {
                         var order = nextQueueOrderLocked(db)
-                        migrated.forEach { (key, name, detectedAt) ->
+                        migrated.forEach { (legacyRow, memoryThreadId) ->
+                            val (key, name, detectedAt) = legacyRow
                             val state = if (key in uncertain) ContactTaskState.VERIFY_SEND else ContactTaskState.PENDING
                             db.insertWithOnConflict(
                                 "contact_tasks",
@@ -142,6 +146,7 @@ internal class ContactTaskQueue(context: Context) :
                                 ContentValues().apply {
                                     put("contact_key", key)
                                     put("display_name", name)
+                                    put("memory_thread_id", memoryThreadId)
                                     put("queue_order", order++)
                                     put("state", state.name)
                                     put("created_at", detectedAt)
@@ -239,6 +244,31 @@ internal class ContactTaskQueue(context: Context) :
         return inserted
     }
 
+    @Synchronized
+    fun attachMemoryThreadId(contactKey: String, memoryThreadId: String) {
+        if (contactKey.isBlank() || memoryThreadId.isBlank()) return
+        writableDatabase.update(
+            "contact_tasks",
+            ContentValues().apply {
+                put("memory_thread_id", memoryThreadId)
+                put("updated_at", System.currentTimeMillis())
+            },
+            "contact_key=?",
+            arrayOf(contactKey),
+        )
+    }
+
+    @Synchronized
+    fun markOpened(contactKey: String) {
+        if (contactKey.isBlank()) return
+        writableDatabase.update(
+            "contact_tasks",
+            ContentValues().apply { put("unread_cleared", 1); put("updated_at", System.currentTimeMillis()) },
+            "contact_key=? AND state='PROCESSING'",
+            arrayOf(contactKey),
+        )
+    }
+
     /** Release the per-cycle duplicate guard only after Soul no longer shows an unread badge. */
     @Synchronized
     fun markUnreadCleared(contactKey: String) {
@@ -256,7 +286,7 @@ internal class ContactTaskQueue(context: Context) :
     fun peekHead(): ContactTask? {
         val db = readableDatabase
         return db.rawQuery(
-            """SELECT contact_key, display_name, queue_order, state, outcome, attempt_count,
+            """SELECT contact_key, display_name, memory_thread_id, queue_order, state, outcome, attempt_count,
                       next_attempt_at, lease_until, unread_cleared, last_error, created_at, updated_at
                FROM contact_tasks
                WHERE state IN ('PENDING','PROCESSING','RETRY_WAIT','VERIFY_SEND')
@@ -324,7 +354,6 @@ internal class ContactTaskQueue(context: Context) :
                 put("outcome", outcome.name)
                 put("lease_until", 0L)
                 put("next_attempt_at", 0L)
-                put("unread_cleared", 0)
                 put("last_error", "")
                 put("updated_at", System.currentTimeMillis())
             },
@@ -440,9 +469,9 @@ internal class ContactTaskQueue(context: Context) :
         val args = states + (if (search.isBlank()) emptyList() else listOf("%" + search.trim() + "%")) +
             listOf(limit.coerceIn(1, 500).toString())
         return readableDatabase.rawQuery(
-            """SELECT contact_key, display_name, state, outcome, attempt_count, last_error, updated_at, queue_order
+            """SELECT contact_key, display_name, memory_thread_id, state, outcome, attempt_count, last_error, updated_at, queue_order
                FROM contact_tasks WHERE state IN ($placeholders) $searchClause
-               ORDER BY queue_order DESC LIMIT ?""".trimIndent(),
+               ORDER BY queue_order ASC LIMIT ?""".trimIndent(),
             args.toTypedArray(),
         ).use { cursor ->
             buildList {
@@ -450,14 +479,15 @@ internal class ContactTaskQueue(context: Context) :
                     ContactTaskSummary(
                         contactKey = cursor.getString(0),
                         displayName = cursor.getString(1),
-                        state = runCatching { ContactTaskState.valueOf(cursor.getString(2)) }
+                        memoryThreadId = cursor.getString(2),
+                        state = runCatching { ContactTaskState.valueOf(cursor.getString(3)) }
                             .getOrDefault(ContactTaskState.PENDING),
-                        outcome = cursor.getString(3).takeIf(String::isNotBlank)
+                        outcome = cursor.getString(4).takeIf(String::isNotBlank)
                             ?.let { runCatching { ContactTaskOutcome.valueOf(it) }.getOrNull() },
-                        attemptCount = cursor.getInt(4),
-                        lastError = cursor.getString(5),
-                        updatedAt = cursor.getLong(6),
-                        queueOrder = cursor.getLong(7),
+                        attemptCount = cursor.getInt(5),
+                        lastError = cursor.getString(6),
+                        updatedAt = cursor.getLong(7),
+                        queueOrder = cursor.getLong(8),
                     ),
                 )
             }
@@ -518,17 +548,18 @@ internal class ContactTaskQueue(context: Context) :
     private fun android.database.Cursor.toTask(): ContactTask = ContactTask(
         contactKey = getString(0),
         displayName = getString(1),
-        queueOrder = getLong(2),
-        state = runCatching { ContactTaskState.valueOf(getString(3)) }.getOrDefault(ContactTaskState.PENDING),
-        outcome = getString(4).takeIf(String::isNotBlank)
+        memoryThreadId = getString(2),
+        queueOrder = getLong(3),
+        state = runCatching { ContactTaskState.valueOf(getString(4)) }.getOrDefault(ContactTaskState.PENDING),
+        outcome = getString(5).takeIf(String::isNotBlank)
             ?.let { runCatching { ContactTaskOutcome.valueOf(it) }.getOrNull() },
-        attemptCount = getInt(5),
-        nextAttemptAt = getLong(6),
-        leaseUntil = getLong(7),
-        unreadCleared = getInt(8) != 0,
-        lastError = getString(9),
-        createdAt = getLong(10),
-        updatedAt = getLong(11),
+        attemptCount = getInt(6),
+        nextAttemptAt = getLong(7),
+        leaseUntil = getLong(8),
+        unreadCleared = getInt(9) != 0,
+        lastError = getString(10),
+        createdAt = getLong(11),
+        updatedAt = getLong(12),
     )
 
     companion object {
