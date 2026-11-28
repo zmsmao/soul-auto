@@ -46,6 +46,7 @@ import android.view.WindowInsets
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
@@ -251,17 +252,41 @@ class FloatingButtonService : Service() {
     }
 
     private fun toggle() {
-        val service = SoulBotService.instance
-        if (service == null) {
-            recordUiEvent("floating toggle ignored; accessibility service unavailable")
+        if (SoulBotService.running) {
+            val service = SoulBotService.instance
+            if (service == null) {
+                Toast.makeText(this, "无障碍服务已断开，暂时无法停止任务", Toast.LENGTH_LONG).show()
+                recordUiEvent("floating stop ignored; accessibility service unavailable")
+            } else {
+                service.stop()
+            }
             updateStatusPanel()
             return
         }
-        if (SoulBotService.running) {
-            service.stop()
-        } else {
-            service.start()
+
+        val readiness = RuntimeReadinessProvider.snapshot(this)
+        val blockers = readiness.automationStartBlockers()
+        if (blockers.isNotEmpty()) {
+            val message = blockers.joinToString("；")
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            recordUiEvent("manual automation start blocked; " + blockers.joinToString("; "))
+            runCatching {
+                startActivity(
+                    Intent(this, RuntimeEnvironmentActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure { recordUiEvent("runtime environment page launch failed", it) }
+            updateStatusPanel()
+            return
         }
+
+        val service = SoulBotService.instance
+        if (service == null) {
+            Toast.makeText(this, "无障碍服务尚未连接，无法启动任务", Toast.LENGTH_LONG).show()
+            updateStatusPanel()
+            return
+        }
+        service.start()
         updateStatusPanel()
     }
 

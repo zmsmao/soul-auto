@@ -23,6 +23,11 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.snackbar.Snackbar
 
 abstract class BaseSettingsActivity : AppCompatActivity() {
+    override fun onResume() {
+        super.onResume()
+        PrimaryNavigation.requestInsets(this)
+    }
+
     protected fun setupToolbar(title: String) {
         findViewById<MaterialToolbar>(R.id.toolbar).apply {
             this.title = title

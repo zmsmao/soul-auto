@@ -11,7 +11,7 @@ SoulBot 是运行在 Android 手机上的 Soul 自动化辅助工具。应用通
 
 ## 安装应用
 
-1. 打开 [GitHub Releases](https://github.com/zmsmao/soul-auto/releases)。
+1. 打开 [GitHub Releases](https://github.com/zmsmao/soul-pilot/releases)。
 2. 下载最新版本的 `SoulBot-版本号.apk`。
 3. 在 Android 设备上安装 APK。
 4. 首次启动时按系统提示授予所需权限。
