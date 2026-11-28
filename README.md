@@ -2,7 +2,7 @@
 
 SoulBot 是一款 Android 端的 Soul 自动化辅助工具，帮助用户整理聊天上下文、管理个人资料，并通过自己配置的 AI 模型辅助生成回复。应用提供运行状态展示和人工停止入口，自动化过程应保持可监督。
 
-**当前版本：2.1.0** · Android 8.0（API 26）及以上
+**当前版本：2.1.1** · Android 8.0（API 26）及以上
 
 ## 主要功能
 
@@ -42,7 +42,7 @@ SoulBot 需要通过 Android 无障碍服务读取 Soul 中可访问的页面内
 
 ## 版本与更新
 
-版本变更见 [CHANGELOG.md](CHANGELOG.md)。当前 Android `versionName` 为 `2.1.0`，`versionCode` 为 `4`。正式 APK 通过 GitHub Actions 构建，并使用固定发布签名。首次从此前的 Debug 测试包迁移到正式版本时，需要先备份数据、卸载 Debug 包，再安装正式包；之后使用同一发布签名的更新可直接覆盖安装。
+版本变更见 [CHANGELOG.md](CHANGELOG.md)。当前 Android `versionName` 为 `2.1.1`，`versionCode` 为 `5`。正式 APK 通过 GitHub Actions 构建，并使用固定发布签名。首次从此前的 Debug 测试包迁移到正式版本时，需要先备份数据、卸载 Debug 包，再安装正式包；之后使用同一发布签名的更新可直接覆盖安装。
 
 ## 参与项目
 
