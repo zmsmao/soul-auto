@@ -116,9 +116,14 @@ internal class SoulAccessibilityUi(
 
     fun visibleLabels(): List<String> {
         val window = root() ?: return emptyList()
+        val area = activeWindowRegion()
+        val areaBounds = Rect(area.left, area.top, area.right, area.bottom)
         return descendants(window, maxDepth = 12, maxNodes = 320)
             .asSequence()
-            .filter(::isVisibleOnScreen)
+            .filter { node ->
+                runCatching { node.isVisibleToUser }.getOrDefault(false) &&
+                    Rect.intersects(rect(node), areaBounds)
+            }
             .flatMap { sequenceOf(textOf(it), contentDescriptionOf(it)) }
             .map(String::trim)
             .filter(String::isNotBlank)
