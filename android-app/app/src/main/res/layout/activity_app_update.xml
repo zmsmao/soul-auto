@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
-    android:orientation="vertical">
+    android:orientation="vertical" android:background="@drawable/bg_page_canvas">
 
     <include layout="@layout/view_toolbar" />
 
@@ -43,7 +42,7 @@
                 android:layout_marginTop="20dp"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
                 app:cardCornerRadius="@dimen/page_card_radius"
-                app:cardElevation="0dp"
+                app:cardElevation="1dp"
                 app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
 
                 <LinearLayout
@@ -142,7 +141,7 @@
                 android:layout_marginTop="10dp"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
                 app:cardCornerRadius="@dimen/page_card_radius"
-                app:cardElevation="0dp"
+                app:cardElevation="1dp"
                 app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
 
                 <TextView
