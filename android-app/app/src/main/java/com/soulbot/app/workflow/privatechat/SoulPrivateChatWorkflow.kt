@@ -104,6 +104,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
         if (!host.isRunning || !host.isOnChat() || !host.isExpectedConversation(name)) {
             return PrivateChatTaskResult.RETRY
         }
+        host.markPrivateContactOpened(name)
         if (host.hasUncertainSendAttempts(name)) {
             host.setNextStep("$name 存在发送结果待确认，暂停自动重发")
             host.gotoChatList()
