@@ -25,17 +25,21 @@ internal enum class PrivateChatTaskResult {
 /** Owns ordinary private-chat entry, reservation and reply processing. */
 internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
     @Volatile private var activeReplyName: String? = null
+    @Volatile private var activeContactKey: String = ""
 
-    fun replyTo(name: String, seen: ConversationSeenTracker): PrivateChatTaskResult {
+    private fun activeContactKey(name: String): String = activeContactKey.takeIf { activeReplyName == name && it.isNotBlank() }.orEmpty()
+
+    fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
         if (name.isBlank()) return PrivateChatTaskResult.RETRY
         if (!reserveReply(name)) return PrivateChatTaskResult.RETRY
+        activeContactKey = contactKey
         RuntimeLog.record(host.context, "contact task started; contactId=$contactId")
         return try {
             val result = when {
                 host.isOnChat() && host.isExpectedConversation(name) ->
                     processContactTaskInCurrentChat(name)
-                host.isOnList() && openConversationForReply(name) ->
+                host.isOnList() && openConversationForReply(name, contactKey) ->
                     processContactTaskInCurrentChat(name)
                 else -> PrivateChatTaskResult.RETRY
             }
@@ -52,6 +56,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             PrivateChatTaskResult.RETRY
         } finally {
             releaseReply(name)
+            activeContactKey = ""
         }
     }
 
@@ -67,11 +72,11 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
         if (activeReplyName == name) activeReplyName = null
     }
 
-    private fun openConversationForReply(name: String): Boolean {
+    private fun openConversationForReply(name: String, contactKey: String): Boolean {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
         repeat(2) { attempt ->
             if (!host.isRunning || !host.isOnList()) return false
-            val item = host.findConversation(name) ?: return false
+            val item = host.findConversation(name, contactKey) ?: return false
             host.setNextStep(if (attempt == 0) "打开 $name 的会话" else "重新定位 $name 的会话")
             if (!host.tapNode(item)) {
                 host.sleep(500)
@@ -104,7 +109,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
         if (!host.isRunning || !host.isOnChat() || !host.isExpectedConversation(name)) {
             return PrivateChatTaskResult.RETRY
         }
-        host.markPrivateContactOpened(name)
+        host.markPrivateContactOpened(activeContactKey(name), name)
         if (host.hasUncertainSendAttempts(name)) {
             host.setNextStep("$name 存在发送结果待确认，暂停自动重发")
             host.gotoChatList()
