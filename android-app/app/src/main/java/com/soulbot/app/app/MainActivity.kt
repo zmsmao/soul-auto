@@ -367,6 +367,40 @@ class MainActivity : AppCompatActivity() {
         return root
     }
 
+    private fun toInboxConversationSummary(task: ContactTaskSummary): InboxConversationSummary {
+        val state = when (task.state) {
+            ContactTaskState.PENDING -> MessageQueueState.PENDING
+            ContactTaskState.PROCESSING -> MessageQueueState.PROCESSING
+            ContactTaskState.RETRY_WAIT -> MessageQueueState.RETRY_WAIT
+            ContactTaskState.VERIFY_SEND -> MessageQueueState.SEND_UNCERTAIN
+            ContactTaskState.DONE -> when (task.outcome) {
+                ContactTaskOutcome.SENT -> MessageQueueState.SENT
+                ContactTaskOutcome.NO_REPLY -> MessageQueueState.NO_REPLY_REQUIRED
+                ContactTaskOutcome.MANUAL -> MessageQueueState.HANDLED_MANUALLY
+                null -> MessageQueueState.HANDLED_MANUALLY
+            }
+        }
+        val subtitle = when (task.state) {
+            ContactTaskState.PENDING -> "私聊联系人 · 等待按序处理"
+            ContactTaskState.PROCESSING -> "私聊联系人 · 正在处理"
+            ContactTaskState.RETRY_WAIT -> "私聊联系人 · 等待重试"
+            ContactTaskState.VERIFY_SEND -> "私聊联系人 · 发送结果待确认"
+            ContactTaskState.DONE -> when (task.outcome) {
+                ContactTaskOutcome.SENT -> "本轮已成功回复"
+                ContactTaskOutcome.NO_REPLY -> "AI 判断本轮无需回复"
+                ContactTaskOutcome.MANUAL -> "已人工标记处理"
+                null -> "本轮已处理"
+            }
+        }
+        return InboxConversationSummary(
+            threadId = task.contactKey,
+            displayName = task.displayName,
+            preview = subtitle,
+            updatedAt = task.updatedAt,
+            openCount = if (task.state == ContactTaskState.DONE) 0 else 1,
+            state = state,
+        )
+    }
     private fun showConversationDetails(item: InboxConversationSummary) {
         val events = deliveryQueue.eventsForThread(item.threadId)
         if (events.isEmpty()) {
