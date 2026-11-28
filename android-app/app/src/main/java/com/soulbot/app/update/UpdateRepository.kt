@@ -263,11 +263,11 @@ object UpdateRepository {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun signerDigests(info: PackageInfo): Set<String> {
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             info.signingInfo?.apkContentsSigners?.toList().orEmpty()
         } else {
-            @Suppress("DEPRECATION")
             info.signatures?.toList().orEmpty()
         }
         if (signatures.isEmpty()) throw IOException("无法读取 APK 签名")
@@ -278,9 +278,9 @@ object UpdateRepository {
         }.toSet()
     }
 
+    @Suppress("DEPRECATION")
     private fun packageInfo(context: Context, packageName: String, flags: Int): PackageInfo =
         try {
-            @Suppress("DEPRECATION")
             packageManager(context).getPackageInfo(packageName, flags)
         } catch (error: PackageManager.NameNotFoundException) {
             throw IOException("无法读取当前应用信息", error)
