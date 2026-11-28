@@ -271,6 +271,15 @@ class SoulBotService : AccessibilityService() {
 
     internal fun textOf(node: AccessibilityNodeInfo?): String = pageUi.textOf(node)
 
+    internal fun contentDescriptionOf(node: AccessibilityNodeInfo?): String = pageUi.contentDescriptionOf(node)
+
+    internal fun descendants(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = pageUi.descendants(node)
+
+    internal fun visibleLabels(): List<String> = pageUi.visibleLabels()
+
+    internal fun tapSquareAvatarSafely(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): Boolean =
+        pageUi.tapSquareAvatarSafely(card, avatar)
+
     internal fun tap(x: Float, y: Float): Boolean = pageUi.tap(x, y)
 
     internal fun tapNode(node: AccessibilityNodeInfo): Boolean = pageUi.tapNode(node)
