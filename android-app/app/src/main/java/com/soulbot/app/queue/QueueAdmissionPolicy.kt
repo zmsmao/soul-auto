@@ -5,7 +5,6 @@ import com.soulbot.app.conversation.ConversationRowPolicy
 
 internal enum class QueueAdmissionRejection {
     PLATFORM_NOTICE,
-    NO_PENDING_INBOUND,
     EMPTY_EVENT_KEY,
     EMPTY_CONTENT,
     DUPLICATE_EVENT_KEY,
