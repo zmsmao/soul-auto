@@ -541,6 +541,8 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 扫未读（仅会话列表） =====
 
+    internal fun scanConversationPage(): List<ConversationListEntry> = conversationListScanner.scanCurrentPage()
+
     internal fun scanUnread(): List<UnreadConversationCandidate> = conversationListScanner.scanUnread()
 
     internal fun findConversation(name: String): AccessibilityNodeInfo? =
@@ -563,6 +565,9 @@ class SoulBotService : AccessibilityService() {
 
     internal fun memoryThreadId(contactName: String): String =
         conversationContextManager.memoryThreadId(contactName)
+
+    internal fun hasUncertainSendAttempts(contactName: String): Boolean =
+        conversationMemoryDb?.hasUncertainSendAttempts(memoryThreadId(contactName)) == true
 
     internal fun personalizationContext(
         contactName: String,
@@ -616,7 +621,7 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 回复会话（仅会话列表起点） =====
 
-    internal fun replyTo(name: String, seen: ConversationSeenTracker): Boolean =
+    internal fun replyTo(name: String, seen: ConversationSeenTracker): PrivateChatTaskResult =
         privateChatWorkflow.replyTo(name, seen)
 
     internal fun displayedConversationName(): String {
