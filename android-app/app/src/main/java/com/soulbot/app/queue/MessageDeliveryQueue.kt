@@ -700,21 +700,28 @@ internal class MessageDeliveryQueue(context: Context) :
                 "thread_id=? AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','DEAD_LETTER','SUPPRESSED_POLICY')",
                 arrayOf(threadId),
             )
-            db.update(
-                "reply_batches",
-                ContentValues().apply {
-                    put("state", MessageQueueState.NO_REPLY_REQUIRED.name)
-                    put("lease_until", 0L)
-                    put("updated_at", now)
-                    put("last_error", "system_notice_excluded")
-                },
-                "thread_id=? AND state IN ('PROCESSING','RETRY_WAIT','INTERRUPTED','DEAD_LETTER')",
+            val remainingOpen = db.rawQuery(
+                "SELECT COUNT(*) FROM conversation_events WHERE thread_id=? " +
+                    "AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
                 arrayOf(threadId),
-            )
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            if (remainingOpen == 0) {
+                db.update(
+                    "reply_batches",
+                    ContentValues().apply {
+                        put("state", MessageQueueState.NO_REPLY_REQUIRED.name)
+                        put("lease_until", 0L)
+                        put("updated_at", now)
+                        put("last_error", "system_notice_excluded")
+                    },
+                    "thread_id=? AND state IN ('PROCESSING','RETRY_WAIT','INTERRUPTED','DEAD_LETTER')",
+                    arrayOf(threadId),
+                )
+            }
             db.update(
                 "inbox_conversations",
                 ContentValues().apply {
-                    put("state", "DONE")
+                    put("state", if (remainingOpen > 0) "OPEN" else "DONE")
                     put("last_error", "system_notice_excluded")
                     put("last_detected_at", now)
                 },
