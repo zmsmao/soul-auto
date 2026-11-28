@@ -203,7 +203,7 @@ internal class ContactTaskQueue(context: Context) :
                         },
                     ) > 0
                 }
-                existing.state == ContactTaskState.DONE && existing.unreadCleared -> {
+                ContactTaskPolicy.shouldEnqueueAgain(existing.state, existing.unreadCleared) -> {
                     val order = nextQueueOrderLocked(db)
                     db.update(
                         "contact_tasks",
@@ -314,8 +314,11 @@ internal class ContactTaskQueue(context: Context) :
                 else Triple(cursor.getString(0), cursor.getString(1), cursor.getLong(2))
             }
             if (head == null ||
-                head.second !in setOf(ContactTaskState.PENDING.name, ContactTaskState.RETRY_WAIT.name) ||
-                head.third > now
+                !ContactTaskPolicy.canClaim(
+                    state = runCatching { ContactTaskState.valueOf(head.second) }.getOrDefault(ContactTaskState.DONE),
+                    nextAttemptAt = head.third,
+                    now = now,
+                )
             ) {
                 db.setTransactionSuccessful()
                 return null
@@ -357,7 +360,7 @@ internal class ContactTaskQueue(context: Context) :
                 put("last_error", "")
                 put("updated_at", System.currentTimeMillis())
             },
-            "contact_key=? AND state='PROCESSING'",
+            "contact_key=? AND state IN ('PROCESSING','RETRY_WAIT')",
             arrayOf(contactKey),
         )
     }
@@ -587,6 +590,20 @@ internal class ContactTaskQueue(context: Context) :
 }
 
 internal object ContactTaskPolicy {
+    fun shouldEnqueueAgain(state: ContactTaskState, unreadCleared: Boolean): Boolean =
+        state == ContactTaskState.DONE && unreadCleared
+
+    fun canClaim(state: ContactTaskState, nextAttemptAt: Long, now: Long): Boolean =
+        state == ContactTaskState.PENDING ||
+            (state == ContactTaskState.RETRY_WAIT && nextAttemptAt <= now)
+
+    fun shouldResumeCurrentChat(state: ContactTaskState, sameContact: Boolean): Boolean =
+        sameContact && state in setOf(
+            ContactTaskState.PENDING,
+            ContactTaskState.PROCESSING,
+            ContactTaskState.RETRY_WAIT,
+        )
+
     fun retryDelay(attempt: Int): Long = when (attempt.coerceAtLeast(1)) {
         1 -> 3_000L
         2 -> 10_000L
