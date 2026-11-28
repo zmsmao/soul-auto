@@ -39,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvReadinessSummary: TextView
     private lateinit var tvReadinessDetails: TextView
     private lateinit var btnReadinessDetails: TextView
+    private lateinit var btnReadinessToggle: TextView
+    private var readinessExpanded = true
     private lateinit var etSearch: EditText
     private lateinit var queueList: LinearLayout
     private lateinit var tvEmpty: TextView
@@ -71,6 +73,8 @@ class MainActivity : AppCompatActivity() {
         tvReadinessSummary = findViewById(R.id.tvReadinessSummary)
         tvReadinessDetails = findViewById(R.id.tvReadinessDetails)
         btnReadinessDetails = findViewById(R.id.btnReadinessDetails)
+        btnReadinessToggle = findViewById(R.id.btnReadinessToggle)
+        btnReadinessToggle.setOnClickListener { toggleReadinessDetails() }
         etSearch = findViewById(R.id.etInboxSearch)
         queueList = findViewById(R.id.queueList)
         tvEmpty = findViewById(R.id.tvInboxEmpty)
@@ -178,6 +182,14 @@ class MainActivity : AppCompatActivity() {
             (readiness.isReadyForManualStart || readiness.automationRunning)
         ) "打开控制" else "运行准备"
         renderInbox()
+    }
+
+    private fun toggleReadinessDetails() {
+        readinessExpanded = !readinessExpanded
+        tvReadinessDetails.visibility = if (readinessExpanded) View.VISIBLE else View.GONE
+        btnReadinessToggle.text = if (readinessExpanded) "收起" else "展开"
+        btnReadinessToggle.contentDescription =
+            if (readinessExpanded) "收起运行准备详情" else "展开运行准备详情"
     }
 
     private fun openRuntimeEnvironment() {
