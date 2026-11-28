@@ -14,6 +14,9 @@ class SettingsHubActivity : BaseSettingsActivity() {
         setupPrimaryNavigation(R.id.nav_settings)
 
         findViewById<View>(R.id.rowTaskSettings).setOnClickListener { open(TaskSettingsActivity::class.java) }
+        findViewById<View>(R.id.rowRuntimeEnvironment).setOnClickListener {
+            open(RuntimeEnvironmentActivity::class.java)
+        }
         findViewById<View>(R.id.rowModelSettings).setOnClickListener { open(ModelSettingsActivity::class.java) }
         findViewById<View>(R.id.rowProfileSettings).setOnClickListener { open(ProfileSettingsActivity::class.java) }
         findViewById<View>(R.id.rowDataBackup).setOnClickListener { open(DataBackupActivity::class.java) }
