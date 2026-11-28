@@ -288,7 +288,23 @@ internal class SoulAutomationCoordinator(
                                     if (remaining > 0L) {
                                         host.setNextStep(head.displayName + " 处理失败，等待重试", remaining)
                                         host.sleep(minOf(3_000L, remaining))
+                                    } else if (pageRows.none { it.contactKey == head.contactKey }) {
+                                        if (head.contactKey != missingHeadKey) {
+                                            missingHeadKey = head.contactKey
+                                            wrappedForMissingHead = false
+                                        }
+                                        if (host.scrollConversationPageDown()) {
+                                            continue@mainLoop
+                                        }
+                                        if (!wrappedForMissingHead) {
+                                            wrappedForMissingHead = true
+                                            host.scrollConversationToTop()
+                                            continue@mainLoop
+                                        }
+                                        contactQueue.retry(head.contactKey, "contact_not_found_in_inbox")
                                     } else {
+                                        missingHeadKey = ""
+                                        wrappedForMissingHead = false
                                         processQueueHead(head)
                                     }
                                 }
