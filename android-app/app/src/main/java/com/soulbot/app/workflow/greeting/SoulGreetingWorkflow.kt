@@ -124,6 +124,15 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
         val reply = when (generationResult) {
             is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
             is ChatReplyGenerationResult.NoReplyRequired -> {
+                if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                    host.currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
+                ) {
+                    RuntimeLog.record(
+                        host.context,
+                        "greeting no-reply decision discarded; reason=incoming_changed_after_review",
+                    )
+                    return host.replyToCurrentConversation(name, seen)
+                }
                 seen.markNoReplyRequiredEvents(
                     host.memoryThreadId(name),
                     newEvents,
