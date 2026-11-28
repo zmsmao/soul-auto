@@ -116,7 +116,7 @@ object ReplyPipelinePolicy {
         )
     }
 
-    fun noReplyRequiredResult(review: ReplyReview?): ChatReplyGenerationResult.NoReplyRequired? {
+    internal fun noReplyRequiredResult(review: ReplyReview?): ChatReplyGenerationResult.NoReplyRequired? {
         if (review?.decision != ReplyReviewDecision.SKIP) return null
         return ChatReplyGenerationResult.NoReplyRequired(
             review.issues.firstOrNull() ?: "explicit_boundary",
