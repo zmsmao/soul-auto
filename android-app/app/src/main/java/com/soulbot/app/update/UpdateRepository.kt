@@ -127,7 +127,7 @@ object UpdateRepository {
         val apiDigest = rawDigest.removePrefix("sha256:").lowercase()
             .takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
         val checksumUrl = checksumAsset?.optString("browser_download_url")
-            ?.takeIf(::isAllowedReleaseAsset)
+            ?.let { candidate -> candidate.takeIf { isAllowedReleaseAsset(it) } }
 
         return ReleaseInfo(
             tagName = tagName,
@@ -221,7 +221,7 @@ object UpdateRepository {
             Request.Builder().url(url).header("User-Agent", "SoulBot-Android-Updater").get().build(),
             maxChars = 512,
         ).trim()
-        val digest = text.substringBefore(Regex("\\s")).lowercase()
+        val digest = text.split(Regex("\\s+")).firstOrNull().orEmpty().lowercase()
         if (!digest.matches(Regex("^[0-9a-f]{64}$"))) {
             throw IOException("Release SHA-256 文件格式无效")
         }
@@ -359,6 +359,4 @@ object UpdateRepository {
         }, "soulbot-update-check").start()
     }
 
-    private fun isAllowedReleaseAsset(url: String?): Boolean =
-        !url.isNullOrBlank() && isAllowedReleaseAsset(url)
 }
