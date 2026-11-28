@@ -1,5 +1,7 @@
 package com.soulbot.app.policy
 
+import com.soulbot.app.conversation.ChatReplyGenerationResult
+
 enum class ReplyGenerationDepth { SINGLE, REVIEW, ANALYZE_AND_REVIEW }
 enum class ReplyReviewDecision { PASS, REWRITE, SKIP }
 
@@ -49,6 +51,10 @@ object ReplyPipelinePolicy {
     private val deepAnalysisSignals = listOf(
         "不开心", "难过", "难受", "委屈", "生气", "失望", "不舒服", "焦虑", "压力大",
         "崩溃", "哭了", "道歉", "误会", "冷战", "拒绝", "不想继续", "别联系",
+        "别再联系", "以后别联系", "不要联系", "不要再联系", "不再联系",
+        "别给我发消息", "不要给我发消息", "不要再给我发消息", "不要再找我",
+        "以后别找我", "不想再聊", "不想继续聊", "不想和你聊", "请别打扰",
+        "不要再打扰", "别打扰我", "到此为止", "结束聊天", "停止联系",
         "喜欢你", "想你", "想见你", "暧昧", "约会", "在一起", "表白", "吃醋",
         "嫉妒", "男朋友", "女朋友", "分手", "我们的关系", "有好感",
     )
@@ -111,6 +117,13 @@ object ReplyPipelinePolicy {
             relationshipSignal = (json["relationship_signal"] as? String).orEmpty().ifBlank { "none" }.trim().take(100),
             signalConfidence = if (confidence.isFinite()) confidence.coerceIn(0.0, 1.0) else 0.0,
             factsToUse = facts.distinct(),
+        )
+    }
+
+    internal fun noReplyRequiredResult(review: ReplyReview?): ChatReplyGenerationResult.NoReplyRequired? {
+        if (review?.decision != ReplyReviewDecision.SKIP) return null
+        return ChatReplyGenerationResult.NoReplyRequired(
+            review.issues.firstOrNull() ?: "explicit_boundary",
         )
     }
 

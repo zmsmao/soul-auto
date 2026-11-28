@@ -112,7 +112,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             return false
         }
         if (ReplyRhythmPolicy.shouldWaitForLowInformation(thread, new)) {
-            seen.markSeenEvents(host.memoryThreadId(name), newEvents)
+            seen.markSuppressedEvents(host.memoryThreadId(name), newEvents)
             greetDb.recordGreet(systemGreetingName, replyContext)
             host.setNextStep("$name 连续简短回应，本轮自然停顿")
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
@@ -120,18 +120,50 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             return false
         }
         val greetingEventKey = host.currentIncomingMessageKeys(name).joinToString(",")
-        val reply = host.generateValidatedChatReply(name, thread, new) ?: run {
+        val generationResult = host.generateValidatedChatReply(name, thread, new)
+        val reply = when (generationResult) {
+            is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
+            is ChatReplyGenerationResult.NoReplyRequired -> {
+                if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                    host.currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
+                ) {
+                    RuntimeLog.record(
+                        host.context,
+                        "greeting no-reply decision discarded; reason=incoming_changed_after_review",
+                    )
+                    return host.replyToCurrentConversation(name, seen)
+                }
+                seen.markNoReplyRequiredEvents(
+                    host.memoryThreadId(name),
+                    newEvents,
+                    generationResult.reason,
+                )
+                greetDb.recordGreet(systemGreetingName, replyContext)
+                RuntimeLog.record(
+                    host.context,
+                    "greeting reply intentionally skipped; reason=${generationResult.reason}; contactId=${DiagnosticIdentity.contactId(host.context, name)}",
+                )
+                host.setNextStep("$name 本轮无需回复，已归档", 1000)
+                if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
+                else { host.pressBack(); host.sleep(1000) }
+                return false
+            }
+            null -> null
+        }
+        if (reply.isNullOrBlank()) {
             if (host.isExpectedConversation(name) &&
                 host.currentIncomingMessageKeys(name).joinToString(",") != greetingEventKey
             ) {
                 return host.replyToCurrentConversation(name, seen)
             }
+            seen.retryEvents(host.memoryThreadId(name), newEvents, "generation_failed")
             host.setNextStep("招呼回复生成失败，返回列表避免卡住", 1200)
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) host.handleQiyu()
             else { host.pressBack(); host.sleep(1200) }
             return false
         }
         if (host.currentScreen() == SoulScreen.QIYU_POPUP) {
+            seen.retryEvents(host.memoryThreadId(name), newEvents, "qiyu_interrupted")
             host.handleQiyu()
             return false
         }
@@ -152,6 +184,7 @@ internal class SoulGreetingWorkflow(private val host: SoulGreetingHost) {
             RuntimeLog.record(host.context, "greeting reply regenerated; reason=incoming_changed_before_send")
             return host.replyToCurrentConversation(name, seen)
         } else {
+            seen.markUncertainEvents(host.memoryThreadId(name), newEvents, "send_not_confirmed")
             host.setNextStep("给 $name 的消息未发出，本轮不再重复进入", 1500)
             host.sleep(1500)
         }

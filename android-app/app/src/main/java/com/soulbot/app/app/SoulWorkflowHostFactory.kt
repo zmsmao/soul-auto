@@ -7,6 +7,7 @@ import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
+import com.soulbot.app.queue.MessageQueueState
 import android.graphics.Rect
 import android.os.SystemClock
 import android.os.Handler
@@ -85,8 +86,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.conversationMemoryDb?.hasHistory(memoryThreadId(name), scene) == true
                 override fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>, scene: ReplyScene) =
                     service.learnFromManualReplies(name, thread, scene)
-                override fun unseenIncomingEvents(name: String, thread: List<Pair<String, String>>, seen: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent> =
-                    service.unseenIncomingEvents(name, thread, seen, pendingCount)
+                override fun unseenIncomingEvents(name: String, thread: List<Pair<String, String>>, seen: ConversationSeenTracker, pendingCount: Int, scene: ReplyScene): List<ConversationIncomingEvent> =
+                    service.unseenIncomingEvents(name, thread, seen, pendingCount, scene)
                 override fun memoryThreadId(name: String): String = service.memoryThreadId(name)
                 override fun hasUnreadRedDot(): Boolean = service.hasUnreadRedDot()
                 override fun gotoChatList(): Boolean = service.gotoChatList()
@@ -95,7 +96,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun findExactText(text: String): List<AccessibilityNodeInfo> = service.findExactText(text)
                 override fun tapNode(node: AccessibilityNodeInfo): Boolean = service.tapNode(node)
                 override fun handleQiyu(): Boolean = service.handleQiyu()
-                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
                 override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
                     service.generateValidatedOpening(action, context)
@@ -154,7 +155,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     contactName: String,
                     thread: List<Pair<String, String>>,
                     focusIncoming: List<String>,
-                ): String? =
+                ): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming)
                 override fun normalizeReply(text: String): String = service.normalizeReply(text)
                 override fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean =
@@ -215,7 +216,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     contactName: String,
                     thread: List<Pair<String, String>>,
                     focusIncoming: List<String>,
-                ): String? =
+                ): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming)
                 override fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean =
                     service.replyToCurrentConversation(name, seen)
@@ -316,9 +317,15 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun memoryThreadId(contactName: String): String = service.memoryThreadId(contactName)
                 override fun currentIncomingMessageKeys(contactName: String): List<String> =
                     service.currentIncomingMessageKeys(contactName)
+                override fun updateQueueEvents(
+                    contactName: String,
+                    eventKeys: List<String>,
+                    state: MessageQueueState,
+                    reason: String,
+                ) = service.updateQueueEvents(contactName, eventKeys, state, reason)
                 override fun visibleTitleTexts(): List<String> = service.visibleTitleTexts()
                 override fun readQiyuSignature(): String = service.readQiyuSignature()
-                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String? =
+                override fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult? =
                     service.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
                 override fun generateValidatedOpening(action: String, context: OpeningContext): String? =
                     service.generateValidatedOpening(action, context)

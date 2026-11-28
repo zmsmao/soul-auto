@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.match
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import com.soulbot.app.conversation.OpeningContext
 import com.soulbot.app.conversation.ReplyScene
 import android.view.accessibility.AccessibilityNodeInfo
@@ -22,6 +23,7 @@ internal interface SoulMatchHost : SoulWorkflowHost {
         thread: List<Pair<String, String>>,
         seen: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent>
     fun memoryThreadId(name: String): String
     fun hasUnreadRedDot(): Boolean
@@ -36,7 +38,7 @@ internal interface SoulMatchHost : SoulWorkflowHost {
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
         scene: ReplyScene,
-    ): String?
+    ): ChatReplyGenerationResult?
     fun generateValidatedOpening(action: String, context: OpeningContext): String?
     fun currentConversationHasChanged(name: String, thread: List<Pair<String, String>>): Boolean
     fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean

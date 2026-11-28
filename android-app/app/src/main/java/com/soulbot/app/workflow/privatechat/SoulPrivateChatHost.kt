@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.privatechat
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import android.view.accessibility.AccessibilityNodeInfo
 
 
@@ -30,7 +31,7 @@ internal interface SoulPrivateChatHost : SoulWorkflowHost {
         contactName: String,
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
-    ): String?
+    ): ChatReplyGenerationResult?
     fun normalizeReply(text: String): String
     fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean
     fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String)

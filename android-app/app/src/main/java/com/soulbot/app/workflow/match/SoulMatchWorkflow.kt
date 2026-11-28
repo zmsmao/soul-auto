@@ -113,11 +113,11 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         val route = OpeningConversationRoute.action(thread, host.hasConversationHistory(contactName, ReplyScene.SOUL_MATCH))
         host.learnFromManualReplies(contactName, thread, ReplyScene.SOUL_MATCH)
         val pendingIncoming = OpeningConversationRoute.pendingIncoming(thread)
-        val newIncomingEvents = host.unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size)
+        val newIncomingEvents = host.unseenIncomingEvents(contactName, thread, seen, pendingIncoming.size, ReplyScene.SOUL_MATCH)
         val newIncoming = newIncomingEvents.map { it.text }
         val replyingToMessage = newIncoming.isNotEmpty()
         if (replyingToMessage && ReplyRhythmPolicy.shouldWaitForLowInformation(thread, newIncoming)) {
-            seen.markSeenEvents(host.memoryThreadId(contactName), newIncomingEvents)
+            seen.markSuppressedEvents(host.memoryThreadId(contactName), newIncomingEvents)
             host.setNextStep("匹配聊天连续收到简短回应，本轮自然停顿")
             host.gotoSoulPlanet()
             return false
@@ -147,7 +147,33 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
         }
 
         val finalReply = if (replyingToMessage) {
-            host.generateValidatedChatReply(contactName, thread, newIncoming, ReplyScene.SOUL_MATCH)
+            when (val result = host.generateValidatedChatReply(contactName, thread, newIncoming, ReplyScene.SOUL_MATCH)) {
+                null -> null
+                is ChatReplyGenerationResult.ReadyToSend -> result.text
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(
+                            host.context,
+                            "soul-match no-reply decision discarded; reason=incoming_changed_after_review",
+                        )
+                        return host.replyToCurrentConversation(contactName, seen)
+                    }
+                    seen.markNoReplyRequiredEvents(
+                        host.memoryThreadId(contactName),
+                        newIncomingEvents,
+                        result.reason,
+                    )
+                    RuntimeLog.record(
+                        host.context,
+                        "soul-match reply intentionally skipped; reason=${result.reason}; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}",
+                    )
+                    host.setNextStep("匹配会话本轮无需回复，返回星球页", 800)
+                    host.gotoSoulPlanet()
+                    return false
+                }
+            }
         } else {
             host.generateValidatedOpening(
                 "根据 $contactName 的匹配资料生成开场白",
@@ -160,6 +186,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             ) {
                 return host.replyToCurrentConversation(contactName, seen)
             }
+            seen.retryEvents(host.memoryThreadId(contactName), newIncomingEvents, "generation_failed")
             RuntimeLog.record(host.context, "soul-match reply generation exhausted")
             host.setNextStep("匹配回复生成失败，返回星球避免卡住", 2000)
             host.sleep(2000)
@@ -185,6 +212,7 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             if (host.isOnChat() && host.isExpectedConversation(contactName)) {
                 return host.replyToCurrentConversation(contactName, seen)
             }
+            if (replyingToMessage) seen.retryEvents(host.memoryThreadId(contactName), newIncomingEvents, "snapshot_changed_before_send")
             return false
         }
         val matchOpeningKey = if (replyingToMessage) null else {
@@ -217,6 +245,8 @@ internal class SoulMatchWorkflow(private val host: SoulMatchHost) {
             host.setNextStep("灵魂匹配开场白已发送，返回星球页", 1200)
             host.sleep(1200)
             host.gotoSoulPlanet()
+        } else if (replyingToMessage) {
+            seen.markUncertainEvents(host.memoryThreadId(contactName), newIncomingEvents, "send_not_confirmed")
         } else if (host.isOnChat() && host.isExpectedConversation(contactName) &&
             host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
         ) {

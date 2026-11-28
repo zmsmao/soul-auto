@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.greeting
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Android and conversation capabilities used by the greeting workflow. */
@@ -32,7 +33,7 @@ internal interface SoulGreetingHost : SoulWorkflowHost {
         contactName: String,
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
-    ): String?
+    ): ChatReplyGenerationResult?
     fun replyToCurrentConversation(name: String, seen: ConversationSeenTracker): Boolean
     fun send(text: String, expectedContact: String, expectedEventAnchor: String): Boolean
     fun recordAutomatedInteraction(contactName: String, incomingMessages: List<String>, reply: String)

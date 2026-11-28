@@ -54,6 +54,26 @@ class ReplyPipelinePolicyTest {
     }
 
     @Test
+    fun explicitStopContactMessagesUseAnalyzerAndReviewer() {
+        for (message in listOf(
+            "别再联系我了",
+            "以后不要再给我发消息",
+            "我不想继续聊了",
+            "请不要再打扰我",
+            "到此为止吧",
+        )) {
+            assertEquals(
+                ReplyGenerationDepth.ANALYZE_AND_REVIEW,
+                ReplyPipelinePolicy.classify(
+                    listOf("in" to message),
+                    listOf(message),
+                    false,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun emotionalAndRelationshipTurnsUseAnalyzerAndReviewer() {
         for (message in listOf("我有点委屈，不知道怎么说", "其实我有点想见你")) {
             assertEquals(
@@ -98,6 +118,25 @@ class ReplyPipelinePolicyTest {
         assertTrue(instructions.contains("假性时间框架与 Push-Pull 是允许选择的策略"))
         assertTrue(instructions.contains("策略按场景选择，不是每轮必用"))
         assertTrue(instructions.contains("轻量时间框架是例外"))
+    }
+
+    @Test
+    fun reviewerSkipMapsToTerminalNoReplyInsteadOfGenerationFailure() {
+        val skip = ReplyPipelinePolicy.parseReview(
+            """{"decision":"skip","issues":["EXPLICIT_STOP"]}""",
+        )
+        val terminal = ReplyPipelinePolicy.noReplyRequiredResult(skip)
+
+        assertEquals(
+            ChatReplyGenerationResult.NoReplyRequired("EXPLICIT_STOP"),
+            terminal,
+        )
+        assertNull(ReplyPipelinePolicy.noReplyRequiredResult(null))
+        assertNull(
+            ReplyPipelinePolicy.noReplyRequiredResult(
+                ReplyPipelinePolicy.parseReview("""{"decision":"pass","issues":[]}"""),
+            ),
+        )
     }
 
     @Test

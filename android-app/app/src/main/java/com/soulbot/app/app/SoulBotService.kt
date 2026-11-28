@@ -12,6 +12,7 @@ import com.soulbot.app.diagnostics.*
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
+import com.soulbot.app.queue.MessageQueueState
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
@@ -251,6 +252,8 @@ class SoulBotService : AccessibilityService() {
 
     internal fun scrollConversationToTop() = navigation.scrollConversationToTop()
 
+    internal fun scrollConversationPageDown(): Boolean = navigation.scrollConversationPageDown()
+
     internal fun findById(id: String): AccessibilityNodeInfo? = pageUi.findById(id)
 
     internal fun findByIds(id: String): List<AccessibilityNodeInfo> = pageUi.findByIds(id)
@@ -474,14 +477,22 @@ class SoulBotService : AccessibilityService() {
     internal fun readThread(): List<Pair<String, String>> = messageReader.readThread()
 
     internal fun currentIncomingMessageKeys(contactName: String): List<String> = messageReader.currentIncomingMessageKeys(contactName)
+    internal fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: MessageQueueState,
+        reason: String = "",
+    ) = conversationContextManager.updateQueueEvents(contactName, eventKeys, state, reason)
+
 
     internal fun unseenIncomingEvents(
         contactName: String,
         thread: List<Pair<String, String>>,
         tracker: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent> =
-        conversationContextManager.unseenIncomingEvents(contactName, thread, tracker, pendingCount)
+        conversationContextManager.unseenIncomingEvents(contactName, thread, tracker, pendingCount, scene)
 
     private fun currentNativeSoulUserId(): String? = conversationContextManager.currentNativeSoulUserId()
 
@@ -543,7 +554,7 @@ class SoulBotService : AccessibilityService() {
         thread: List<Pair<String, String>>,
         focusIncoming: List<String>,
         scene: ReplyScene = ReplyScene.CHAT,
-    ): String? = replyGenerationEngine.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
+    ): ChatReplyGenerationResult? = replyGenerationEngine.generateValidatedChatReply(contactName, thread, focusIncoming, scene)
 
     internal fun generateValidatedOpening(
         action: String,

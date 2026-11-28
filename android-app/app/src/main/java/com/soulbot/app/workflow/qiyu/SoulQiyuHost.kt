@@ -3,6 +3,7 @@ package com.soulbot.app.workflow.qiyu
 import com.soulbot.app.workflow.SoulWorkflowHost
 import com.soulbot.app.conversation.ConversationIncomingEvent
 import com.soulbot.app.conversation.ConversationSeenTracker
+import com.soulbot.app.conversation.ChatReplyGenerationResult
 import com.soulbot.app.conversation.OpeningContext
 import com.soulbot.app.conversation.ReplyScene
 import android.view.accessibility.AccessibilityNodeInfo
@@ -25,9 +26,15 @@ internal interface SoulQiyuHost : SoulWorkflowHost {
     fun unseenIncomingEvents(contactName: String, thread: List<Pair<String, String>>, tracker: ConversationSeenTracker, pendingCount: Int): List<ConversationIncomingEvent>
     fun memoryThreadId(contactName: String): String
     fun currentIncomingMessageKeys(contactName: String): List<String>
+    fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: com.soulbot.app.queue.MessageQueueState,
+        reason: String = "",
+    )
     fun visibleTitleTexts(): List<String>
     fun readQiyuSignature(): String
-    fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): String?
+    fun generateValidatedChatReply(contactName: String, thread: List<Pair<String, String>>, focusIncoming: List<String>, scene: ReplyScene): ChatReplyGenerationResult?
     fun generateValidatedOpening(action: String, context: OpeningContext): String?
     fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo>
     fun splitReply(text: String): List<String>

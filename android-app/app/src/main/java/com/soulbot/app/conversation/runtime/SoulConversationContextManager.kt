@@ -13,6 +13,10 @@ import com.soulbot.app.conversation.context.ContextFragment
 import com.soulbot.app.conversation.context.PersonaContextProvider
 import com.soulbot.app.conversation.context.ContactMemoryContextProvider
 import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
+import com.soulbot.app.queue.MessageDeliveryQueue
+import com.soulbot.app.queue.MessageQueuePolicy
+import com.soulbot.app.queue.MessageQueueState
+import com.soulbot.app.queue.QueueAdmissionPolicy
 
 internal interface SoulConversationContextHost {
     val context: Context
@@ -20,6 +24,7 @@ internal interface SoulConversationContextHost {
     val memoryDatabase: ConversationMemoryDatabase?
     val replyReplayDatabase: ReplyReplayDatabase?
     fun currentIncomingMessageKeys(contactName: String): List<String>
+    fun outgoingMessageCount(): Int
     fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint
     fun isOnChat(): Boolean
     fun isExpectedConversation(contactName: String): Boolean
@@ -33,24 +38,89 @@ internal interface SoulConversationContextHost {
 }
 
 internal class SoulConversationContextManager(private val host: SoulConversationContextHost) {
+    private val deliveryQueue by lazy(LazyThreadSafetyMode.NONE) { MessageDeliveryQueue(host.context) }
     fun unseenIncomingEvents(
         contactName: String,
         thread: List<Pair<String, String>>,
         tracker: ConversationSeenTracker,
         pendingCount: Int,
+        scene: ReplyScene = ReplyScene.CHAT,
     ): List<ConversationIncomingEvent> {
-        if (pendingCount <= 0) return emptyList()
+        if (ConversationRowPolicy.isPlatformNotice(contactName)) {
+            RuntimeLog.record(
+                host.context,
+                "inbox event capture skipped; reason=platform_notice; displayName=$contactName",
+            )
+            return emptyList()
+        }
         val incomingTexts = thread.filter { it.first == "in" }.map { it.second }
         val eventKeys = host.currentIncomingMessageKeys(contactName)
-        val alignedCount = minOf(incomingTexts.size, eventKeys.size)
-        if (alignedCount == 0) return emptyList()
-        val events = incomingTexts.takeLast(alignedCount)
-            .zip(eventKeys.takeLast(alignedCount))
-            .map { (messageText, eventKey) -> ConversationIncomingEvent(eventKey, messageText) }
-            .takeLast(pendingCount)
+        val events = MessageQueuePolicy.alignIncoming(incomingTexts, eventKeys)
         val threadId = memoryThreadId(contactName)
+
+        // Existing queued events that now have a following outgoing message are acknowledged
+        // before filtering the still-unanswered tail. This uses the full aligned snapshot,
+        // but only for reconciliation; historical messages are never newly enqueued.
+        val lastOutgoingIndex = thread.indexOfLast { it.first == "out" }
+        if (lastOutgoingIndex >= 0) {
+            val answeredIncomingCount = thread.take(lastOutgoingIndex).count { it.first == "in" }
+            deliveryQueue.markManuallyHandledIfPending(
+                threadId,
+                events.take(answeredIncomingCount).map { it.key },
+            )
+        }
+
+        val admission = QueueAdmissionPolicy.filter(
+            displayName = contactName,
+            incoming = events,
+            pendingCount = pendingCount,
+        )
+        if (admission.rejected.isNotEmpty()) {
+            RuntimeLog.record(
+                host.context,
+                "queue admission filtered; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}; " +
+                    admission.rejected.entries.joinToString(",") { "${it.key.name}=${it.value}" } +
+                    "; accepted=${admission.accepted.size}",
+            )
+        }
+        if (admission.accepted.isNotEmpty()) {
+            deliveryQueue.enqueueActionableEvents(
+                threadId = threadId,
+                contactId = DiagnosticIdentity.contactId(host.context, contactName),
+                displayName = contactName,
+                scene = scene.name,
+                events = admission.accepted,
+            )
+        }
+        // Reconcile the crash window where the send ledger was confirmed but queue ACK was not.
         val confirmedKeys = host.memoryDatabase?.confirmedMessageKeys(threadId).orEmpty()
-        return tracker.unseenEvents(threadId, events, confirmedKeys)
+        deliveryQueue.markConfirmedKeys(threadId, confirmedKeys)
+        // The durable ledger is authoritative for claimed events. Applying the volatile
+        // seen tracker here would suppress an event that the user explicitly unsnoozed
+        // or manually requeued from the inbox during the same service session.
+        val claimed = deliveryQueue.claimPending(threadId, scene.name)
+        val explicitlyRetried = claimed
+            .filter { it.lastError == "manual_retry_from_inbox" }
+            .map { it.key }
+            .toSet()
+        if (explicitlyRetried.isNotEmpty()) {
+            host.memoryDatabase?.resetUncertainSendAttemptsForEvents(
+                threadId = threadId,
+                eventKeys = explicitlyRetried,
+                outgoingBaseline = host.outgoingMessageCount(),
+            )
+        }
+        return claimed.map { ConversationIncomingEvent(it.key, it.text) }
+    }
+
+    fun updateQueueEvents(
+        contactName: String,
+        eventKeys: List<String>,
+        state: MessageQueueState,
+        reason: String = "",
+    ) {
+        if (eventKeys.isEmpty()) return
+        deliveryQueue.updateEvents(memoryThreadId(contactName), eventKeys, state, reason)
     }
 
     fun currentNativeSoulUserId(): String? {

@@ -135,7 +135,7 @@ internal class SoulMessageReader(
             }
             previousAnchor = occurrenceKey
         }
-        return keys.takeLast(8)
+        return keys
     }
 
     private fun Rect.toUiRegion(): UiRegion = UiRegion(left, top, right, bottom)

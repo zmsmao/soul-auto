@@ -23,6 +23,22 @@ class UnreadConversationPolicyTest {
     }
 
     @Test
+    fun `overlapping pages retain one contact and stable global display order`() {
+        val pageOne = listOf(
+            UnreadConversationCandidate("小明", "10分钟前", 0),
+            UnreadConversationCandidate("小红", "8分钟前", 1),
+        )
+        val pageTwo = listOf(
+            UnreadConversationCandidate("小红", "8分钟前", 0),
+            UnreadConversationCandidate("小张", "5分钟前", 1),
+        )
+        val merged = UnreadConversationPolicy.mergeVisiblePages(listOf(pageOne, pageTwo))
+
+        assertEquals(listOf("小明", "小红", "小张"), merged.map { it.name })
+        assertEquals(listOf(0, 1, 2), merged.map { it.displayOrder })
+    }
+
+    @Test
     fun `high intent unread rows jump ahead of ordinary unread rows`() {
         val rows = listOf(
             UnreadConversationCandidate("普通旧消息", "昨天 08:30", 2, "今天吃饭了吗"),

@@ -8,6 +8,12 @@ import com.soulbot.app.data.AutomationMode
 import com.soulbot.app.data.GreetDatabase
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.policy.GreetingSessionPolicy
+import com.soulbot.app.conversation.UnreadConversationCandidate
+import com.soulbot.app.conversation.UnreadConversationPolicy
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
+import com.soulbot.app.queue.MessageDeliveryQueue
+import com.soulbot.app.queue.MessageQueueState
 import android.content.Context
 
 /**
@@ -23,7 +29,19 @@ internal class SoulAutomationCoordinator(
     private val host: SoulAutomationHost,
 ) {
     fun run() {
-        val seen = ConversationSeenTracker()
+        val deliveryQueue = MessageDeliveryQueue(context)
+        deliveryQueue.recoverProcessingAtWorkerStart()
+        val seen = ConversationSeenTracker { threadId, keys, state ->
+            when {
+                state == "SENT" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SENT)
+                state == "SUPPRESSED_POLICY" -> deliveryQueue.updateEvents(threadId, keys, MessageQueueState.SUPPRESSED_POLICY)
+                state.startsWith("NO_REPLY_REQUIRED:") -> deliveryQueue.updateEvents(
+                    threadId, keys, MessageQueueState.NO_REPLY_REQUIRED, state.substringAfter(':'),
+                )
+                state.startsWith("SEND_UNCERTAIN:") -> deliveryQueue.markSendUncertain(threadId, keys, state.substringAfter(':'))
+                state.startsWith("RETRY_WAIT:") -> deliveryQueue.retryEvents(threadId, keys, state.substringAfter(':'))
+            }
+        }
         val seenDm = mutableSetOf<String>()
         val attemptedDmProfiles = mutableSetOf<String>()
 
@@ -35,6 +53,19 @@ internal class SoulAutomationCoordinator(
         val handledSoulMatches = mutableSetOf<String>()
         val handledGreetingUsers = mutableSetOf<String>()
         var greetingRecheckAt = 0L
+
+        fun queueAgeLabel(timestamp: Long): String {
+            val ageMinutes = ChronoUnit.MINUTES.between(
+                java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime(),
+                LocalDateTime.now(),
+            ).coerceAtLeast(0L)
+            return when {
+                ageMinutes < 1L -> "刚刚"
+                ageMinutes < 60L -> ageMinutes.toString() + "分钟前"
+                ageMinutes < 24L * 60L -> (ageMinutes / 60L).toString() + "小时前"
+                else -> (ageMinutes / (24L * 60L)).toString() + "天前"
+            }
+        }
 
         fun handleIdleWork() {
             if (automationMode.handlesSoulMatch) {
@@ -78,6 +109,7 @@ internal class SoulAutomationCoordinator(
 
         mainLoop@ while (host.isRunning) {
             try {
+                deliveryQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
                 if (!host.hasUnreadRedDot()) unreadTopSearchComplete = false
                 if (screen.name == lastScreenName) stuckCount++ else {
@@ -160,9 +192,24 @@ internal class SoulAutomationCoordinator(
                     SoulScreen.LIST -> {
                         // Private unread messages outrank greetings and all idle outbound work.
                         // The unread list itself is ordered by high-intent preview, then message age.
-                        val unread = if (host.hasUnreadRedDot()) host.scanUnread() else emptyList()
+                        val discoveredUnread = if (host.hasUnreadRedDot() && !unreadTopSearchComplete) {
+                            host.scanUnread()
+                        } else {
+                            emptyList()
+                        }
+                        val queuedUnread = deliveryQueue.readyConversations().mapIndexed { index, item ->
+                            UnreadConversationCandidate(
+                                name = item.displayName,
+                                timeText = queueAgeLabel(item.updatedAt),
+                                displayOrder = index,
+                                previewText = item.preview,
+                            )
+                        }
+                        val unread = UnreadConversationPolicy.oldestFirst(
+                            (discoveredUnread + queuedUnread).distinctBy { it.name },
+                        )
                         if (unread.isNotEmpty()) {
-                            unreadTopSearchComplete = false
+                            if (discoveredUnread.isNotEmpty()) unreadTopSearchComplete = false
                             val nextUnread = unread.first()
                             val name = nextUnread.name
                             val timeStr = nextUnread.timeText

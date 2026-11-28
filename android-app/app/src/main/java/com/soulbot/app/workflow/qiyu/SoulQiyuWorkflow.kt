@@ -11,6 +11,7 @@ import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
+import com.soulbot.app.queue.MessageQueueState
 
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
@@ -142,8 +143,40 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
         )
         val replying = route == OpeningConversationAction.REPLY
         val eventAnchor = host.currentIncomingMessageKeys(contactName).joinToString(",")
-        val finalReply = if (replying) {
+        val generationResult = if (replying) {
             host.generateValidatedChatReply(contactName, thread, pending, ReplyScene.QIYU)
+        } else null
+        val finalReply = if (replying) {
+            when (generationResult) {
+                null -> null
+                is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
+                is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.readThread() != thread ||
+                        host.currentIncomingMessageKeys(contactName).joinToString(",") != eventAnchor
+                    ) {
+                        return deferQiyu(
+                            session,
+                            "incoming_changed_after_no_reply_review",
+                            "奇遇铃收到新消息，已放弃旧的无需回复判断，稍后重新检查",
+                        )
+                    }
+                    host.updateQueueEvents(
+                        contactName,
+                        pendingEvents.map { it.key },
+                        MessageQueueState.NO_REPLY_REQUIRED,
+                        generationResult.reason,
+                    )
+                    pendingQiyu = null
+                    RuntimeLog.record(
+                        host.context,
+                        "qiyu reply intentionally skipped; reason=${generationResult.reason}; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}",
+                    )
+                    host.setNextStep("奇遇铃本轮无需回复，已归档", 800)
+                    host.gotoChatList()
+                    return false
+                }
+            }
         } else host.generateValidatedOpening("优先生成奇遇铃开场", openingContext)
         if (finalReply == null) {
             if (host.pendingIncomingVoiceBubbles().isNotEmpty() || host.readThread() != thread ||
@@ -253,6 +286,7 @@ internal class SoulQiyuWorkflow(private val host: SoulQiyuHost) {
     private fun finishQiyuSend(session: PendingQiyu, prepared: QiyuPreparedReply): Boolean {
         pendingQiyu = null
         qiyuSeen.markSeen(host.memoryThreadId(session.contactName), prepared.pendingEventKeys)
+        host.updateQueueEvents(session.contactName, prepared.pendingEventKeys, MessageQueueState.SENT)
         host.recordAutomatedInteraction(session.contactName, prepared.pending, prepared.text, prepared.opening, scene = ReplyScene.QIYU)
         host.recordHistory(session.contactName,
             prepared.opening?.let { "奇遇铃资料：${it.content}" } ?: prepared.pending.joinToString("\n"), prepared.text)

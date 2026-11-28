@@ -89,6 +89,8 @@ internal class SoulServiceComponentFactory(private val service: SoulBotService) 
         SoulConversationListScanner(object : SoulConversationListHost {
             override val context: android.content.Context get() = service.applicationContext
             override fun isOnList(): Boolean = service.isOnList()
+            override fun scrollToTop() = service.scrollConversationToTop()
+            override fun scrollPageDown(): Boolean = service.scrollConversationPageDown()
             override fun findByIds(id: String): List<AccessibilityNodeInfo> = service.findByIds(id)
             override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean =
                 service.isVisibleOnScreen(node)
@@ -154,6 +156,7 @@ internal class SoulServiceComponentFactory(private val service: SoulBotService) 
             override val replyReplayDatabase: ReplyReplayDatabase? get() = service.replyReplayDb
             override fun currentIncomingMessageKeys(contactName: String): List<String> =
                 service.currentIncomingMessageKeys(contactName)
+            override fun outgoingMessageCount(): Int = service.outgoingMessageCount()
             override fun openingFingerprint(reply: String, context: OpeningContext): OpeningFingerprint =
                 OpeningReplyPolicy.fingerprint(reply, context)
             override fun isOnChat(): Boolean = service.isOnChat()

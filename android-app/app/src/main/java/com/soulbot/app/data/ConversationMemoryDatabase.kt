@@ -302,6 +302,41 @@ class ConversationMemoryDatabase(context: Context) :
         ).use { return it.moveToFirst() }
     }
 
+    /**
+     * Called only after a user explicitly confirms that an uncertain outbound
+     * message was not sent. Reset the matching event reservation with a fresh
+     * visible outgoing baseline so the normal idempotency path can safely retry.
+     */
+    @Synchronized
+    fun resetUncertainSendAttemptsForEvents(
+        threadId: String,
+        eventKeys: Set<String>,
+        outgoingBaseline: Int,
+    ) {
+        if (threadId.isBlank() || eventKeys.isEmpty()) return
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            eventKeys.forEach { eventKey ->
+                db.update(
+                    "send_attempts",
+                    ContentValues().apply {
+                        put("state", "PREPARED")
+                        put("outgoing_baseline", outgoingBaseline.coerceAtLeast(0))
+                        put("updated_at", now)
+                    },
+                    "thread_id=? AND state IN ('CLICKED','UNCERTAIN') " +
+                        "AND instr(',' || event_anchor || ',', ',' || ? || ',') > 0",
+                    arrayOf(threadId, eventKey),
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun markSendAttemptClicked(sendKey: String) = updateSendAttemptState(sendKey, "CLICKED")
     fun markSendAttemptPrepared(sendKey: String) = updateSendAttemptState(sendKey, "PREPARED")
     fun markSendAttemptUncertain(sendKey: String) = updateSendAttemptState(sendKey, "UNCERTAIN")

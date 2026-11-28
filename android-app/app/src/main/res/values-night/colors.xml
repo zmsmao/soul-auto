@@ -1,3 +1,27 @@
 <resources>
-<color name="purple_500">#B7BAFF</color><color name="purple_700">#9297FF</color><color name="brand_primary">#AEB3FF</color><color name="brand_primary_dark">#9297FF</color><color name="brand_on_primary">#20245B</color><color name="brand_primary_container">#30365F</color><color name="brand_on_primary_container">#E8EAFF</color><color name="brand_secondary">#B8C0D6</color><color name="brand_secondary_container">#30394B</color><color name="brand_tertiary">#75D7C0</color><color name="brand_tertiary_container">#1D473F</color><color name="surface_page">#0D1119</color><color name="surface_card">#171D29</color><color name="surface_subtle">#171D29</color><color name="surface_border">#293345</color><color name="text_primary">#F2F4FA</color><color name="text_secondary">#A5AEC0</color><color name="nav_selected">#B7BBFF</color><color name="nav_unselected">#8792A7</color><color name="state_success">#75D7B7</color><color name="state_warning">#E8BE7A</color><color name="state_danger">#F19AA8</color><color name="white">#FFFFFF</color><color name="black">#000000</color><color name="apple_page">#0D1119</color><color name="apple_card">#171D29</color><color name="apple_text">#F2F4FA</color><color name="apple_secondary">#A5AEC0</color><color name="apple_blue">#AEB3FF</color><color name="apple_separator">#293345</color><color name="apple_soft">#222B3A</color><color name="launcher_background">#5B61E8</color>
+    <color name="purple_500">#9DCBFA</color><color name="purple_700">#77B4EE</color>
+    <color name="brand_primary">#83BDF0</color><color name="brand_primary_dark">#65A8E6</color>
+    <color name="brand_on_primary">#102B43</color><color name="brand_primary_container">#25425D</color>
+    <color name="brand_on_primary_container">#E1F2FF</color><color name="brand_secondary">#B1C2D5</color>
+    <color name="brand_secondary_container">#2B3B4C</color><color name="brand_tertiary">#75D7B2</color>
+    <color name="brand_tertiary_container">#1F493B</color><color name="surface_page">#101721</color>
+    <color name="surface_card">#192431</color><color name="surface_subtle">#192431</color>
+    <color name="surface_border">#2D3B4C</color><color name="text_primary">#EEF5FC</color>
+    <color name="text_secondary">#A9B8C9</color><color name="nav_selected">#91C9F7</color>
+    <color name="nav_unselected">#94A4B6</color><color name="state_success">#78D7B6</color>
+    <color name="state_warning">#E9C17F</color><color name="state_danger">#F09AA4</color>
+    <color name="white">#FFFFFF</color><color name="black">#000000</color>
+    <color name="apple_page">#101721</color><color name="apple_card">#192431</color>
+    <color name="apple_text">#EEF5FC</color><color name="apple_secondary">#A9B8C9</color>
+    <color name="apple_blue">#83BDF0</color><color name="apple_separator">#2D3B4C</color>
+    <color name="apple_soft">#243344</color><color name="launcher_background">#318BDB</color>
+    <color name="inbox_page">#101721</color><color name="inbox_text">#EEF5FC</color>
+    <color name="inbox_secondary">#A9B8C9</color><color name="inbox_hint">#8293A7</color>
+    <color name="inbox_line">#2D3B4C</color><color name="inbox_nav">#192431</color>
+    <color name="inbox_tab_ripple">#25425D</color><color name="inbox_header_top">#294C68</color>
+    <color name="inbox_header_bottom">#101721</color><color name="inbox_search">#192431</color>
+    <color name="inbox_status_bg">#25425D</color><color name="inbox_status_fg">#B9E0FF</color>
+    <color name="inbox_badge_bg">#E44855</color><color name="inbox_badge_fg">#FFFFFF</color>
+    <color name="inbox_chip_blue">#243E55</color><color name="inbox_chip_blue_text">#B8DFFF</color>
+    <color name="inbox_chip_purple">#3D2D4D</color><color name="inbox_chip_purple_text">#E0BDF8</color>
 </resources>
