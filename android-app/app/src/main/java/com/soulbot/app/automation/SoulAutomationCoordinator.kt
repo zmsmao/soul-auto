@@ -24,7 +24,8 @@ import android.content.Context
  * available to match/greeting workflows only.
  */
 
-internal class SoulAutomationCoordinator(    private val context: Context,
+internal class SoulAutomationCoordinator(
+    private val context: Context,
     private val automationMode: AutomationMode,
     private val squareIntervalSeconds: Long,
     private val greetDb: GreetDatabase,
