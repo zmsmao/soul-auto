@@ -107,6 +107,20 @@ class QueueAdmissionPolicyTest {
     }
 
     @Test
+    fun `official notice text forwarded by a person remains actionable`() {
+        val result = QueueAdmissionPolicy.filter(
+            displayName = "小林",
+            incoming = listOf(
+                event("forwarded", "官方通知：周末活动改到下午三点，我们一起去吗？"),
+                event("quoted", "刚刚看到系统消息这个词，感觉有点奇怪"),
+            ),
+            pendingCount = 2,
+        )
+
+        assertEquals(listOf("forwarded", "quoted"), result.accepted.map { it.key })
+    }
+
+    @Test
     fun `media and shared post messages remain actionable content`() {
         val result = QueueAdmissionPolicy.filter(
             displayName = "小林",
