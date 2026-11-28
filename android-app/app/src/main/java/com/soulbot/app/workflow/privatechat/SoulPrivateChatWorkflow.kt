@@ -35,7 +35,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                 host.isOnChat() && host.isExpectedContact(name, contactKey) ->
                     processContactTaskInCurrentChat(name, contactKey)
                 host.isOnList() && openConversationForReply(name, contactKey) ->
-                    processContactTaskInCurrentChat(name)
+                    processContactTaskInCurrentChat(name, contactKey)
                 else -> PrivateChatTaskResult.RETRY
             }
             RuntimeLog.record(host.context, "contact task ended; contactId=$contactId; result=$result")
