@@ -13,7 +13,10 @@
     <color name="brand_tertiary_container">#E0F4EC</color>
 
     <!-- Shared page surfaces: quiet canvas, crisp white content surfaces -->
-    <color name="surface_page">#F4F6FA</color>
+    <color name="surface_page">#F7F9FC</color>
+    <color name="page_canvas_top">#B9DFFF</color>
+    <color name="page_canvas_mid">#EAF4FE</color>
+    <color name="page_canvas_bottom">#F7F9FC</color>
     <color name="surface_card">#FFFFFF</color>
     <color name="surface_subtle">#FFFFFF</color>
     <color name="surface_border">#E3E8F0</color>
@@ -26,7 +29,7 @@
     <color name="state_danger">#D94B59</color>
 
     <!-- Legacy Apple-style page aliases, kept for existing layouts -->
-    <color name="apple_page">#F4F6FA</color>
+    <color name="apple_page">#F7F9FC</color>
     <color name="apple_card">#FFFFFF</color>
     <color name="apple_text">#172235</color>
     <color name="apple_secondary">#728096</color>
