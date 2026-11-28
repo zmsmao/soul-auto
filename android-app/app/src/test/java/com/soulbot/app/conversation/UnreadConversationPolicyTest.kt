@@ -8,7 +8,7 @@ class UnreadConversationPolicyTest {
     private val now = LocalDateTime.of(2026, 9, 12, 12, 0)
 
     @Test
-    fun `orders unread conversations from oldest to newest`() {
+    fun `keeps unread contacts in discovered list order regardless of timestamps`() {
         val rows = listOf(
             UnreadConversationCandidate("最新", "刚刚", 0),
             UnreadConversationCandidate("较早", "2小时前", 1),
@@ -17,7 +17,7 @@ class UnreadConversationPolicyTest {
         )
 
         assertEquals(
-            listOf("最早", "较早", "中间", "最新"),
+            listOf("最新", "较早", "最早", "中间"),
             UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
         )
     }
@@ -39,7 +39,7 @@ class UnreadConversationPolicyTest {
     }
 
     @Test
-    fun `high intent unread rows jump ahead of ordinary unread rows`() {
+    fun `message preview priority does not change FIFO contact order`() {
         val rows = listOf(
             UnreadConversationCandidate("普通旧消息", "昨天 08:30", 2, "今天吃饭了吗"),
             UnreadConversationCandidate("联系方式", "刚刚", 0, "方便加个微信吗"),
@@ -47,7 +47,7 @@ class UnreadConversationPolicyTest {
         )
 
         assertEquals(
-            listOf("情绪信号", "联系方式", "普通旧消息"),
+            listOf("普通旧消息", "联系方式", "情绪信号"),
             UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
         )
     }
@@ -95,7 +95,7 @@ class UnreadConversationPolicyTest {
         )
 
         assertEquals(
-            listOf("最早", "最新", "未知"),
+            listOf("最新", "最早", "未知"),
             UnreadConversationPolicy.oldestFirst(rows, now).map { it.name },
         )
     }
