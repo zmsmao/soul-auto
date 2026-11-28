@@ -6,7 +6,11 @@
         <include layout="@layout/view_toolbar" />
         <androidx.core.widget.NestedScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:clipToPadding="false" android:fillViewport="true">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="20dp" android:paddingTop="@dimen/page_top_padding" android:paddingEnd="20dp" android:paddingBottom="@dimen/page_bottom_padding">
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="让回复更像你" android:textAppearance="@style/TextAppearance.SoulBot.PageTitle" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="让回复更像你" android:textAppearance="@style/TextAppearance.SoulBot.PageTitle"
+                android:background="@drawable/bg_page_title_mark"
+                android:paddingStart="12dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="用真实人工样本、反馈和回放逐步校准表达风格。" android:textAppearance="@style/TextAppearance.SoulBot.Supporting" />
                 <com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardBackgroundColor="?attr/colorPrimaryContainer" app:cardCornerRadius="@dimen/page_card_radius" app:cardElevation="1dp" app:strokeWidth="1dp" app:strokeColor="?attr/colorOutlineVariant">
                     <TextView android:id="@+id/tvLearningStats" android:layout_width="match_parent" android:layout_height="wrap_content" android:lineSpacingExtra="4dp" android:padding="18dp" android:text="风格学习开启 · 0 条样本\n记忆引用开启 · 0 条旧版摘要" android:textAppearance="@style/TextAppearance.Material3.BodyLarge" android:textColor="?attr/colorOnPrimaryContainer" />
