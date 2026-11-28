@@ -10,7 +10,7 @@
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="68dp"
         android:layout_gravity="center_vertical"
         android:layout_marginEnd="66dp"
         app:cardBackgroundColor="@color/inbox_nav"
@@ -21,16 +21,16 @@
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/bottomNavigation"
             android:layout_width="match_parent"
-            android:layout_height="64dp"
+            android:layout_height="68dp"
             android:background="@android:color/transparent"
             android:elevation="0dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            app:itemIconSize="22dp"
+            app:itemIconSize="20dp"
             app:itemIconTint="@color/nav_item_tint"
             app:itemTextColor="@color/nav_item_tint"
             app:itemRippleColor="@color/inbox_tab_ripple"
-            app:labelVisibilityMode="unlabeled"
+            app:labelVisibilityMode="labeled"
             app:menu="@menu/menu_primary_navigation" />
     </com.google.android.material.card.MaterialCardView>
 
