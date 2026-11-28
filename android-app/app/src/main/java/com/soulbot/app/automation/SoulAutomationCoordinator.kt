@@ -12,6 +12,7 @@ import com.soulbot.app.queue.ContactTask
 import com.soulbot.app.queue.ContactTaskOutcome
 import com.soulbot.app.queue.ContactTaskQueue
 import com.soulbot.app.queue.ContactTaskState
+import com.soulbot.app.queue.ContactTaskPolicy
 import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueueState
 import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
@@ -58,6 +59,8 @@ internal class SoulAutomationCoordinator(
         var stuckCount = 0
         var unreadTopSearchComplete = false
         var nextUnreadSweepAt = 0L
+        var inboxPositionInitialized = false
+        var lastUnreadRedDot = false
         var greetingRecheckAt = 0L
         var missingHeadKey = ""
         var wrappedForMissingHead = false
@@ -141,10 +144,15 @@ internal class SoulAutomationCoordinator(
                 legacyDeliveryQueue.recoverExpiredLeases()
                 contactQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
-                if (!host.hasUnreadRedDot()) {
+                val hasUnreadRedDot = host.hasUnreadRedDot()
+                if (!hasUnreadRedDot) {
                     unreadTopSearchComplete = false
                     nextUnreadSweepAt = 0L
                 }
+                if (hasUnreadRedDot != lastUnreadRedDot) {
+                    inboxPositionInitialized = false
+                }
+                lastUnreadRedDot = hasUnreadRedDot
                 if (screen.name == lastScreenName) {
                     stuckCount++
                 } else {
@@ -242,6 +250,12 @@ internal class SoulAutomationCoordinator(
                         }
                     }
                     SoulScreen.LIST -> {
+                        if (!inboxPositionInitialized && contactQueue.peekHead() == null) {
+                            host.setNextStep("定位私聊列表顶部")
+                            host.scrollConversationToTop()
+                            inboxPositionInitialized = true
+                            continue@mainLoop
+                        }
                         if (host.hasUnreadRedDot() && unreadTopSearchComplete &&
                             System.currentTimeMillis() >= nextUnreadSweepAt
                         ) {
