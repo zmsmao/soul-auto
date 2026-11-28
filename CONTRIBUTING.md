@@ -20,6 +20,7 @@
 3. 在描述中说明修改目的、主要变化和可能影响。
 4. 为修复或新增的逻辑补充适当测试。
 5. 确认没有提交密钥、个人数据、构建产物或无关文件。
+6. 文档、安装步骤、版本号或用户可见行为发生变化时，同步检查相关 Markdown 文档。
 
 建议使用以下分支前缀：`feat/`、`fix/`、`refactor/`、`docs/`。
 
@@ -37,18 +38,25 @@
 ./gradlew testDebugUnitTest assembleDebug lintDebug
 ```
 
+发布相关改动还应运行 Release 变体检查：
+
+```bash
+./gradlew testReleaseUnitTest assembleRelease lintRelease
+```
+
 Windows PowerShell：
 
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleDebug lintDebug
 ```
 
-## 代码与文档
+## 代码与行为边界
 
 - 保持页面操作、自动化流程、模型调用和数据存储的职责清晰。
 - 避免提交真实用户聊天内容和身份信息。
 - 用户可见功能、安装步骤或配置项发生变化时，同步更新 README 或使用指南。
 - 请勿将尚未实现或未经验证的功能描述为已完成。
+- 涉及聊天策略的修改应明确列出影响范围。不要在队列、界面、稳定性或重构类改动中顺带修改人设、Prompt、模型路由、回复判定、生成规则、聊天节奏、联系人记忆或人工回复学习行为。
 
 ## 发布
 
