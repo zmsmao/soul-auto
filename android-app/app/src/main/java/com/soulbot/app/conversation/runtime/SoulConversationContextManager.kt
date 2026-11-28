@@ -56,20 +56,39 @@ internal class SoulConversationContextManager(private val host: SoulConversation
         val eventKeys = host.currentIncomingMessageKeys(contactName)
         val events = MessageQueuePolicy.alignIncoming(incomingTexts, eventKeys)
         val threadId = memoryThreadId(contactName)
-        deliveryQueue.observeSnapshot(
-            threadId = threadId,
-            contactId = DiagnosticIdentity.contactId(host.context, contactName),
-            displayName = contactName,
-            scene = scene.name,
-            incoming = events,
-            pendingCount = pendingCount,
-        )
+
+        // Existing queued events that now have a following outgoing message are acknowledged
+        // before filtering the still-unanswered tail. This uses the full aligned snapshot,
+        // but only for reconciliation; historical messages are never newly enqueued.
         val lastOutgoingIndex = thread.indexOfLast { it.first == "out" }
         if (lastOutgoingIndex >= 0) {
             val answeredIncomingCount = thread.take(lastOutgoingIndex).count { it.first == "in" }
             deliveryQueue.markManuallyHandledIfPending(
                 threadId,
                 events.take(answeredIncomingCount).map { it.key },
+            )
+        }
+
+        val admission = QueueAdmissionPolicy.filter(
+            displayName = contactName,
+            incoming = events,
+            pendingCount = pendingCount,
+        )
+        if (admission.rejected.isNotEmpty()) {
+            RuntimeLog.record(
+                host.context,
+                "queue admission filtered; contactId=${DiagnosticIdentity.contactId(host.context, contactName)}; " +
+                    admission.rejected.entries.joinToString(",") { "${it.key.name}=${it.value}" } +
+                    "; accepted=${admission.accepted.size}",
+            )
+        }
+        if (admission.accepted.isNotEmpty()) {
+            deliveryQueue.enqueueActionableEvents(
+                threadId = threadId,
+                contactId = DiagnosticIdentity.contactId(host.context, contactName),
+                displayName = contactName,
+                scene = scene.name,
+                events = admission.accepted,
             )
         }
         // Reconcile the crash window where the send ledger was confirmed but queue ACK was not.
