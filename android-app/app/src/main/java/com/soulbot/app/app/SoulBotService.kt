@@ -32,6 +32,7 @@ import com.soulbot.app.workflow.match.SoulMatchHost
 import com.soulbot.app.workflow.match.SoulMatchWorkflow
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatHost
 import com.soulbot.app.workflow.privatechat.SoulPrivateChatWorkflow
+import com.soulbot.app.workflow.privatechat.PrivateChatTaskResult
 import com.soulbot.app.workflow.qiyu.SoulQiyuHost
 import com.soulbot.app.workflow.qiyu.SoulQiyuWorkflow
 import com.soulbot.app.workflow.square.SoulSquareHost
