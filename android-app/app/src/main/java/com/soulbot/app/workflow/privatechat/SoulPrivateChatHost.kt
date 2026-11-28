@@ -11,7 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 internal interface SoulPrivateChatHost : SoulWorkflowHost {
     fun isOnList(): Boolean
     fun isOnChat(): Boolean
-    fun findConversation(name: String): AccessibilityNodeInfo?
+    fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo?
     fun tapNode(node: AccessibilityNodeInfo): Boolean
     fun gotoChatList(): Boolean
     fun isExpectedConversation(name: String): Boolean
@@ -25,7 +25,7 @@ internal interface SoulPrivateChatHost : SoulWorkflowHost {
         seen: ConversationSeenTracker,
         pendingCount: Int,
     ): List<ConversationIncomingEvent>
-    fun markPrivateContactOpened(name: String)
+    fun markPrivateContactOpened(contactKey: String, name: String)
     fun hasUncertainSendAttempts(name: String): Boolean
     fun memoryThreadId(name: String): String
     fun currentIncomingMessageKeys(name: String): List<String>
