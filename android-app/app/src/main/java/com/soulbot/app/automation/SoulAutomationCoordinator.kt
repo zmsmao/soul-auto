@@ -191,9 +191,10 @@ internal class SoulAutomationCoordinator(
                 val queuedHead = contactQueue.peekHead()
                 if (screen == SoulScreen.CHAT && queuedHead != null) {
                     val visibleName = host.displayedConversationName()
-                    if (visibleName == queuedHead.displayName &&
-                        queuedHead.state != ContactTaskState.VERIFY_SEND &&
-                        queuedHead.state != ContactTaskState.PROCESSING
+                    if (ContactTaskPolicy.shouldResumeCurrentChat(
+                            queuedHead.state,
+                            sameContact = visibleName == queuedHead.displayName,
+                        )
                     ) {
                         processQueueHead(queuedHead)
                     } else if (visibleName != queuedHead.displayName) {
