@@ -261,6 +261,11 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun findByIds(id: String): List<AccessibilityNodeInfo> = service.findByIds(id)
                 override fun descendantsById(node: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo> =
                     service.descendantsById(node, id)
+                override fun descendants(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = service.descendants(node)
+                override fun contentDescriptionOf(node: AccessibilityNodeInfo?): String = service.contentDescriptionOf(node)
+                override fun tapSquareAvatarSafely(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): Boolean =
+                    service.tapSquareAvatarSafely(card, avatar)
+                override fun isLikelyLiveRoom(): Boolean = service.currentScreen() == SoulScreen.LIVE_ROOM
                 override fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean = service.isVisibleOnScreen(node)
                 override fun rect(node: AccessibilityNodeInfo): Rect = service.rect(node)
                 override fun textOf(node: AccessibilityNodeInfo?): String = service.textOf(node)
