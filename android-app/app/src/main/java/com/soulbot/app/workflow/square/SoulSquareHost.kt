@@ -30,6 +30,7 @@ internal interface SoulSquareHost : SoulWorkflowHost {
     fun swipeVertically(containerId: String, startRatio: Float, endRatio: Float, duration: Long = 300L)
     fun isOnProfile(): Boolean
     fun isSoulForeground(): Boolean
+    fun pressBack()
     fun backToSquare(): Boolean
     fun isOnNoSend(): Boolean
     fun skipNoSend()
