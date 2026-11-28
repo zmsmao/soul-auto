@@ -59,7 +59,6 @@ internal class SoulAutomationCoordinator(
         var lastScreenName = ""
         var stuckCount = 0
         var inboxPageScanned = false
-        var inboxPositionInitialized = false
         var lastUnreadRedDot = false
         var greetingRecheckAt = 0L
         var missingHeadKey = ""
@@ -145,9 +144,8 @@ internal class SoulAutomationCoordinator(
                 contactQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
                 val hasUnreadRedDot = host.hasUnreadRedDot()
-                if (hasUnreadRedDot != lastUnreadRedDot) {
-                    inboxPositionInitialized = false
-                    if (hasUnreadRedDot) inboxPageScanned = false
+                if (hasUnreadRedDot != lastUnreadRedDot && hasUnreadRedDot) {
+                    inboxPageScanned = false
                 }
                 // Reset only after leaving the inbox with no unread badge and no queued work.
                 // A badge that remains visible after processing must not send the worker back
@@ -156,7 +154,6 @@ internal class SoulAutomationCoordinator(
                     contactQueue.peekHead() == null
                 ) {
                     inboxPageScanned = false
-                    inboxPositionInitialized = false
                 }
                 lastUnreadRedDot = hasUnreadRedDot
                 if (screen.name == lastScreenName) {
@@ -260,12 +257,6 @@ internal class SoulAutomationCoordinator(
                         }
                     }
                     SoulScreen.LIST -> {
-                        if (!inboxPositionInitialized && contactQueue.peekHead() == null) {
-                            host.setNextStep("定位私聊列表顶部")
-                            host.scrollConversationToTop()
-                            inboxPositionInitialized = true
-                            continue@mainLoop
-                        }
                         // Scan one viewport only. The list provides identity + unread state;
                         // actual chat content is fetched only after opening the contact.
                         val pageRows = host.scanConversationPage()
