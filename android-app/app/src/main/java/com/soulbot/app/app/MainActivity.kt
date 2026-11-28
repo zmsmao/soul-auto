@@ -4,12 +4,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -38,6 +36,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvRuntimeDetail: TextView
     private lateinit var btnPrimary: MaterialButton
     private lateinit var btnSettings: TextView
+    private lateinit var tvReadinessSummary: TextView
+    private lateinit var tvReadinessDetails: TextView
+    private lateinit var btnReadinessDetails: TextView
     private lateinit var etSearch: EditText
     private lateinit var queueList: LinearLayout
     private lateinit var tvEmpty: TextView
@@ -67,6 +68,9 @@ class MainActivity : AppCompatActivity() {
         tvRuntimeDetail = findViewById(R.id.tvRuntimeDetail)
         btnPrimary = findViewById(R.id.btnPrimary)
         btnSettings = findViewById(R.id.btnSettings)
+        tvReadinessSummary = findViewById(R.id.tvReadinessSummary)
+        tvReadinessDetails = findViewById(R.id.tvReadinessDetails)
+        btnReadinessDetails = findViewById(R.id.btnReadinessDetails)
         etSearch = findViewById(R.id.etInboxSearch)
         queueList = findViewById(R.id.queueList)
         tvEmpty = findViewById(R.id.tvInboxEmpty)
@@ -97,23 +101,17 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener {
             startActivity(Intent(this, SettingsHubActivity::class.java))
         }
-        tvRuntimeDetail.setOnClickListener {
-            if (!isAccessibilityEnabled()) {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            } else {
-                Snackbar.make(tvRuntimeDetail, "无障碍服务已开启", Snackbar.LENGTH_SHORT).show()
-            }
-        }
+        tvRuntimeDetail.setOnClickListener { openRuntimeEnvironment() }
+        btnReadinessDetails.setOnClickListener { openRuntimeEnvironment() }
         btnPrimary.setOnClickListener {
-            if (!isOverlayEnabled()) {
-                openOverlaySettings()
+            val readiness = RuntimeReadinessProvider.snapshot(this)
+            val mayOpenController = readiness.overlayGranted &&
+                (readiness.isReadyForManualStart || readiness.automationRunning)
+            if (!mayOpenController) {
+                openRuntimeEnvironment()
                 return@setOnClickListener
             }
-            val intent = Intent(this, FloatingButtonService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-            else startService(intent)
-            RuntimeLog.record(applicationContext, "floating control launch requested from inbox")
-            Snackbar.make(btnPrimary, "悬浮控制已打开", Snackbar.LENGTH_SHORT).show()
+            openFloatingController()
         }
         etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -143,30 +141,55 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshDashboard() {
-        val serviceAvailable = SoulBotService.instance != null
-        val running = SoulBotService.running
-        val accessibilityEnabled = isAccessibilityEnabled()
-        val overlayEnabled = isOverlayEnabled()
+        val readiness = RuntimeReadinessProvider.snapshot(this)
+        val serviceAvailable = readiness.accessibilityConnected
+        val running = readiness.automationRunning
         val rawStatus = if (serviceAvailable) SoulBotService.statusText else "等待服务连接"
         tvRuntimeTitle.text = when {
             running -> "运行中"
-            !accessibilityEnabled -> "未开启无障碍"
+            !readiness.accessibilityEnabled -> "未开启无障碍"
             !serviceAvailable -> "等待服务"
             else -> "已停止"
         }
         tvRuntimeTitle.setTextColor(color(if (running) R.color.inbox_status_fg else R.color.inbox_secondary))
         tvRuntimeDetail.text = when {
-            !accessibilityEnabled -> "点击这里开启无障碍服务"
-            !overlayEnabled -> "需要悬浮窗权限才能打开运行控制"
             running -> FloatingStatusFormatter.detail(
                 true, serviceAvailable, rawStatus, SoulBotService.statusDeadline,
                 System.currentTimeMillis(),
             )
+            !readiness.soulInstalled -> "未检测到 Soul 客户端 · 点击查看运行准备"
+            !readiness.accessibilityEnabled -> "无障碍服务未开启 · 点击查看运行准备"
+            !serviceAvailable -> "无障碍服务尚未连接 · 点击查看运行准备"
+            !readiness.overlayGranted -> "悬浮窗权限未开启 · 点击查看运行准备"
+            readiness.runnableModelCount == 0 -> "没有可用模型通道 · 点击查看运行准备"
             rawStatus.isNotBlank() && rawStatus != "用户手动停止" -> rawStatus
             else -> "自动任务尚未运行 · 已采集的消息仍保留在队列中"
         }
-        btnPrimary.text = if (overlayEnabled) "控制" else "授权"
+        tvReadinessSummary.text = "运行准备 · " + readiness.checklistCompletedCount + " / 4 项完成"
+        tvReadinessDetails.text = listOf(
+            if (readiness.soulInstalled) "Soul 已安装" else "Soul 未安装",
+            if (readiness.accessibilityEnabled && readiness.accessibilityConnected) "无障碍已连接"
+                else if (readiness.accessibilityEnabled) "无障碍等待连接" else "无障碍未开启",
+            if (readiness.overlayGranted) "悬浮窗已授权" else "悬浮窗未授权",
+            if (readiness.runnableModelCount > 0) "模型可用 " + readiness.runnableModelCount + " 个"
+                else "模型未就绪",
+        ).joinToString("  ·  ")
+        btnPrimary.text = if (readiness.overlayGranted &&
+            (readiness.isReadyForManualStart || readiness.automationRunning)
+        ) "打开控制" else "运行准备"
         renderInbox()
+    }
+
+    private fun openRuntimeEnvironment() {
+        startActivity(Intent(this, RuntimeEnvironmentActivity::class.java))
+    }
+
+    private fun openFloatingController() {
+        val intent = Intent(this, FloatingButtonService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+        else startService(intent)
+        RuntimeLog.record(applicationContext, "floating control launch requested from inbox")
+        Snackbar.make(btnPrimary, "悬浮控制已打开", Snackbar.LENGTH_SHORT).show()
     }
 
     private fun selectFilter(filter: InboxFilter) {
@@ -447,18 +470,6 @@ class MainActivity : AppCompatActivity() {
         return SimpleDateFormat(pattern, Locale.getDefault()).format(date)
     }
 
-    private fun openOverlaySettings() {
-        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-    }
-
-    private fun isAccessibilityEnabled(): Boolean {
-        val enabled = Settings.Secure.getString(
-            contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
-        return enabled.contains(packageName)
-    }
-
-    private fun isOverlayEnabled(): Boolean = Settings.canDrawOverlays(this)
     private fun color(id: Int): Int = getColor(id)
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
