@@ -5,7 +5,6 @@ on:
     branches:
       - master
       - feat/dev-soul
-  create:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -121,7 +120,7 @@ jobs:
 
   release:
     name: Build and publish signed APK
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/')) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -157,7 +156,7 @@ jobs:
 
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             RELEASE_TAG="$INPUT_RELEASE_TAG"
-          elif [ "$GITHUB_EVENT_NAME" = "create" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/heads/release/* ]]; }; then
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
             if [[ "$GITHUB_REF_NAME" != release/* ]]; then
               echo "::error::Only release/<version> branch events can trigger publication."
               exit 1
@@ -179,7 +178,7 @@ jobs:
           fi
 
           CHECK_EXISTING_TAG=false
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "create" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/heads/release/* ]]; }; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/heads/release/* ]]; }; then
             CHECK_EXISTING_TAG=true
           fi
           if [ "$CHECK_EXISTING_TAG" = true ] && git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
