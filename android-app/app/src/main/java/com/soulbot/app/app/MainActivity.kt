@@ -24,7 +24,6 @@ import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
 import com.soulbot.app.logging.RuntimeLog
 import com.soulbot.app.update.UpdateRepository
-import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.data.ConversationMemoryDatabase
 import com.soulbot.app.queue.ContactTaskQueue
 import com.soulbot.app.queue.ContactTaskState
