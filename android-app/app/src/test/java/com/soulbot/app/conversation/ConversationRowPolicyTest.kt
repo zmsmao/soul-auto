@@ -23,6 +23,18 @@ class ConversationRowPolicyTest {
     }
 
     @Test
+    fun `known Soul notification aliases are excluded exactly`() {
+        listOf(
+            "Soul客服",
+            "Soul小助手",
+            "officialnotification",
+            "Soul 官方通知",
+        ).forEach { name ->
+            assertTrue("$name should be filtered", ConversationRowPolicy.isPlatformNotice(name))
+        }
+    }
+
+    @Test
     fun `ordinary people and non-notice official themed names are retained`() {
         val names = listOf(
             "小林",
