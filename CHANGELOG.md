@@ -1,5 +1,7 @@
 # 更新日志
 
+本文记录面向用户的版本变化。最新版本请以 [GitHub Releases](https://github.com/zmsmao/soul-pilot/releases) 页面为准。
+
 ## [2.2.1] - 2026-11-28
 
 ### 联系人队列与页面调度
@@ -20,8 +22,6 @@
 - Android versionName：`2.2.1`
 - Android versionCode：`10`
 - 最低 Android 版本：Android 8.0（API 26）
-
-本文记录面向用户的版本变化。最新版本请以 [GitHub Releases](https://github.com/zmsmao/soul-pilot/releases) 页面为准。
 
 ## [2.2.0] - 2026-11-28
 
