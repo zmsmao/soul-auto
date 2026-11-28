@@ -440,7 +440,7 @@ class MainActivity : AppCompatActivity() {
                             memory.close()
                         }
                     } else {
-                        contactTaskQueue.confirmSent(task.contactKey)
+                        Snackbar.make(queueList, "缺少发送记录身份，不能安全确认", Snackbar.LENGTH_LONG).show()
                     }
                     renderInbox()
                 }
