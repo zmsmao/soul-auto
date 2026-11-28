@@ -36,7 +36,7 @@ internal interface SoulAutomationHost {
     fun scanUnread(): List<UnreadConversationCandidate>
     fun replyDelay(timeStr: String): Long
     fun waitUnlessQiyu(delayMs: Long): Boolean
-    fun replyTo(name: String, seen: ConversationSeenTracker): PrivateChatTaskResult
+    fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult
     fun scrollConversationToTop()
     fun hasGreeting(): Boolean
     fun openGreetingList(): Boolean
