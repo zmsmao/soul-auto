@@ -27,7 +27,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="设置与偏好"
-                android:textAppearance="@style/TextAppearance.SoulBot.PageTitle" />
+                android:textAppearance="@style/TextAppearance.SoulBot.PageTitle"
+                android:background="@drawable/bg_page_title_mark"
+                android:paddingStart="12dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
 
             <TextView
                 android:layout_width="match_parent"
