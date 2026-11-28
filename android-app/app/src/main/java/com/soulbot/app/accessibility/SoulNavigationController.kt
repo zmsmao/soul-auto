@@ -192,6 +192,6 @@ internal class SoulNavigationController(
     // ===== 延时 =====
 
     companion object {
-        const val MAX_SCROLLS_TO_TOP = 12
+        const val MAX_SCROLLS_TO_TOP = 100
     }
 }
