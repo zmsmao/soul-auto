@@ -35,7 +35,7 @@ class QueueAdmissionPolicyTest {
         )
 
         assertTrue(result.accepted.isEmpty())
-        assertEquals(1, result.rejected[QueueAdmissionRejection.NO_PENDING_INBOUND])
+        assertTrue(result.rejected.isEmpty())
     }
 
     @Test
