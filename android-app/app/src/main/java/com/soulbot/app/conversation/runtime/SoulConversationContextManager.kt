@@ -16,6 +16,7 @@ import com.soulbot.app.conversation.memory.ContactMemoryExtractionScheduler
 import com.soulbot.app.queue.MessageDeliveryQueue
 import com.soulbot.app.queue.MessageQueuePolicy
 import com.soulbot.app.queue.MessageQueueState
+import com.soulbot.app.queue.QueueAdmissionPolicy
 
 internal interface SoulConversationContextHost {
     val context: Context
