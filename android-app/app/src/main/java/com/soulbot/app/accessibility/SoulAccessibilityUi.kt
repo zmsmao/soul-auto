@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.math.roundToInt
+import java.util.ArrayDeque
+import com.soulbot.app.policy.SquareBrowsePolicy
 
 /** Low-level Soul accessibility tree and gesture operations. No chat/business policy lives here. */
 internal class SoulAccessibilityUi(
@@ -89,6 +91,73 @@ internal class SoulAccessibilityUi(
     }
     fun textOf(node: AccessibilityNodeInfo?): String =
         runCatching { node?.text?.toString()?.trim() ?: "" }.getOrDefault("")
+
+    fun contentDescriptionOf(node: AccessibilityNodeInfo?): String =
+        runCatching { node?.contentDescription?.toString()?.trim() ?: "" }.getOrDefault("")
+
+    /** Bounded breadth-first traversal for one card; avoids walking the whole Soul window. */
+    fun descendants(node: AccessibilityNodeInfo, maxDepth: Int = 9, maxNodes: Int = 180): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        val pending = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
+        pending.addLast(node to 0)
+        while (pending.isNotEmpty() && result.size < maxNodes) {
+            val (current, depth) = pending.removeFirst()
+            result += current
+            if (depth >= maxDepth) continue
+            val childCount = runCatching { current.childCount }.getOrDefault(0)
+            for (index in 0 until childCount) {
+                if (result.size + pending.size >= maxNodes) break
+                val child = runCatching { current.getChild(index) }.getOrNull() ?: continue
+                pending.addLast(child to depth + 1)
+            }
+        }
+        return result
+    }
+
+    fun visibleLabels(): List<String> {
+        val window = root() ?: return emptyList()
+        return descendants(window, maxDepth = 12, maxNodes = 320)
+            .asSequence()
+            .filter(::isVisibleOnScreen)
+            .flatMap { sequenceOf(textOf(it), contentDescriptionOf(it)) }
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .toList()
+    }
+
+    /**
+     * A square avatar may bubble a generic node click to its whole card. Only click
+     * the avatar or its nearest clickable ancestor when that target is tightly bounded.
+     * There is intentionally no coordinate fallback for this high-risk action.
+     */
+    fun tapSquareAvatarSafely(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): Boolean {
+        if (!isVisibleOnScreen(card) || !isVisibleOnScreen(avatar)) return false
+        val cardBounds = rect(card)
+        val avatarBounds = rect(avatar)
+        var current: AccessibilityNodeInfo? = avatar
+        repeat(5) {
+            val candidate = current ?: return false
+            val clickable = runCatching { candidate.isClickable }.getOrDefault(false)
+            if (clickable) {
+                val targetBounds = rect(candidate)
+                val insideCard = cardBounds.contains(targetBounds)
+                val overlapsAvatar = Rect.intersects(targetBounds, avatarBounds)
+                val tightTarget = SquareBrowsePolicy.isSafeAvatarClickTarget(
+                    avatarBounds.width(),
+                    avatarBounds.height(),
+                    targetBounds.width(),
+                    targetBounds.height(),
+                )
+                if (!insideCard || !overlapsAvatar || !tightTarget) return false
+                return runCatching {
+                    candidate.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }.getOrDefault(false)
+            }
+            current = runCatching { candidate.parent }.getOrNull()
+        }
+        return false
+    }
     fun tap(x: Float, y: Float): Boolean {
         val point = AdaptiveUiPolicy.clampPoint(
             UiPoint(x.roundToInt(), y.roundToInt()),
