@@ -53,7 +53,7 @@ internal object QueueAdmissionPolicy {
             return QueueAdmissionResult(emptyList(), rejected)
         }
         if (pendingCount <= 0 || incoming.isEmpty()) {
-            return QueueAdmissionResult(emptyList(), mapOf(QueueAdmissionRejection.NO_PENDING_INBOUND to 1))
+            return QueueAdmissionResult(emptyList(), emptyMap())
         }
 
         val pending = incoming.takeLast(pendingCount.coerceAtMost(incoming.size))
