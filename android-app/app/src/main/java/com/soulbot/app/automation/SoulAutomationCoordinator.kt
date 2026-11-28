@@ -379,6 +379,14 @@ internal class SoulAutomationCoordinator(
                     SoulScreen.SQUARE -> {
                         if (automationMode.handlesSquareDm) handleIdleWork() else host.gotoSoulPlanet()
                     }
+                    SoulScreen.LIVE_ROOM -> {
+                        host.setNextStep("检测到直播页面，立即退出并恢复浏览", 1000)
+                        host.pressBack()
+                        host.sleep(700)
+                        if (host.currentScreen() == SoulScreen.LIVE_ROOM) {
+                            host.gotoModeIdleSurface(automationMode)
+                        }
+                    }
                     SoulScreen.PROFILE -> host.gotoModeIdleSurface(automationMode)
                     SoulScreen.CHAT -> {
                         if (contactQueue.peekHead() != null) {
