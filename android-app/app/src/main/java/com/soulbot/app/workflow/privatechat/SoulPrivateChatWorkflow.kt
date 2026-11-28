@@ -143,6 +143,15 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             val reply = when (generationResult) {
                 is ChatReplyGenerationResult.ReadyToSend -> generationResult.text
                 is ChatReplyGenerationResult.NoReplyRequired -> {
+                    if (host.pendingIncomingVoiceBubbles().isNotEmpty() ||
+                        host.currentIncomingMessageKeys(name).joinToString(",") != eventAnchor
+                    ) {
+                        RuntimeLog.record(
+                            host.context,
+                            "no-reply decision discarded; reason=incoming_changed_after_review",
+                        )
+                        continue@replyCycle
+                    }
                     seen.markNoReplyRequiredEvents(
                         host.memoryThreadId(name),
                         newEvents,
