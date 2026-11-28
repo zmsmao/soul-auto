@@ -6,7 +6,7 @@
     android:layout_marginBottom="9dp"
     app:cardBackgroundColor="@color/apple_card"
     app:cardCornerRadius="@dimen/page_card_radius"
-    app:cardElevation="0dp"
+    app:cardElevation="1dp"
     app:strokeColor="?attr/colorOutlineVariant"
     app:strokeWidth="1dp">
 
