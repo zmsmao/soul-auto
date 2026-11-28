@@ -49,6 +49,7 @@ internal data class ContactTaskSummary(
  */
 internal class ContactTaskQueue(context: Context) :
     SQLiteOpenHelper(context.applicationContext, DB_NAME, null, DB_VERSION) {
+    private val appContext = context.applicationContext
 
     @Volatile private var legacyMigrationChecked = false
 
@@ -95,7 +96,7 @@ internal class ContactTaskQueue(context: Context) :
             return
         }
 
-        val legacyFile = context.getDatabasePath(LEGACY_DB_NAME)
+        val legacyFile = appContext.getDatabasePath(LEGACY_DB_NAME)
         if (legacyFile.exists()) {
             runCatching {
                 SQLiteDatabase.openDatabase(
@@ -293,14 +294,12 @@ internal class ContactTaskQueue(context: Context) :
                 "contact_tasks",
                 ContentValues().apply {
                     put("state", ContactTaskState.PROCESSING.name)
-                    put("attempt_count", """attempt_count + 1""")
                     put("lease_until", now + leaseMillis.coerceAtLeast(60_000L))
                     put("updated_at", now)
                 },
                 "contact_key=? AND state IN ('PENDING','RETRY_WAIT')",
                 arrayOf(head.first),
             )
-            // ContentValues cannot express SQL expressions; update the attempt count explicitly.
             if (updated > 0) {
                 db.execSQL(
                     "UPDATE contact_tasks SET attempt_count=attempt_count+1 WHERE contact_key=?",
@@ -501,24 +500,6 @@ internal class ContactTaskQueue(context: Context) :
                    last_error='processing_lease_expired', updated_at=?
                WHERE state='PROCESSING' AND lease_until<=?""".trimIndent(),
             arrayOf(now + 3_000L, now, now),
-        )
-    }
-
-    private fun completeRegardlessOfState(contactKey: String, outcome: ContactTaskOutcome) {
-        if (contactKey.isBlank()) return
-        writableDatabase.update(
-            "contact_tasks",
-            ContentValues().apply {
-                put("state", ContactTaskState.DONE.name)
-                put("outcome", outcome.name)
-                put("lease_until", 0L)
-                put("next_attempt_at", 0L)
-                put("unread_cleared", 0)
-                put("last_error", "")
-                put("updated_at", System.currentTimeMillis())
-            },
-            "contact_key=? AND state IN ('PENDING','PROCESSING','RETRY_WAIT','VERIFY_SEND')",
-            arrayOf(contactKey),
         )
     }
 
