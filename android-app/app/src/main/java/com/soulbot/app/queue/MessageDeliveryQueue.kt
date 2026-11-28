@@ -674,6 +674,17 @@ internal class MessageDeliveryQueue(context: Context) :
                     arrayOf(batchId),
                 )
             }
+            val remainingOpen = db.rawQuery(
+                "SELECT COUNT(*) FROM conversation_events WHERE thread_id=? " +
+                    "AND queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','SEND_UNCERTAIN','DEAD_LETTER')",
+                arrayOf(threadId),
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply { put("state", if (remainingOpen > 0) "OPEN" else "DONE") },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
         }
 
         notices.forEach { (threadId, name) ->
