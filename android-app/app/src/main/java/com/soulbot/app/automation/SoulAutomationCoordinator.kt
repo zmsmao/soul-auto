@@ -23,6 +23,7 @@ import android.content.Context
  * Ordinary private chats are scheduled by contact; legacy event tracking remains
  * available to match/greeting workflows only.
  */
+
 internal class SoulAutomationCoordinator(
     private val context: Context,
     private val automationMode: AutomationMode,
@@ -57,9 +58,7 @@ internal class SoulAutomationCoordinator(
         var lastDm = 0L
         var lastScreenName = ""
         var stuckCount = 0
-        var unreadTopSearchComplete = false
-        var nextUnreadSweepAt = 0L
-        var inboxPositionInitialized = false
+        var inboxPageScanned = false
         var lastUnreadRedDot = false
         var greetingRecheckAt = 0L
         var missingHeadKey = ""
@@ -128,10 +127,9 @@ internal class SoulAutomationCoordinator(
                 if (sent) lastDm = System.currentTimeMillis()
             }
             if (!sent && host.isRunning) {
-                if (host.hasUnreadRedDot()) {
-                    host.gotoChatList()
-                    return
-                }
+                // Inbox entry is queue/badge-cycle driven by the main loop. A failed
+                // square round must not re-open the inbox just because the global badge
+                // is still visible after the initial viewport was handled.
                 if (!host.isOnSquare()) host.gotoSquare()
                 RuntimeLog.record(context, "square round ended; sent=false; cooldown=false")
                 host.setNextStep("继续寻找可私聊用户", SoulAccessibilityTiming.SQUARE_RETRY_DELAY_MS)
@@ -145,12 +143,16 @@ internal class SoulAutomationCoordinator(
                 contactQueue.recoverExpiredLeases()
                 val screen = host.currentScreen()
                 val hasUnreadRedDot = host.hasUnreadRedDot()
-                if (!hasUnreadRedDot) {
-                    unreadTopSearchComplete = false
-                    nextUnreadSweepAt = 0L
+                if (hasUnreadRedDot != lastUnreadRedDot && hasUnreadRedDot) {
+                    inboxPageScanned = false
                 }
-                if (hasUnreadRedDot != lastUnreadRedDot) {
-                    inboxPositionInitialized = false
+                // Reset only after leaving the inbox with no unread badge and no queued work.
+                // A badge that remains visible after processing must not send the worker back
+                // into another full contact-list scan.
+                if (!hasUnreadRedDot && screen != SoulScreen.LIST &&
+                    contactQueue.peekHead() == null
+                ) {
+                    inboxPageScanned = false
                 }
                 lastUnreadRedDot = hasUnreadRedDot
                 if (screen.name == lastScreenName) {
@@ -215,12 +217,16 @@ internal class SoulAutomationCoordinator(
                     continue
                 }
 
+                val hasQueuedContact = contactQueue.peekHead() != null
                 if (screen != SoulScreen.LIST &&
                     screen != SoulScreen.GREETING_LIST &&
-                    host.hasUnreadRedDot() &&
-                    !unreadTopSearchComplete
+                    InboxQueuePolicy.shouldEnterInbox(
+                        hasUnreadRedDot = hasUnreadRedDot,
+                        inboxPageScanned = inboxPageScanned,
+                        hasPendingTask = hasQueuedContact,
+                    )
                 ) {
-                    host.setNextStep("发现聊天消息，优先返回会话列表")
+                    host.setNextStep("发现待处理私聊任务，返回会话列表")
                     host.gotoChatList()
                     continue
                 }
@@ -250,29 +256,34 @@ internal class SoulAutomationCoordinator(
                         }
                     }
                     SoulScreen.LIST -> {
-                        if (!inboxPositionInitialized && contactQueue.peekHead() == null) {
-                            host.setNextStep("定位私聊列表顶部")
-                            host.scrollConversationToTop()
-                            inboxPositionInitialized = true
-                            continue@mainLoop
-                        }
-                        if (host.hasUnreadRedDot() && unreadTopSearchComplete &&
-                            System.currentTimeMillis() >= nextUnreadSweepAt
-                        ) {
-                            unreadTopSearchComplete = false
-                        }
                         // Scan one viewport only. The list provides identity + unread state;
                         // actual chat content is fetched only after opening the contact.
                         val pageRows = host.scanConversationPage()
-                        pageRows.forEach { row ->
-                            if (row.hasUnread) {
-                                contactQueue.enqueueUnread(row.contactKey, row.name)
-                            } else {
-                                contactQueue.markUnreadCleared(row.contactKey)
+                        if (InboxQueuePolicy.shouldEnqueueVisiblePage(inboxPageScanned)) {
+                            pageRows.forEach { row ->
+                                if (row.hasUnread) {
+                                    contactQueue.enqueueUnread(row.contactKey, row.name)
+                                } else {
+                                    contactQueue.markUnreadCleared(row.contactKey)
+                                }
                             }
+                            inboxPageScanned = true
+                            RuntimeLog.record(
+                                context,
+                                "inbox initial viewport scanned; rows=${pageRows.size}; unread=${pageRows.count { it.hasUnread }}",
+                            )
                         }
 
                         val head = contactQueue.peekHead()
+                        if (InboxQueuePolicy.shouldReturnToIdle(head != null)) {
+                            RuntimeLog.record(
+                                context,
+                                "contact queue drained; returning to idle surface; unreadBadge=$hasUnreadRedDot",
+                            )
+                            host.setNextStep("联系人队列已处理，返回同城广场")
+                            host.gotoModeIdleSurface(automationMode)
+                            continue@mainLoop
+                        }
                         if (head != null) {
                             when (head.state) {
                                 ContactTaskState.VERIFY_SEND -> {
@@ -337,24 +348,6 @@ internal class SoulAutomationCoordinator(
                             continue@mainLoop
                         }
 
-                        if (host.hasUnreadRedDot() && !unreadTopSearchComplete) {
-                            if (host.scrollConversationPageDown()) {
-                                continue@mainLoop
-                            }
-                            host.setNextStep("已检查完当前私聊列表，回到顶部等待下一轮")
-                            host.scrollConversationToTop()
-                            unreadTopSearchComplete = true
-                            nextUnreadSweepAt = System.currentTimeMillis() + 30_000L
-                            host.sleep(800)
-                            continue@mainLoop
-                        }
-
-                        if (host.hasGreeting() && System.currentTimeMillis() >= greetingRecheckAt) {
-                            host.setNextStep("私聊未读已处理，开始处理新招呼")
-                            host.openGreetingList()
-                        } else {
-                            handleIdleWork()
-                        }
                     }
                     SoulScreen.GREETING_LIST -> {
                         val users = host.scanGreetingUsers(handledGreetingUsers, greetDb)
