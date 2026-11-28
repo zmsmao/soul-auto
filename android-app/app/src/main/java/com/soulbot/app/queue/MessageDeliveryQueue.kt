@@ -621,8 +621,61 @@ internal class MessageDeliveryQueue(context: Context) :
                 if (ConversationRowPolicy.isPlatformNotice(name)) notices += threadId to name
             }
         }
-        if (notices.isEmpty()) return
         val now = System.currentTimeMillis()
+
+        // Version 1 may already contain system-generated text rows from older scanners.
+        // Quarantine only definitely system-generated pending content; uncertain sends
+        // are intentionally left for manual confirmation.
+        val legacySystemEvents = mutableListOf<Triple<String, String, String>>()
+        db.rawQuery(
+            """SELECT thread_id, event_key, content FROM conversation_events
+               WHERE queue_state IN ('PENDING','PROCESSING','RETRY_WAIT','DEAD_LETTER','SUPPRESSED_POLICY')""".trimIndent(),
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val threadId = cursor.getString(0)
+                val eventKey = cursor.getString(1)
+                val content = cursor.getString(2)
+                if (QueueAdmissionPolicy.isSystemGeneratedContent(content)) {
+                    legacySystemEvents += Triple(threadId, eventKey, content)
+                }
+            }
+        }
+        legacySystemEvents.forEach { (threadId, eventKey, content) ->
+            val batchId = db.rawQuery(
+                "SELECT batch_id FROM conversation_events WHERE thread_id=? AND event_key=? LIMIT 1",
+                arrayOf(threadId, eventKey),
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "" }
+            db.update(
+                "conversation_events",
+                ContentValues().apply {
+                    put("queue_state", MessageQueueState.NO_REPLY_REQUIRED.name)
+                    put("batch_id", "")
+                    put("lease_until", 0L)
+                    put("updated_at", now)
+                    put("last_error", "system_generated_content_excluded")
+                },
+                "thread_id=? AND event_key=?",
+                arrayOf(threadId, eventKey),
+            )
+            if (batchId.isNotBlank()) {
+                val remaining = db.rawQuery(
+                    "SELECT COUNT(*) FROM conversation_events WHERE batch_id=? AND queue_state='PROCESSING'",
+                    arrayOf(batchId),
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+                if (remaining == 0) db.update(
+                    "reply_batches",
+                    ContentValues().apply {
+                        put("state", MessageQueueState.NO_REPLY_REQUIRED.name)
+                        put("updated_at", now)
+                        put("last_error", "system_generated_content_excluded")
+                    },
+                    "batch_id=?",
+                    arrayOf(batchId),
+                )
+            }
+        }
+
         notices.forEach { (threadId, name) ->
             db.update(
                 "conversation_events",
