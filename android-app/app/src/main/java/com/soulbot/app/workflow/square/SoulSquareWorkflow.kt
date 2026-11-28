@@ -57,7 +57,9 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                     avatarBounds.right + host.dp(24),
                     avatarBounds.bottom + host.dp(40),
                 )
-                val cardNodes = host.descendants(card).filter(host::isVisibleOnScreen)
+                val cardNodes = host.descendants(card).filter { node ->
+                    runCatching { node.isVisibleToUser }.getOrDefault(false)
+                }
                 fun labelsOf(node: AccessibilityNodeInfo): List<String> =
                     listOf(host.textOf(node), host.contentDescriptionOf(node)).filter(String::isNotBlank)
                 val allLabels = cardNodes.flatMap(::labelsOf)
