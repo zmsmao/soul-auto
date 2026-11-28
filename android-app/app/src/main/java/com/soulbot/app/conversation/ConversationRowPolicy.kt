@@ -7,13 +7,23 @@ internal object ConversationRowPolicy {
         "系统通知",
         "通知中心",
         "平台通知",
+        "官方消息",
+        "系统消息",
+        "平台消息",
+        "消息通知",
         "soul官方通知",
         "soulofficialnotice",
         "soul系统通知",
         "soulsystemnotice",
         "soul通知",
         "soul助手",
+        "soul小助手",
+        "soul客服",
         "soul官方",
+        "officialnotice",
+        "officialnotification",
+        "systemnotification",
+        "soulnotifications",
     )
 
     private val explicitSuffixes = listOf(
@@ -21,6 +31,10 @@ internal object ConversationRowPolicy {
         "系统通知",
         "通知中心",
         "平台通知",
+        "官方消息",
+        "系统消息",
+        "平台消息",
+        "消息通知",
     )
 
     fun isPlatformNotice(displayName: String): Boolean {
