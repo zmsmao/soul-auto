@@ -17,6 +17,10 @@ internal interface SoulSquareHost : SoulWorkflowHost {
     fun findById(id: String): AccessibilityNodeInfo?
     fun findByIds(id: String): List<AccessibilityNodeInfo>
     fun descendantsById(node: AccessibilityNodeInfo, id: String): List<AccessibilityNodeInfo>
+    fun descendants(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo>
+    fun contentDescriptionOf(node: AccessibilityNodeInfo?): String
+    fun tapSquareAvatarSafely(card: AccessibilityNodeInfo, avatar: AccessibilityNodeInfo): Boolean
+    fun isLikelyLiveRoom(): Boolean
     fun isVisibleOnScreen(node: AccessibilityNodeInfo): Boolean
     fun rect(node: AccessibilityNodeInfo): Rect
     fun textOf(node: AccessibilityNodeInfo?): String
