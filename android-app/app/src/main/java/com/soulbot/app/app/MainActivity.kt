@@ -23,6 +23,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import com.soulbot.app.R
 import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.data.ConversationMemoryDatabase
+import com.soulbot.app.queue.ContactTaskQueue
+import com.soulbot.app.queue.ContactTaskState
+import com.soulbot.app.queue.ContactTaskOutcome
+import com.soulbot.app.queue.ContactTaskSummary
 import com.soulbot.app.queue.InboxConversationSummary
 import com.soulbot.app.queue.InboxFilter
 import com.soulbot.app.queue.MessageDeliveryQueue
@@ -50,7 +55,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lineOpen: View
     private lateinit var lineSnoozed: View
     private lateinit var lineDone: View
-    private lateinit var deliveryQueue: MessageDeliveryQueue
+    private lateinit var contactTaskQueue: ContactTaskQueue
 
     private var selectedFilter = InboxFilter.OPEN
     private val refreshHandler = Handler(Looper.getMainLooper())
@@ -64,7 +69,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        deliveryQueue = MessageDeliveryQueue(applicationContext)
+        contactTaskQueue = ContactTaskQueue(applicationContext)
 
         tvRuntimeTitle = findViewById(R.id.tvRuntimeTitle)
         tvRuntimeDetail = findViewById(R.id.tvRuntimeDetail)
@@ -139,7 +144,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         refreshHandler.removeCallbacks(refreshRunnable)
-        deliveryQueue.close()
+        contactTaskQueue.close()
         super.onDestroy()
     }
 
@@ -166,7 +171,7 @@ class MainActivity : AppCompatActivity() {
             !readiness.overlayGranted -> "悬浮窗权限未开启 · 点击查看运行准备"
             readiness.runnableModelCount == 0 -> "没有可用模型通道 · 点击查看运行准备"
             rawStatus.isNotBlank() && rawStatus != "用户手动停止" -> rawStatus
-            else -> "自动任务尚未运行 · 已采集的消息仍保留在队列中"
+            else -> "自动任务尚未运行 · 未处理的联系人任务会保留"
         }
         tvReadinessSummary.text = "运行准备 · " + readiness.checklistCompletedCount + " / 4 项完成"
         tvReadinessDetails.text = listOf(
@@ -208,8 +213,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTabs() {
-        if (!::deliveryQueue.isInitialized) return
-        val counts = deliveryQueue.counts()
+        if (!::contactTaskQueue.isInitialized) return
+        val counts = contactTaskQueue.counts()
         tvTabOpen.text = "Open  " + (counts[InboxFilter.OPEN] ?: 0)
         tvTabSnoozed.text = "Snoozed  " + (counts[InboxFilter.SNOOZED] ?: 0)
         tvTabDone.text = "Done  " + (counts[InboxFilter.DONE] ?: 0)
@@ -224,16 +229,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderInbox() {
-        if (!::queueList.isInitialized || !::deliveryQueue.isInitialized) return
+        if (!::queueList.isInitialized || !::contactTaskQueue.isInitialized) return
         queueList.removeAllViews()
         val rows = runCatching {
-            deliveryQueue.summaries(selectedFilter, etSearch.text?.toString().orEmpty())
+            contactTaskQueue.summaries(selectedFilter, etSearch.text?.toString().orEmpty())
+                .map(::toInboxConversationSummary)
         }.getOrDefault(emptyList())
         tvEmpty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         tvEmpty.text = when {
             etSearch.text?.isNotBlank() == true -> "没有找到匹配的会话"
-            selectedFilter == InboxFilter.OPEN -> "没有待处理消息\n采集到新的未读会话后会显示在这里"
-            selectedFilter == InboxFilter.SNOOZED -> "暂时没有被暂缓的会话"
+            selectedFilter == InboxFilter.OPEN -> "没有待处理联系人\n发现私聊未读后会按顺序加入队列"
+            selectedFilter == InboxFilter.SNOOZED -> "联系人队列没有暂缓任务"
             else -> "已处理的会话会显示在这里"
         }
         rows.forEachIndexed { index, row ->
