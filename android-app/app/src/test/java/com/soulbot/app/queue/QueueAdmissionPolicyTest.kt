@@ -87,6 +87,26 @@ class QueueAdmissionPolicyTest {
     }
 
     @Test
+    fun `human messages mentioning friendship notices are retained unless exact system template`() {
+        val result = QueueAdmissionPolicy.filter(
+            displayName = "小林",
+            incoming = listOf(
+                event("human-1", "我通过了你的好友申请，现在可以开始聊天了，哈哈"),
+                event("human-2", "你们已经成为好友的朋友也在这个群里"),
+                event("human-3", "系统消息这个词我只是拿来举例"),
+                event("system-1", "你们已经成为好友，可以开始聊天了！"),
+            ),
+            pendingCount = 4,
+        )
+
+        assertEquals(
+            listOf("human-1", "human-2", "human-3"),
+            result.accepted.map { it.key },
+        )
+        assertEquals(1, result.rejected[QueueAdmissionRejection.SYSTEM_GENERATED_CONTENT])
+    }
+
+    @Test
     fun `media and shared post messages remain actionable content`() {
         val result = QueueAdmissionPolicy.filter(
             displayName = "小林",
