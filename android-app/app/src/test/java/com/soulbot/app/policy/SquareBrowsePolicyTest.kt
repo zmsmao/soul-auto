@@ -37,6 +37,45 @@ class SquareBrowsePolicyTest {
     }
 
     @Test
+    fun activeBadgeBesideAvatar_skipsCardBeforeClick() {
+        assertEquals(
+            "ACTIVE_BADGE",
+            SquareBrowsePolicy.liveActivitySkipReason(
+                labelsNearAvatar = listOf("活动中"),
+                allCardLabels = listOf("耳机一戴 谁都不爱"),
+            ),
+        )
+    }
+
+    @Test
+    fun hotChatAndJoinEntry_skipsLiveActivityCard() {
+        assertEquals(
+            "LIVE_ACTIVITY_ENTRY",
+            SquareBrowsePolicy.liveActivitySkipReason(
+                labelsNearAvatar = emptyList(),
+                allCardLabels = listOf("正在热聊", "一键加入"),
+            ),
+        )
+    }
+
+    @Test
+    fun ordinaryPostMentioningLive_doesNotSkipCard() {
+        assertEquals(
+            null,
+            SquareBrowsePolicy.liveActivitySkipReason(
+                labelsNearAvatar = listOf("关注"),
+                allCardLabels = listOf("昨晚看了一场直播，挺有意思"),
+            ),
+        )
+    }
+
+    @Test
+    fun oversizedCardClickTarget_isRejected() {
+        assertFalse(SquareBrowsePolicy.isSafeAvatarClickTarget(48, 48, 360, 640))
+        assertTrue(SquareBrowsePolicy.isSafeAvatarClickTarget(48, 48, 64, 56))
+    }
+
+    @Test
     fun profileKey_ignoresDecorativeSpacingAndPunctuation() {
         assertEquals(
             SquareBrowsePolicy.profileKey(" 小 明。"),
