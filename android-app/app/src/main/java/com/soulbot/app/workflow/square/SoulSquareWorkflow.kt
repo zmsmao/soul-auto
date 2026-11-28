@@ -64,7 +64,10 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                 val nearbyLabels = cardNodes
                     .filter { node ->
                         val bounds = host.rect(node)
-                        bounds.width() > 0 && bounds.height() > 0 && Rect.intersects(bounds, nearbyRegion)
+                        val compactLabel = bounds.width() <= maxOf(host.dp(100), avatarBounds.width() * 3) &&
+                            bounds.height() <= maxOf(host.dp(60), avatarBounds.height() * 2)
+                        compactLabel && bounds.width() > 0 && bounds.height() > 0 &&
+                            Rect.intersects(bounds, nearbyRegion)
                     }
                     .flatMap(::labelsOf)
                 val skipReason = SquareBrowsePolicy.liveActivitySkipReason(nearbyLabels, allLabels)
@@ -248,15 +251,11 @@ internal class SoulSquareWorkflow(private val host: SoulSquareHost) {
                     continue
                 }
                 ProfileOpenResult.TIMEOUT -> {
-                    val attempts = (transientFailures[viewportKey] ?: 0) + 1
-                    transientFailures[viewportKey] = attempts
+                    // A safe tap that does not reach a confirmed profile is never repeated:
+                    // the destination may be a live layer that the current Soul build hides.
                     if (!host.isOnSquare() && !host.backToSquare()) return false
-                    if (SquareBrowsePolicy.shouldRetryTransientFailure(attempts)) {
-                        host.setNextStep("主页未打开，稍后重新检查本屏", 1200)
-                        host.sleep(1200)
-                    } else {
-                        handledInViewport += viewportKey
-                    }
+                    handledInViewport += viewportKey
+                    RuntimeLog.record(host.context, "square card skipped; reason=profile_destination_unconfirmed")
                     continue
                 }
                 ProfileOpenResult.OPENED -> Unit
