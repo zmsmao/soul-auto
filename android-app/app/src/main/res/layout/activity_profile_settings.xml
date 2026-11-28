@@ -57,6 +57,7 @@
                             android:layout_marginBottom="4dp"
                             android:text="资料内容"
                             android:textAppearance="@style/TextAppearance.SoulBot.Section" />
+
                     <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.SoulBot.TextInputLayout"
                     android:layout_width="match_parent"
@@ -299,7 +300,17 @@
                         android:layout_weight="1"
                         android:contentDescription="资料可见范围" />
                 </LinearLayout>
-                                   </LinearLayout>
+                                    </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
- 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveSelfProfile"
+                    style="@style/Widget.SoulBot.PrimaryButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="保存我的资料" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
