@@ -1,0 +1,9 @@
+<resources>
+    <dimen name="page_horizontal_padding">20dp</dimen>
+    <dimen name="page_top_padding">18dp</dimen>
+    <dimen name="page_bottom_padding">28dp</dimen>
+    <dimen name="page_section_spacing">24dp</dimen>
+    <dimen name="page_card_radius">22dp</dimen>
+    <dimen name="page_card_padding">16dp</dimen>
+    <dimen name="page_control_height">50dp</dimen>
+</resources>

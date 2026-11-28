@@ -1,27 +1,60 @@
 <resources>
-    <color name="purple_500">#65A9EA</color><color name="purple_700">#287FCA</color>
-    <color name="brand_primary">#318BDB</color><color name="brand_primary_dark">#2473BE</color>
-    <color name="brand_on_primary">#FFFFFF</color><color name="brand_primary_container">#DCEEFF</color>
-    <color name="brand_on_primary_container">#163C60</color><color name="brand_secondary">#63778E</color>
-    <color name="brand_secondary_container">#EAF2F9</color><color name="brand_tertiary">#26A77B</color>
-    <color name="brand_tertiary_container">#DDF5EB</color><color name="surface_page">#F9FBFD</color>
-    <color name="surface_card">#FFFFFF</color><color name="surface_subtle">#FFFFFF</color>
-    <color name="surface_border">#E9EEF3</color><color name="text_primary">#142033</color>
-    <color name="text_secondary">#7D8999</color><color name="nav_selected">#318BDB</color>
-    <color name="nav_unselected">#8D98A8</color><color name="state_success">#20A56E</color>
-    <color name="state_warning">#B87926</color><color name="state_danger">#D94B59</color>
-    <color name="white">#FFFFFF</color><color name="black">#000000</color>
-    <color name="apple_page">#F9FBFD</color><color name="apple_card">#FFFFFF</color>
-    <color name="apple_text">#142033</color><color name="apple_secondary">#7D8999</color>
-    <color name="apple_blue">#318BDB</color><color name="apple_separator">#E9EEF3</color>
-    <color name="apple_soft">#F1F5F9</color><color name="launcher_background">#318BDB</color>
-    <color name="inbox_page">#FFFFFF</color><color name="inbox_text">#111D31</color>
-    <color name="inbox_secondary">#7C899B</color><color name="inbox_hint">#A0ABBA</color>
-    <color name="inbox_line">#ECEFF3</color><color name="inbox_nav">#F8F9FB</color>
-    <color name="inbox_tab_ripple">#DCEEFF</color><color name="inbox_header_top">#B9DFFF</color>
-    <color name="inbox_header_bottom">#FFFFFF</color><color name="inbox_search">#FFFFFF</color>
-    <color name="inbox_status_bg">#E7F4FF</color><color name="inbox_status_fg">#2B7CC1</color>
-    <color name="inbox_badge_bg">#E44855</color><color name="inbox_badge_fg">#FFFFFF</color>
-    <color name="inbox_chip_blue">#EAF4FF</color><color name="inbox_chip_blue_text">#2478C1</color>
-    <color name="inbox_chip_purple">#F3E9FB</color><color name="inbox_chip_purple_text">#8D49B6</color>
+    <!-- Brand palette -->
+    <color name="purple_500">#65A9EA</color>
+    <color name="purple_700">#287FCA</color>
+    <color name="brand_primary">#318BDB</color>
+    <color name="brand_primary_dark">#2473BE</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#E5F1FF</color>
+    <color name="brand_on_primary_container">#173D63</color>
+    <color name="brand_secondary">#63778E</color>
+    <color name="brand_secondary_container">#EEF3F8</color>
+    <color name="brand_tertiary">#279A78</color>
+    <color name="brand_tertiary_container">#E0F4EC</color>
+
+    <!-- Shared page surfaces: quiet canvas, crisp white content surfaces -->
+    <color name="surface_page">#F4F6FA</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="surface_subtle">#FFFFFF</color>
+    <color name="surface_border">#E3E8F0</color>
+    <color name="text_primary">#172235</color>
+    <color name="text_secondary">#728096</color>
+    <color name="nav_selected">#318BDB</color>
+    <color name="nav_unselected">#8995A6</color>
+    <color name="state_success">#229B72</color>
+    <color name="state_warning">#B87926</color>
+    <color name="state_danger">#D94B59</color>
+
+    <!-- Legacy Apple-style page aliases, kept for existing layouts -->
+    <color name="apple_page">#F4F6FA</color>
+    <color name="apple_card">#FFFFFF</color>
+    <color name="apple_text">#172235</color>
+    <color name="apple_secondary">#728096</color>
+    <color name="apple_blue">#318BDB</color>
+    <color name="apple_separator">#E3E8F0</color>
+    <color name="apple_soft">#F0F4F8</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="launcher_background">#318BDB</color>
+
+    <!-- Home inbox palette intentionally remains independent from inner pages -->
+    <color name="inbox_page">#FFFFFF</color>
+    <color name="inbox_text">#111D31</color>
+    <color name="inbox_secondary">#7C899B</color>
+    <color name="inbox_hint">#A0ABBA</color>
+    <color name="inbox_line">#ECEFF3</color>
+    <color name="inbox_nav">#F8F9FB</color>
+    <color name="inbox_tab_ripple">#DCEEFF</color>
+    <color name="inbox_header_top">#B9DFFF</color>
+    <color name="inbox_header_bottom">#FFFFFF</color>
+    <color name="inbox_search">#FFFFFF</color>
+    <color name="inbox_status_bg">#E7F4FF</color>
+    <color name="inbox_status_fg">#2B7CC1</color>
+    <color name="inbox_badge_bg">#E44855</color>
+    <color name="inbox_badge_fg">#FFFFFF</color>
+    <color name="inbox_chip_blue">#EAF4FF</color>
+    <color name="inbox_chip_blue_text">#2478C1</color>
+    <color name="inbox_chip_purple">#F3E9FB</color>
+    <color name="inbox_chip_purple_text">#8D49B6</color>
 </resources>
