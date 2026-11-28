@@ -276,6 +276,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.swipeVertically(containerId, startRatio, endRatio, duration)
                 override fun isOnProfile(): Boolean = service.isOnProfile()
                 override fun isSoulForeground(): Boolean = service.isSoulForeground()
+                override fun pressBack() = service.pressBack()
                 override fun backToSquare(): Boolean = service.backToSquare()
                 override fun isOnNoSend(): Boolean = service.isOnNoSend()
                 override fun skipNoSend() = service.skipNoSend()
