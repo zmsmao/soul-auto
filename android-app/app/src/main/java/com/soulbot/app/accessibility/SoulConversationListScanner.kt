@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import com.soulbot.app.conversation.ConversationRowPolicy
+import com.soulbot.app.conversation.ConversationIdentity
+import com.soulbot.app.conversation.SoulAccessibilityIdentity
 import com.soulbot.app.conversation.ConversationListEntry
 import com.soulbot.app.conversation.UnreadConversationCandidate
 import com.soulbot.app.logging.DiagnosticIdentity
@@ -56,7 +58,10 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
             }
             rows += ConversationListEntry(
                 name = name,
-                contactKey = DiagnosticIdentity.contactId(host.context, name),
+                contactKey = ConversationIdentity.threadId(
+                    SoulAccessibilityIdentity.userId(item),
+                    DiagnosticIdentity.contactId(host.context, name),
+                ),
                 displayOrder = displayOrder,
                 hasUnread = badges.any { host.contains(bounds, host.rect(it)) },
             )
@@ -82,7 +87,7 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
         }
 
     /** Locate only on the current viewport. Pagination is owned by the FIFO scheduler. */
-    fun findConversation(name: String): AccessibilityNodeInfo? {
+    fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo? {
         if (!host.isOnList() || name.isBlank()) return null
         val items = host.findByIds(SoulAccessibilityIds.ID_CONV_ITEM)
             .filter(host::isVisibleOnScreen)
@@ -92,7 +97,12 @@ internal class SoulConversationListScanner(private val host: SoulConversationLis
         for (item in items) {
             val bounds = host.rect(item)
             val match = names.firstOrNull {
-                host.contains(bounds, host.rect(it)) && host.textOf(it).trim() == name
+                host.contains(bounds, host.rect(it)) &&
+                    host.textOf(it).trim() == name &&
+                    ConversationIdentity.threadId(
+                        SoulAccessibilityIdentity.userId(item),
+                        DiagnosticIdentity.contactId(host.context, name),
+                    ) == contactKey
             }
             if (match != null) return item
         }
