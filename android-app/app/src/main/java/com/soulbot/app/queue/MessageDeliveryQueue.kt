@@ -57,45 +57,71 @@ internal class MessageDeliveryQueue(context: Context) :
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
 
-    /** First capture baselines old history; only the trailing unanswered incoming run is queued. */
+    /**
+     * Persist only events already admitted by QueueAdmissionPolicy.
+     * Transcript history is deliberately never copied into this delivery ledger.
+     */
     @Synchronized
-    fun observeSnapshot(
-        threadId: String, contactId: String, displayName: String, scene: String,
-        incoming: List<ConversationIncomingEvent>, pendingCount: Int,
+    fun enqueueActionableEvents(
+        threadId: String,
+        contactId: String,
+        displayName: String,
+        scene: String,
+        events: List<ConversationIncomingEvent>,
     ) {
-        if (threadId.isBlank() || displayName.isBlank()) return
+        if (threadId.isBlank() || displayName.isBlank() || events.isEmpty()) return
         val db = writableDatabase
         val now = System.currentTimeMillis()
         db.beginTransaction()
         try {
-            val initialized = db.rawQuery(
-                "SELECT initialized FROM inbox_conversations WHERE thread_id=? LIMIT 1",
-                arrayOf(threadId),
-            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) != 0 }
             val values = ContentValues().apply {
-                put("thread_id", threadId); put("contact_id", contactId)
-                put("display_name", displayName); put("scene", scene)
-                put("initialized", 1); put("state", "OPEN")
-                put("first_detected_at", now); put("last_detected_at", now)
+                put("thread_id", threadId)
+                put("contact_id", contactId)
+                put("display_name", displayName)
+                put("scene", scene)
+                put("initialized", 1)
+                put("state", "OPEN")
+                put("first_detected_at", now)
+                put("last_detected_at", now)
             }
             db.insertWithOnConflict("inbox_conversations", null, values, SQLiteDatabase.CONFLICT_IGNORE)
-            db.update("inbox_conversations", ContentValues().apply {
-                put("display_name", displayName); put("contact_id", contactId)
-                put("scene", scene); put("initialized", 1); put("last_detected_at", now)
-            }, "thread_id=?", arrayOf(threadId))
-            val pendingStart = incoming.size - pendingCount.coerceIn(0, incoming.size)
-            incoming.forEachIndexed { index, event ->
-                if (event.key.isBlank() || event.text.isBlank()) return@forEachIndexed
-                val initialState = MessageQueuePolicy.initialState(index, pendingStart, initialized).name
+            db.update(
+                "inbox_conversations",
+                ContentValues().apply {
+                    put("display_name", displayName)
+                    put("contact_id", contactId)
+                    put("scene", scene)
+                    put("initialized", 1)
+                    put("last_detected_at", now)
+                    put("state", "OPEN")
+                },
+                "thread_id=?",
+                arrayOf(threadId),
+            )
+            events.forEachIndexed { index, event ->
+                val key = event.key.trim()
+                val text = event.text.trim()
+                if (key.isEmpty() || text.isEmpty()) return@forEachIndexed
                 val eventValues = ContentValues().apply {
-                    put("thread_id", threadId); put("event_key", event.key); put("scene", scene)
-                    put("direction", "IN"); put("content", event.text)
-                    put("observed_at", now + index); put("queue_state", initialState)
+                    put("thread_id", threadId)
+                    put("event_key", key)
+                    put("scene", scene)
+                    put("direction", "IN")
+                    put("content", text)
+                    put("observed_at", now + index)
+                    put("queue_state", MessageQueueState.PENDING.name)
                 }
-                db.insertWithOnConflict("conversation_events", null, eventValues, SQLiteDatabase.CONFLICT_IGNORE)
+                db.insertWithOnConflict(
+                    "conversation_events",
+                    null,
+                    eventValues,
+                    SQLiteDatabase.CONFLICT_IGNORE,
+                )
             }
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally {
+            db.endTransaction()
+        }
     }
 
     /** Claim one contact's pending events; newly arrived events join an active regenerated batch. */
