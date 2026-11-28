@@ -2,7 +2,7 @@
 <!-- Existing Material language; a focused three-step flow keeps the learning settings page short. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/replayEditorRoot" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="?attr/colorSurface">
+    android:orientation="vertical" android:background="@drawable/bg_page_canvas">
     <include layout="@layout/view_toolbar" />
     <TextView android:id="@+id/replayStepTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:paddingStart="@dimen/page_horizontal_padding" android:paddingEnd="@dimen/page_horizontal_padding" android:paddingTop="@dimen/page_top_padding" android:paddingBottom="12dp"
