@@ -59,13 +59,15 @@ class RuntimeEnvironmentActivity : BaseSettingsActivity() {
 
         tvOverallStatus.text = when {
             readiness.automationRunning -> "自动化正在运行"
-            blockers.isEmpty() -> "自动化启动条件已满足"
-            else -> "运行准备尚未完成 · " + complete + " / 4"
+            blockers.isNotEmpty() -> "运行准备尚未完成 · " + complete + " / 4"
+            !readiness.overlayGranted -> "自动化条件满足 · 悬浮控制器待授权"
+            else -> "自动化启动条件已满足"
         }
         tvOverallDetail.text = when {
             readiness.automationRunning -> "当前任务正在运行。此页面只检查状态，不会更改任务或恢复设置。"
-            blockers.isEmpty() -> "可以打开悬浮控制器并手动启动自动化。"
-            else -> blockers.joinToString("；")
+            blockers.isNotEmpty() -> blockers.joinToString("；")
+            !readiness.overlayGranted -> "启用悬浮窗权限后，才能打开悬浮控制器并手动启动自动化。"
+            else -> "可以打开悬浮控制器并手动启动自动化。"
         }
 
         setStatus(tvSoulStatus, if (readiness.soulInstalled) "已安装" else "未检测到客户端", readiness.soulInstalled)
@@ -83,7 +85,8 @@ class RuntimeEnvironmentActivity : BaseSettingsActivity() {
 
         btnSoulAction.text = if (readiness.soulInstalled) "打开 Soul" else "检查安装"
         btnAccessibilityAction.text = if (readiness.accessibilityEnabled) "查看系统设置" else "前往授权"
-        btnOverlayAction.text = if (readiness.overlayGranted) "管理授权" else "前往授权"
+        btnOverlayAction.text = if (readiness.overlayGranted) "已授权" else "前往授权"
+        btnOverlayAction.isEnabled = !readiness.overlayGranted
     }
 
     private fun setStatus(view: TextView, value: String, good: Boolean) {
