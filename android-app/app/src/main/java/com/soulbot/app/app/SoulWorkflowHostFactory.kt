@@ -60,7 +60,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun scanUnread(): List<UnreadConversationCandidate> = service.scanUnread()
                 override fun replyDelay(timeStr: String): Long = service.replyDelay(timeStr)
                 override fun waitUnlessQiyu(delayMs: Long): Boolean = service.waitUnlessQiyu(delayMs)
-                override fun replyTo(name: String, seen: ConversationSeenTracker): PrivateChatTaskResult = service.replyTo(name, seen)
+                override fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult = service.replyTo(contactKey, name, seen)
                 override fun scrollConversationToTop() = service.scrollConversationToTop()
                 override fun hasGreeting(): Boolean = service.hasGreeting()
                 override fun openGreetingList(): Boolean = service.openGreetingList()
@@ -129,8 +129,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun currentScreen(): SoulScreen = service.currentScreen()
                 override fun isOnList(): Boolean = service.isOnList()
                 override fun isOnChat(): Boolean = service.isOnChat()
-                override fun findConversation(name: String): AccessibilityNodeInfo? =
-                    service.findConversation(name)
+                override fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo? =
+                    service.findConversation(name, contactKey)
                 override fun setNextStep(action: String, delayMs: Long) =
                     service.setNextStep(action, delayMs)
                 override fun sleep(ms: Long) = service.sleep(ms)
@@ -138,6 +138,8 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                 override fun gotoChatList(): Boolean = service.gotoChatList()
                 override fun isExpectedConversation(name: String): Boolean =
                     service.isExpectedConversation(name)
+                override fun isExpectedContact(name: String, contactKey: String): Boolean =
+                    service.isExpectedContact(name, contactKey)
                 override fun waitForStableThread(name: String): List<Pair<String, String>> =
                     service.waitForStableThread(name)
                 override fun readThread(): List<Pair<String, String>> = service.readThread()
@@ -145,7 +147,7 @@ internal class SoulWorkflowHostFactory(private val service: SoulBotService) {
                     service.learnFromManualReplies(name, thread)
                 override fun pendingIncomingVoiceBubbles(): List<AccessibilityNodeInfo> =
                     service.pendingIncomingVoiceBubbles()
-                override fun markPrivateContactOpened(name: String) = service.markPrivateContactOpened(name)
+                override fun markPrivateContactOpened(contactKey: String, name: String) = service.markPrivateContactOpened(contactKey, name)
                 override fun hasUncertainSendAttempts(name: String): Boolean = service.hasUncertainSendAttempts(name)
                 override fun unseenIncomingEvents(
                     name: String,
