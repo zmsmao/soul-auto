@@ -175,10 +175,10 @@ class AppUpdateActivity : BaseSettingsActivity() {
                     btnInstallUpdate.isEnabled = true
                     progressDownload.progress = 100
                     tvDownloadProgress.text = "下载完成，SHA-256、包名、版本和签名均已验证。"
-                    tvUpdateStatus.text = if (btnInstallUpdate.isEnabled) {
+                    tvUpdateStatus.text = if (packageManager.canRequestPackageInstalls()) {
                         "APK 已通过安全校验，可以安装。"
                     } else {
-                        "APK 已通过安全校验。还需要授予安装未知应用权限。"
+                        "APK 已通过安全校验。点击安装后，按提示授予安装未知应用权限。"
                     }
                 }
             } catch (error: Exception) {
@@ -196,7 +196,7 @@ class AppUpdateActivity : BaseSettingsActivity() {
     }
 
     private fun installUpdate() {
-        val apk = downloadedApk?.takeIf(File::isFile) ?: run {
+        val apk = downloadedApk?.takeIf { it.isFile } ?: run {
             showMessage("请先下载并完成 APK 校验。")
             return
         }
