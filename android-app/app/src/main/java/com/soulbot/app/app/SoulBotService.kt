@@ -10,6 +10,8 @@ import com.soulbot.app.conversation.runtime.SoulReplyGenerationHost
 import com.soulbot.app.data.*
 import com.soulbot.app.diagnostics.*
 import com.soulbot.app.logging.RuntimeLog
+import com.soulbot.app.logging.DiagnosticIdentity
+import com.soulbot.app.queue.ContactTaskQueue
 import com.soulbot.app.model.*
 import com.soulbot.app.policy.*
 import com.soulbot.app.queue.MessageQueueState
@@ -568,6 +570,18 @@ class SoulBotService : AccessibilityService() {
 
     internal fun hasUncertainSendAttempts(contactName: String): Boolean =
         conversationMemoryDb?.hasUncertainSendAttempts(memoryThreadId(contactName)) == true
+
+    internal fun markPrivateContactOpened(contactName: String) {
+        if (contactName.isBlank()) return
+        val queue = ContactTaskQueue(applicationContext)
+        try {
+            val contactKey = DiagnosticIdentity.contactId(applicationContext, contactName)
+            queue.attachMemoryThreadId(contactKey, memoryThreadId(contactName))
+            queue.markOpened(contactKey)
+        } finally {
+            queue.close()
+        }
+    }
 
     internal fun personalizationContext(
         contactName: String,
