@@ -96,7 +96,7 @@ internal class SoulAutomationCoordinator(
                 return
             }
             host.setNextStep("处理私聊联系人 " + task.displayName)
-            val result = host.replyTo(task.displayName, seen)
+            val result = host.replyTo(task.contactKey, task.displayName, seen)
             applyTaskResult(task, result)
         }
 
