@@ -25,6 +25,7 @@ internal interface SoulPrivateChatHost : SoulWorkflowHost {
         seen: ConversationSeenTracker,
         pendingCount: Int,
     ): List<ConversationIncomingEvent>
+    fun markPrivateContactOpened(name: String)
     fun hasUncertainSendAttempts(name: String): Boolean
     fun memoryThreadId(name: String): String
     fun currentIncomingMessageKeys(name: String): List<String>
