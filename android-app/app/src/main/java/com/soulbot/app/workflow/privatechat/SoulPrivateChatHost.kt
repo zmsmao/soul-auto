@@ -15,6 +15,7 @@ internal interface SoulPrivateChatHost : SoulWorkflowHost {
     fun tapNode(node: AccessibilityNodeInfo): Boolean
     fun gotoChatList(): Boolean
     fun isExpectedConversation(name: String): Boolean
+    fun isExpectedContact(name: String, contactKey: String): Boolean
     fun waitForStableThread(name: String): List<Pair<String, String>>
     fun readThread(): List<Pair<String, String>>
     fun learnFromManualReplies(name: String, thread: List<Pair<String, String>>)
