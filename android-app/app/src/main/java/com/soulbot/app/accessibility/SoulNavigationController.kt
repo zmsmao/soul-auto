@@ -52,36 +52,30 @@ internal class SoulNavigationController(
     fun scrollConversationToTop() {
         if (!isOnList()) return
         updateStatus("回到会话顶部")
-
-        // RecyclerView exposes this action on supported Soul versions and can jump
-        // directly to the first row without depending on device height.
-        ui.findById(SoulAccessibilityIds.ID_CONV_LIST)?.let { list ->
-            val args = Bundle().apply {
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_ROW_INT, 0)
-            }
-            runCatching {
-                list.performAction(
-                    AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_TO_POSITION.id,
-                    args,
-                )
-            }
+        val list = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
+        val args = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_ROW_INT, 0)
+        }
+        val jumped = runCatching {
+            list?.performAction(
+                AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_TO_POSITION.id,
+                args,
+            ) == true
+        }.getOrDefault(false)
+        if (jumped) {
             pause(500)
+            return
         }
 
-        // Verify that the list is really at the beginning. Keep scrolling backward
-        // until the visible conversations stop changing, rather than assuming a
-        // fixed number of gestures is enough.
+        // Fallback for Soul builds that do not expose scroll-to-position.
         repeat(MAX_SCROLLS_TO_TOP) {
             if (!isOnList()) return
             val before = conversationListSnapshot()
-            val list = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
+            val currentList = ui.findById(SoulAccessibilityIds.ID_CONV_LIST)
             val accepted = runCatching {
-                list?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
+                currentList?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
             }.getOrDefault(false)
-            if (!accepted) {
-                // Fallback for Soul versions whose list does not publish scroll actions.
-                ui.swipeVertically(SoulAccessibilityIds.ID_CONV_LIST, 0.30f, 0.86f, 450)
-            }
+            if (!accepted) ui.swipeVertically(SoulAccessibilityIds.ID_CONV_LIST, 0.30f, 0.86f, 450)
             pause(500)
             val after = conversationListSnapshot()
             if (before.isNotEmpty() && after == before) return
@@ -198,6 +192,6 @@ internal class SoulNavigationController(
     // ===== 延时 =====
 
     companion object {
-        const val MAX_SCROLLS_TO_TOP = 100
+        const val MAX_SCROLLS_TO_TOP = 12
     }
 }
