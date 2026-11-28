@@ -396,7 +396,7 @@ class MainActivity : AppCompatActivity() {
             displayName = task.displayName,
             preview = subtitle,
             updatedAt = task.updatedAt,
-            openCount = if (task.state == ContactTaskState.DONE) 0 else 1,
+            openCount = 0,
             state = state,
         )
     }
@@ -478,7 +478,7 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
     private fun rowTag(item: InboxConversationSummary): String = when (item.state) {
-        MessageQueueState.PENDING -> "待回复 · ${item.openCount} 条"
+        MessageQueueState.PENDING -> "待处理"
         MessageQueueState.PROCESSING -> "正在处理"
         MessageQueueState.RETRY_WAIT -> "等待重试"
         MessageQueueState.SEND_UNCERTAIN -> "发送待确认"
