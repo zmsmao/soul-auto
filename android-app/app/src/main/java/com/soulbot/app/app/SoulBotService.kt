@@ -548,8 +548,8 @@ class SoulBotService : AccessibilityService() {
 
     internal fun scanUnread(): List<UnreadConversationCandidate> = conversationListScanner.scanUnread()
 
-    internal fun findConversation(name: String): AccessibilityNodeInfo? =
-        conversationListScanner.findConversation(name)
+    internal fun findConversation(name: String, contactKey: String): AccessibilityNodeInfo? =
+        conversationListScanner.findConversation(name, contactKey)
 
     internal fun normalizeReply(text: String): String =
         text.trim().replace(Regex("""[\s，。！？!?、~～]+"""), "")
@@ -572,16 +572,21 @@ class SoulBotService : AccessibilityService() {
     internal fun hasUncertainSendAttempts(contactName: String): Boolean =
         conversationMemoryDb?.hasUncertainSendAttempts(memoryThreadId(contactName)) == true
 
-    internal fun markPrivateContactOpened(contactName: String) {
-        if (contactName.isBlank()) return
+    internal fun markPrivateContactOpened(contactKey: String, contactName: String) {
+        if (contactKey.isBlank() || contactName.isBlank()) return
         val queue = ContactTaskQueue(applicationContext)
         try {
-            val contactKey = DiagnosticIdentity.contactId(applicationContext, contactName)
             queue.attachMemoryThreadId(contactKey, memoryThreadId(contactName))
             queue.markOpened(contactKey)
         } finally {
             queue.close()
         }
+    }
+
+    internal fun isExpectedContact(contactName: String, contactKey: String): Boolean {
+        if (!isExpectedConversation(contactName)) return false
+        val fallbackKey = DiagnosticIdentity.contactId(applicationContext, contactName)
+        return contactKey == fallbackKey || contactKey == memoryThreadId(contactName)
     }
 
     internal fun personalizationContext(
@@ -636,8 +641,8 @@ class SoulBotService : AccessibilityService() {
 
     // ===== 回复会话（仅会话列表起点） =====
 
-    internal fun replyTo(name: String, seen: ConversationSeenTracker): PrivateChatTaskResult =
-        privateChatWorkflow.replyTo(name, seen)
+    internal fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult =
+        privateChatWorkflow.replyTo(contactKey, name, seen)
 
     internal fun displayedConversationName(): String {
         val primary = findByIds(ID_PROFILE_NAME).filter(::isVisibleOnScreen).map(::textOf)
