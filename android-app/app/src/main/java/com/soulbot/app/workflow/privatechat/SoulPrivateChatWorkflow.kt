@@ -25,20 +25,15 @@ internal enum class PrivateChatTaskResult {
 /** Owns ordinary private-chat entry, reservation and reply processing. */
 internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
     @Volatile private var activeReplyName: String? = null
-    @Volatile private var activeContactKey: String = ""
-
-    private fun activeContactKey(name: String): String = activeContactKey.takeIf { activeReplyName == name && it.isNotBlank() }.orEmpty()
-
     fun replyTo(contactKey: String, name: String, seen: ConversationSeenTracker): PrivateChatTaskResult {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
         if (name.isBlank()) return PrivateChatTaskResult.RETRY
         if (!reserveReply(name)) return PrivateChatTaskResult.RETRY
-        activeContactKey = contactKey
         RuntimeLog.record(host.context, "contact task started; contactId=$contactId")
         return try {
             val result = when {
-                host.isOnChat() && host.isExpectedConversation(name) ->
-                    processContactTaskInCurrentChat(name)
+                host.isOnChat() && host.isExpectedContact(name, contactKey) ->
+                    processContactTaskInCurrentChat(name, contactKey)
                 host.isOnList() && openConversationForReply(name, contactKey) ->
                     processContactTaskInCurrentChat(name)
                 else -> PrivateChatTaskResult.RETRY
@@ -56,7 +51,6 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             PrivateChatTaskResult.RETRY
         } finally {
             releaseReply(name)
-            activeContactKey = ""
         }
     }
 
@@ -84,7 +78,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
             }
             host.sleep(1500)
             if (host.currentScreen() == SoulScreen.QIYU_POPUP) return false
-            if (host.isOnChat() && host.isExpectedConversation(name)) {
+            if (host.isOnChat() && host.isExpectedContact(name, contactKey)) {
                 RuntimeLog.record(
                     host.context,
                     "conversation opened; contactId=$contactId; attempt=${attempt + 1}",
@@ -104,12 +98,12 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
      * The queue selected the contact; the live transcript is the only source of reply context.
      * No message events or message bodies are written to the contact task queue.
      */
-    private fun processContactTaskInCurrentChat(name: String): PrivateChatTaskResult {
+    private fun processContactTaskInCurrentChat(name: String, contactKey: String): PrivateChatTaskResult {
         val contactId = DiagnosticIdentity.contactId(host.context, name)
-        if (!host.isRunning || !host.isOnChat() || !host.isExpectedConversation(name)) {
+        if (!host.isRunning || !host.isOnChat() || !host.isExpectedContact(name, contactKey)) {
             return PrivateChatTaskResult.RETRY
         }
-        host.markPrivateContactOpened(activeContactKey(name), name)
+        host.markPrivateContactOpened(contactKey, name)
         if (host.hasUncertainSendAttempts(name)) {
             host.setNextStep("$name 存在发送结果待确认，暂停自动重发")
             host.gotoChatList()
@@ -118,7 +112,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
 
         replyCycle@ while (host.isRunning && host.isOnChat()) {
             val thread = host.waitForStableThread(name)
-            if (!host.isRunning || !host.isOnChat() || !host.isExpectedConversation(name)) {
+            if (!host.isRunning || !host.isOnChat() || !host.isExpectedContact(name, contactKey)) {
                 host.gotoChatList()
                 return PrivateChatTaskResult.RETRY
             }
@@ -207,7 +201,7 @@ internal class SoulPrivateChatWorkflow(private val host: SoulPrivateChatHost) {
                         host.sleep(500)
                         continue@replyCycle
                     }
-                    if (!host.isExpectedConversation(name)) {
+                    if (!host.isExpectedContact(name, contactKey)) {
                         host.gotoChatList()
                         return PrivateChatTaskResult.RETRY
                     }
