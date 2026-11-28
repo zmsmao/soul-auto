@@ -40,6 +40,14 @@ class MessageQueuePolicyTest {
     }
 
     @Test
+    fun `terminal no reply decisions are never claimable again`() {
+        val now = 1_000_000L
+        assertFalse(MessageQueuePolicy.isReadyHead(MessageQueueState.NO_REPLY_REQUIRED.name, 0L, now))
+        assertFalse(MessageQueuePolicy.isReadyHead(MessageQueueState.SENT.name, 0L, now))
+        assertFalse(MessageQueuePolicy.isReadyHead(MessageQueueState.SUPPRESSED_POLICY.name, 0L, now))
+    }
+
+    @Test
     fun `retry delay backs off and remains capped`() {
         assertEquals(3_000L, MessageQueuePolicy.retryDelay(1))
         assertEquals(10_000L, MessageQueuePolicy.retryDelay(2))
